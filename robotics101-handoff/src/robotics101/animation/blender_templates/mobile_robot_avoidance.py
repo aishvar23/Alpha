@@ -60,6 +60,29 @@ TEXT_ACTIVE = (0.92, 0.12, 0.10, 1.0)
 TEXT_GO = (0.02, 0.45, 0.16, 1.0)
 PANEL = (0.97, 0.97, 0.98, 1.0)
 
+OUTLINE = None                          # (r, g, b) Workbench object outline colour, or None (M01 look)
+
+
+def _lin(hexstr: str, a: float = 1.0) -> tuple:
+    """sRGB hex -> linear RGBA (Blender material colours are linear)."""
+    c = [int(hexstr[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    lin = [x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    return (*lin, a)
+
+
+def apply_cartoon_style() -> None:
+    """'robot-cam' cutaway for the cartoon episode (M02.5): the cartoon palette + ink outlines.
+    Same geometry, motion plan, threshold and HUD logic as M01 — only colours/outlines change."""
+    g = globals()
+    g.update(
+        BG=_lin("#FFE8C2")[:3], GROUND=_lin("#F2D3B3"), GRID=_lin("#E0B894"), CHASSIS=_lin("#2EC4B6"),
+        LID=_lin("#1B1B3A"), WHEEL=_lin("#45505E"), HUB=_lin("#FFC93C"), SENSOR=_lin("#2B2140"), EYE=_lin("#7CFFCB"),
+        OBSTACLE=_lin("#E76F51"), BEAM_CLEAR=_lin("#06D6A0", 0.45), BEAM_SEEN=_lin("#FFD166", 0.5),
+        BEAM_ALERT=_lin("#EF476F", 0.6), TEXT_DARK=_lin("#2B2140"), TEXT_DIM=_lin("#9A8C98"),
+        TEXT_MID=_lin("#6C4AB6"), TEXT_ACTIVE=_lin("#EF476F"), TEXT_GO=_lin("#06A77D"), PANEL=_lin("#FFF4E0"),
+        OUTLINE=_lin("#2B2140")[:3])
+
+
 STEPS = [  # HUD step chips: (label, phases that highlight it)
     ("Drive", {K.PHASE_START, K.PHASE_DRIVE}),
     ("Obstacle detected", {K.PHASE_DETECTED}),
@@ -199,7 +222,9 @@ def build_world(engine: str, args) -> None:
         sh.show_shadows = True
         sh.shadow_intensity = 0.35
         sh.show_specular_highlight = True
-        sh.show_object_outline = False
+        sh.show_object_outline = OUTLINE is not None
+        if OUTLINE is not None:
+            sh.object_outline_color = OUTLINE
         scene.display.light_direction = (-0.35, -0.45, 0.82)
         scene.display.render_aa = args.aa
     else:
@@ -421,6 +446,8 @@ def main() -> int:
     job = json.loads(args.params.read_text(encoding="utf-8"))
     if job.get("template") != "mobile_robot_avoidance":
         raise SystemExit(f"wrong template for this script: {job.get('template')!r}")
+    if job.get("style") == "cartoon":
+        apply_cartoon_style()
     params = job.get("params", {})
     errors = get_template("blender", "mobile_robot_avoidance").validate_params(params)
     if errors:

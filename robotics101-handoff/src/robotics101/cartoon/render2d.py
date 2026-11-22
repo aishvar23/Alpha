@@ -23,8 +23,9 @@ FRAME_W = 14.222222222222221
 FRAME_H = 8.0
 
 
-def _config(width: int, height: int, background: str) -> dict:
-    return {"pixel_width": width, "pixel_height": height, "frame_width": FRAME_W, "frame_height": FRAME_H,
+def _config(width: int, height: int, background: str, media_dir: str | None = None) -> dict:
+    extra = {"media_dir": media_dir} if media_dir else {}
+    return {**extra, "pixel_width": width, "pixel_height": height, "frame_width": FRAME_W, "frame_height": FRAME_H,
             "background_color": background, "disable_caching": True}
 
 
@@ -46,7 +47,9 @@ def _encode_chunk(args) -> str:
            "-r", str(fps), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", str(crf), "-profile:v", "high",
            "-pix_fmt", "yuv420p", "-threads", "2", str(out)]
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-    with tempconfig(_config(width, height, background)):
+    # per-worker media dir: Manim's Text writes SVGs to a shared hashed path, which races across processes
+    media = Path(out).parent / f"media-{os.getpid()}"
+    with tempconfig(_config(width, height, background, str(media))):
         cam = Camera(background_color=background)
         for i in range(i0, i1):
             cam.reset()

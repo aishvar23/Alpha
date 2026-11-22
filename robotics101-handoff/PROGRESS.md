@@ -149,6 +149,12 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - `cartoon/render2d.py`: frame function → Cairo frames → H.264 High yuv420p, chunked across processes and concatenated (450 frames of 1080p in ~10 s on this box); optional AAC 48 kHz stereo track trimmed sample-exactly.
 - `robotics101 motion-test`: 15 s cold-open gag with real voiced lines (Kokoro) — lip-sync agreement 0.89–1.0.
 
+## M02.5 — what exists
+- `cartoon/sets.py` (garage set + variants, door, stage constants GROUND/FLOOR_Y/METER=2.2 u/m), `cartoon/props.py` (box pile, toaster, robot-family album, check-up list, battery/cable, glow outlines, ping/echo waves, floor tape measure (forward + reverse), range zone, HUD readout, chalkboard rule, SENSE/THINK/ACT chips, servo protractor, comic SFX lettering, speech bubble, title/quiz cards with word wrap, top-view inset).
+- `cartoon/obstacle.py`: 10 Hz sensor, cm-truncated readings, `plan_approach` lands the stop on a beat at 0.49 m (< 0.5 m), `assert_no_collision`; 2D staging measured from Bolt's frontmost point (hands).
+- Robot-cam cutaway (owner direction): the M01 Blender scene with `style: "cartoon"` (cartoon palette + ink outlines in Workbench, HUD title "ROBOT-CAM"), same motion plan/collision check/threshold; `cartoon/robotcam.py` builds/renders the job with the episode threshold (0.5 m).
+- render2d: per-worker Manim media dir (parallel Text SVG cache race fixed).
+
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.
 - Not met by design / owner decisions pending: the sample narration is a short stub (66 s of speech in 300 s) so QA flags every scene for voice coverage and each scene animates ~10–20 s then holds; espeak is a robotic placeholder voice. Fuller narration + production voice (and then pacing animations to the narration window) are pending the owner's decision.
