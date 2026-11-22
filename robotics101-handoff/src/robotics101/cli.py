@@ -345,6 +345,19 @@ def _cmd_motion_test(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_render_cartoon(args: argparse.Namespace) -> int:
+    from robotics101.cartoon.scenes import render_cartoon_scenes
+
+    if not (args.voice_dir / "timing.json").is_file():
+        print(f"error: {args.voice_dir}/timing.json missing — run `robotics101 voice` first", file=sys.stderr)
+        return EXIT_INPUT
+    w, h = (int(x) for x in args.size.lower().split("x"))
+    rep = render_cartoon_scenes(args.episode, args.voice_dir, args.out, w, h, args.only or None,
+                                robotcam=not args.no_robotcam)
+    print(json.dumps({s["sceneId"]: s["minPresence"] for s in rep["scenes"]}, indent=2))
+    return EXIT_OK
+
+
 AUDITION_LINES = {
     "bolt": "Ow! Who put a wall there? Sense, think, act. Like a tiny dance, but with math!",
     "maya": "Bolt, that's not a wall. It's a pile of boxes! Today, you're going to learn how robots notice things.",
@@ -435,6 +448,15 @@ def build_parser() -> argparse.ArgumentParser:
     mt.add_argument("--out", type=Path, required=True, help="output .mp4")
     mt.add_argument("--size", default="1920x1080")
     mt.set_defaults(func=_cmd_motion_test)
+
+    rc = sub.add_parser("render-cartoon", help="render cartoon scenes (video only) from a `voice` output dir")
+    rc.add_argument("episode", type=Path)
+    rc.add_argument("--voice-dir", type=Path, required=True)
+    rc.add_argument("--out", type=Path, required=True)
+    rc.add_argument("--size", default="1920x1080")
+    rc.add_argument("--only", action="append", help="sceneId (repeatable)")
+    rc.add_argument("--no-robotcam", action="store_true", help="skip the Blender robot-cam cutaway in the rematch")
+    rc.set_defaults(func=_cmd_render_cartoon)
     return parser
 
 

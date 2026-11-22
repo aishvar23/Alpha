@@ -4,8 +4,13 @@ Timeline rules (scene-relative seconds; deterministic, from audio durations + fi
 * a scene starts with ``LEAD_IN_S``; each ``line`` occupies its audio duration, followed by a gap
   (``GAP_SAME_S`` if the next line has the same speaker, ``GAP_SWITCH_S`` otherwise); actions attached to a line
   play during it.
-* ``action`` beats take ``seconds`` or ``ACTION_SECONDS[action]``; ``sfx`` beats ``SFX_ADVANCE_S``;
-  ``music`` cues ``MUSIC_ADVANCE_S[cue]``; ``pause`` its seconds.
+* ``action`` beats take ``seconds`` or ``ACTION_SECONDS[action]``; ``music`` cues ``MUSIC_ADVANCE_S[cue]``;
+  ``pause`` its seconds.
+* ``sfx`` beats (M02.6 timing fix): an sfx that directly follows an action (or a chain of sfx anchored to one) is
+  *anchored* to that action and does not advance time — start-type sounds (``SFX_AT_START``) fire at the action's
+  start, impact sounds (``SFX_AT_END``) when it ends, ``echo`` ``ECHO_DELAY_S`` after the ping it answers. Any other
+  sfx (e.g. after a line) is sequential and advances ``SFX_ADVANCE_S``. ``sound_s`` is the nominal sound length
+  used by the mixer (``SFX_SECONDS``).
 * scene duration = end of the last beat + ``TAIL_S``, rounded *up* to a whole 30 fps frame.
 Scene durations are therefore driven by the dialogue, not by ``durationTargetSeconds`` (reported vs target).
 """
@@ -32,6 +37,12 @@ FPS = 30
 LEAD_IN_S, TAIL_S = 0.4, 0.8
 GAP_SAME_S, GAP_SWITCH_S = 0.25, 0.35
 SFX_ADVANCE_S = 0.45
+SFX_AT_END = frozenset({"bonk", "boing", "skid", "clap"})
+SFX_AT_START = frozenset({"zoom", "whoosh", "motor", "charge", "ping", "nib_whistle", "stars"})
+ECHO_DELAY_S = 0.4
+SFX_SECONDS = {"zoom": 1.0, "bonk": 0.45, "boing": 0.6, "pop": 0.25, "ping": 0.35, "echo": 0.45, "charge": 1.2,
+               "skid": 0.8, "whoosh": 0.6, "clap": 0.35, "motor": 1.5, "nib_beep": 0.5, "nib_whistle": 0.9,
+               "ding": 0.8, "chalk": 0.9, "sparkle": 0.9, "page_flip": 0.4, "stars": 1.2, "toaster_pop": 0.5}
 ACTION_DEFAULT_S = 0.9
 ACTION_SECONDS = {"zoom": 1.2, "bonk": 0.7, "dizzy": 1.4, "fall": 1.0, "land": 0.8, "fly_to": 1.2, "skid": 1.0,
                   "drive": 1.5, "stop": 0.5, "turn": 1.0, "resume": 1.0, "spin": 1.2, "enter": 1.0, "exit": 1.0,
@@ -167,6 +178,8 @@ def voice_episode(spec: dict, registry: Registry, out_dir: Path, backend: Backen
         beats = scene.get("beats", [])
         line_idx = [i for i, b in enumerate(beats) if b["type"] == "line"]
         speech = 0.0
+        anchor: dict | None = None        # last action entry an sfx chain can attach to
+        last_ping: float | None = None
         for i, b in enumerate(beats):
             kind, entry = b["type"], {"index": i, "type": b["type"]}
             if kind == "line":
@@ -184,8 +197,23 @@ def voice_episode(spec: dict, registry: Registry, out_dir: Path, backend: Backen
                 entry.update(who=b["who"], do=b["do"], emotion=b.get("emotion"), start_s=_r(t), end_s=_r(t + d))
                 t += d
             elif kind == "sfx":
-                entry.update(id=b["id"], who=b.get("who"), start_s=_r(t), end_s=_r(t + SFX_ADVANCE_S))
-                t += SFX_ADVANCE_S
+                sid_ = b["id"]
+                snd = SFX_SECONDS.get(sid_, SFX_ADVANCE_S)
+                if anchor is not None or (sid_ == "echo" and last_ping is not None):
+                    if sid_ == "echo":
+                        base = last_ping if last_ping is not None else anchor["start_s"]
+                        at, mode = base + ECHO_DELAY_S, "echo"
+                    elif sid_ in SFX_AT_END:
+                        at, mode = anchor["end_s"], "end"
+                    else:
+                        at, mode = anchor["start_s"], "start"
+                    entry.update(id=sid_, who=b.get("who"), start_s=_r(at), end_s=_r(at + snd), sound_s=snd,
+                                 anchor=anchor["index"] if anchor is not None else None, anchorMode=mode)
+                else:
+                    entry.update(id=sid_, who=b.get("who"), start_s=_r(t), end_s=_r(t + snd), sound_s=snd)
+                    t += SFX_ADVANCE_S
+                if sid_ == "ping":
+                    last_ping = entry["start_s"]
             elif kind == "music":
                 d = MUSIC_ADVANCE_S.get(b["cue"], 0.0)
                 entry.update(cue=b["cue"], start_s=_r(t), end_s=_r(t + d))
@@ -194,6 +222,10 @@ def voice_episode(spec: dict, registry: Registry, out_dir: Path, backend: Backen
                 entry.update(start_s=_r(t), end_s=_r(t + float(b["seconds"])))
                 t += float(b["seconds"])
             beats_out.append(entry)
+            if kind == "action":
+                anchor = entry
+            elif kind != "sfx":
+                anchor, last_ping = None, None
         last_end = max([e["end_s"] for e in beats_out] + [LEAD_IN_S])
         duration = ceil_frame(last_end + TAIL_S)
         n_samples = round(duration * RATE)
@@ -234,7 +266,7 @@ def voice_episode(spec: dict, registry: Registry, out_dir: Path, backend: Backen
         "cost": cost, "totalDurationSeconds": _r(total), "totalSpeechSeconds": _r(speech_total),
         "speechCoverage": _r(speech_total / total) if total else 0.0,
         "constants": {"leadIn": LEAD_IN_S, "tail": TAIL_S, "gapSame": GAP_SAME_S, "gapSwitch": GAP_SWITCH_S,
-                      "sfxAdvance": SFX_ADVANCE_S},
+                      "sfxAdvance": SFX_ADVANCE_S, "echoDelay": ECHO_DELAY_S},
         "scenes": [asdict(s) for s in scenes_out],
     }
     (out_dir / "timing.json").write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

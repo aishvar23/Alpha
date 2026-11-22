@@ -337,7 +337,7 @@ def protractor(center: np.ndarray, angle_deg: float, facing: int = 1, radius: fl
         g.add(Line(center, center + d * radius, stroke_width=4, color=OK_GREEN).set_stroke(opacity=0.8))
     d = P(s * math.cos(math.radians(angle_deg)), math.sin(math.radians(angle_deg)))
     g.add(Line(center, center + d * radius * 0.95, stroke_width=7, color=ALERT))
-    g.add(tag(f"{angle_deg:.0f}°", center + P(s * 0.1, -0.45), color="#6C4AB6", size=24))
+    g.add(tag(f"{angle_deg:.0f}°", center + P(s * 0.2, radius + 0.8), color="#6C4AB6", size=24))
     return g
 
 

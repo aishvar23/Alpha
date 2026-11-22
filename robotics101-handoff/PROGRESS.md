@@ -155,6 +155,14 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - Robot-cam cutaway (owner direction): the M01 Blender scene with `style: "cartoon"` (cartoon palette + ink outlines in Workbench, HUD title "ROBOT-CAM"), same motion plan/collision check/threshold; `cartoon/robotcam.py` builds/renders the job with the episode threshold (0.5 m).
 - render2d: per-worker Manim media dir (parallel Text SVG cache race fixed).
 
+## M02.6 — what exists
+- SFX timing fix (ADR-018) in `voice/dialogue.py`; timing.json sfx entries carry `sound_s`, `anchor`, `anchorMode`.
+- `cartoon/scenes.py`: scene engine — generic dialogue performance (Rhubarb lip sync, emotions, line gestures,
+  listener gaze), sfx lettering, per-template staging for all 8 templates (props, rulers, readouts, rule board,
+  servo gauge, quiz/outro), analytic presence, robot-cam splice; `robotics101 render-cartoon`.
+- 2D obstacle plan can target the robot-cam's stop reading; never fires a sample early.
+- Full 1080p30 render of all 8 scenes (video only): 8568 frames, ~8 min on this box; presence ≥ 0.93 for all cast.
+
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.
 - Not met by design / owner decisions pending: the sample narration is a short stub (66 s of speech in 300 s) so QA flags every scene for voice coverage and each scene animates ~10–20 s then holds; espeak is a robotic placeholder voice. Fuller narration + production voice (and then pacing animations to the narration window) are pending the owner's decision.

@@ -90,6 +90,7 @@ ACTIONS = {
     "resume": lambda u, a: {"lean": 0.1 * bump(u)},
     "spin": lambda u, a: {"flip": int(u * 6) % 2 == 1, "dy": 0.15 * bump(u)},
     "arm_to": lambda u, a: {"arm_r": 20 + (_arg_float(a, 90) - 20) * ease_in_out(u / 0.6)},
+    "arm_to_hold": lambda u, a: {"arm_r": _arg_float(a, 90)},     # internal: keep a servo angle after arm_to
     "ping": lambda u, a: {"glow": 0.5 + 0.5 * bump(u)},
     "plug_in": lambda u, a: {"lean": 0.08 * bump(u), "glow": ease_in_out(u)},
     "enter": lambda u, a: {"dy": 0.05 * abs(math.sin(2 * math.pi * 3 * u))},
@@ -101,6 +102,7 @@ ACTIONS = {
     "stethoscope": lambda u, a: {"arm_r": 20 + 65 * ease_out(u / 0.2), "lean": 0.08},
     "highfive": lambda u, a: {"arm_r": 20 + 140 * ease_out_back(u / 0.3), "arm_l": 20 + 70 * bump(u),
                               **_hop(u, 0.2)},
+    "highfive_reach": lambda u, a: {"arm_r": 20 + 90 * ease_out_back(u / 0.3)},   # palm out toward a partner
     "hover": lambda u, a: {"dy": 0.12 * math.sin(2 * math.pi * 2 * u), "arm_l": 20 + 60 * abs(math.sin(14 * u))},
     "fly_to": lambda u, a: {"arm_l": 20 + 70 * abs(math.sin(18 * u)), "lean": 0.15 * bump(u)},
     "return": lambda u, a: {"arm_l": 20 + 70 * abs(math.sin(18 * u)), "lean": 0.15 * bump(u)},
@@ -229,7 +231,8 @@ class Performer:
                 x, y = m.x1, m.y1
             elif t > m.start:
                 u = (t - m.start) / max(1e-6, m.end - m.start)
-                e = ease_in_out(u) if m.ease == "in_out" else ease_out(u) if m.ease == "out" else u
+                e = (ease_in_out(u) if m.ease == "in_out" else ease_out(u) if m.ease == "out"
+                     else u ** 3 if m.ease == "in" else u)
                 return m.x0 + (m.x1 - m.x0) * e, m.y0 + (m.y1 - m.y0) * e + m.arc * 4 * u * (1 - u)
             else:
                 break

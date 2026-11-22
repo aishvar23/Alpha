@@ -279,3 +279,50 @@ def test_voice_package_has_no_third_party_http_and_only_backends_reads_key():
         reads_key = "environ" in t and ("KEY_ENV" in t or "ELEVENLABS_API_KEY" in t)
         if reads_key:   # only the backend (to call the API) and voice QA (to scan artifacts for leaks)
             assert p.relative_to(src).as_posix() in {"voice/backends.py", "voice/qa.py"}, p
+
+
+@needs_ffmpeg
+def test_sfx_anchor_to_actions(cartoon, tmp_path):
+    """M02.6 timing fix: sfx after an action sync to it (start / impact / echo) and don't add dead time."""
+    s = json.loads(json.dumps(cartoon))
+    s["scenes"] = [s["scenes"][0], s["scenes"][3]]          # cold open (zoom/bonk/dizzy/stars) + sensor ping
+    doc = voice_episode(s, load_registry(), tmp_path / "o", B.FixtureBackend(), VoiceCache(tmp_path / "c"),
+                        log=lambda m: None)
+    for sc in doc["scenes"]:
+        beats = sc["beats"]
+        for i, e in enumerate(beats):
+            if e["type"] != "sfx":
+                continue
+            prev = beats[i - 1]
+            assert e["sound_s"] > 0
+            if prev["type"] == "action" or (prev["type"] == "sfx" and "anchorMode" in prev):
+                a = beats[e["anchor"]] if e.get("anchor") is not None else None
+                mode = e["anchorMode"]
+                if mode == "end":
+                    assert e["start_s"] == pytest.approx(a["end_s"])
+                elif mode == "start":
+                    assert e["start_s"] == pytest.approx(a["start_s"])
+                else:
+                    ping = next(b for b in reversed(beats[:i]) if b["type"] == "sfx" and b["id"] == "ping")
+                    assert e["start_s"] == pytest.approx(ping["start_s"] + 0.4)
+    b1 = doc["scenes"][0]["beats"]
+    zoom_a = next(e for e in b1 if e["type"] == "action" and e["do"] == "zoom")
+    bonk = next(e for e in b1 if e["type"] == "sfx" and e["id"] == "bonk")
+    zoom_s = next(e for e in b1 if e["type"] == "sfx" and e["id"] == "zoom")
+    dizzy = next(e for e in b1 if e["type"] == "action" and e["do"] == "dizzy")
+    assert zoom_s["start_s"] == zoom_a["start_s"] and bonk["start_s"] == zoom_a["end_s"]
+    assert dizzy["start_s"] == pytest.approx(zoom_a["end_s"])          # no dead air added by the two sfx
+
+
+@needs_ffmpeg
+def test_sequential_sfx_after_line_advances(cartoon, tmp_path):
+    s = json.loads(json.dumps(cartoon))
+    sc = s["scenes"][1]
+    sc["beats"] = [{"type": "line", "speaker": "bolt", "text": "Hi there."}, {"type": "sfx", "id": "ding"},
+                   {"type": "line", "speaker": "maya", "text": "Hello."}]
+    s["scenes"] = [sc]
+    doc = voice_episode(s, load_registry(), tmp_path / "o", B.FixtureBackend(), VoiceCache(tmp_path / "c"),
+                        log=lambda m: None)
+    l1, ding, l2 = doc["scenes"][0]["beats"]
+    assert ding["start_s"] >= l1["end_s"] and l2["start_s"] >= ding["start_s"] + 0.45 - 1e-6
+    assert "anchorMode" not in ding

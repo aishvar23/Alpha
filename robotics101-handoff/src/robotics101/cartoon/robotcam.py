@@ -21,6 +21,13 @@ def robotcam_job(duration_s: float, threshold_m: float, obstacle: str = "boxes",
             "title": "ROBOT-CAM", "style": "cartoon", JOB_STOP_THRESHOLD_KEY: float(threshold_m)}
 
 
+def robotcam_stop(job: dict, fps: int = 30) -> tuple[float, float]:
+    """(clip time of the stop frame in s, displayed stop reading in m) — syncs the cutaway with the 2D staging."""
+    from robotics101.animation.blender_templates import format_reading_m, plan_mobile_robot_avoidance
+    plan = plan_mobile_robot_avoidance(job["params"], job["durationSeconds"], fps, job[JOB_STOP_THRESHOLD_KEY])
+    return plan.path.stop_frame / fps, float(format_reading_m(plan.path.stop_reading).split()[0])
+
+
 def render_robotcam(out_dir: Path, duration_s: float, threshold_m: float, obstacle: str = "boxes",
                     profile: str = "full", clip_id: str = "robotcam", timeout_s: float = 1800) -> Path:
     from robotics101.animation.blender_render import find_blender, render_blender_scene

@@ -46,20 +46,30 @@ def trunc_cm(d: float) -> float:
     return math.floor(d * 100 + 1e-9) / 100
 
 
-def plan_approach(t0: float, t_stop: float, d0: float, threshold: float) -> Approach:
-    """Constant speed so the first sample below ``threshold`` happens at (or just before) ``t_stop``."""
+def plan_approach(t0: float, t_stop: float, d0: float, threshold: float, stop_at: float | None = None) -> Approach:
+    """Constant speed so the first sample below ``threshold`` happens at (or just before) ``t_stop``.
+
+    ``stop_at`` (m, < threshold) picks the stop distance — e.g. the robot-cam clip's stop reading, so the 2D view
+    and the cutaway show the same number; default: 1 cm under the threshold (0.49 m for 0.5 m)."""
     if not (d0 > threshold > 0 and t_stop > t0):
         raise ValueError("need d0 > threshold > 0 and t_stop > t0")
+    if stop_at is not None and not (0 < stop_at < threshold):
+        raise ValueError("stop_at must be in (0, threshold)")
     n = max(1, math.floor((t_stop - t0) * SAMPLE_HZ))           # samples available
-    target = threshold - 0.01 + 1e-6                             # land just under the threshold (e.g. 0.49 m)
+    target = (stop_at if stop_at is not None else threshold - 0.01) + 1e-6
+    # the sample before the stop must still read >= threshold, else the rule would fire one sample early:
+    # need speed/HZ > threshold - target; if the window is too long for that, start driving later.
+    min_step = (threshold - target) * 1.0001
+    n = min(n, max(1, math.floor((d0 - target) / min_step))) if min_step > 0 else n
     speed = (d0 - target) / (n / SAMPLE_HZ)
+    start = t_stop - n / SAMPLE_HZ                               # waits (if needed) so the stop lands on t_stop
     stop_t = None
     for k in range(1, n + 1):
         if d0 - speed * k / SAMPLE_HZ < threshold:
-            stop_t = t0 + k / SAMPLE_HZ
+            stop_t = start + k / SAMPLE_HZ
             break
     assert stop_t is not None
-    return Approach(t0, d0, speed, threshold, round(stop_t, 6), d0 - speed * (stop_t - t0))
+    return Approach(round(start, 6), d0, speed, threshold, round(stop_t, 6), d0 - speed * (stop_t - start))
 
 
 def assert_no_collision(a: Approach) -> None:
