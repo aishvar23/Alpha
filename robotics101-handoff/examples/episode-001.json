@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "1.0",
+  "episodeId": "ep-001",
+  "episodeNumber": 1,
+  "title": "What Is a Robot?",
+  "audience": "beginner",
+  "durationTargetSeconds": 300,
+  "learningObjectives": [
+    "Identify key robot components",
+    "Explain sense-decide-act in simple terms"
+  ],
+  "sources": [],
+  "scenes": [
+    {
+      "sceneId": "scene-001",
+      "sequence": 1,
+      "title": "Intro: robots in everyday life",
+      "educationalObjective": "Explain intro: robots in everyday life to a complete beginner",
+      "engine": "manim",
+      "template": "robot_intro",
+      "durationTargetSeconds": 30,
+      "narration": "A robot is a machine that can sense the world, process information, and act. Robots come in many shapes, not just humanoid ones.",
+      "parameters": {
+        "examples": [
+          "vacuum",
+          "factory arm",
+          "mobile rover"
+        ]
+      },
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-002",
+      "sequence": 2,
+      "title": "Meet the robot body",
+      "educationalObjective": "Explain meet the robot body to a complete beginner",
+      "engine": "manim",
+      "template": "robot_anatomy",
+      "durationTargetSeconds": 50,
+      "narration": "A robot combines physical parts: a structure, sensors, actuators, a power source, and a controller. Each part has a different job.",
+      "parameters": {
+        "parts": [
+          "structure",
+          "sensors",
+          "actuators",
+          "power",
+          "controller"
+        ]
+      },
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-003",
+      "sequence": 3,
+      "title": "Sensors: noticing the world",
+      "educationalObjective": "Explain sensors: noticing the world to a complete beginner",
+      "engine": "manim",
+      "template": "sensor_range",
+      "durationTargetSeconds": 50,
+      "narration": "A distance sensor measures how far away an object is. It provides a measurement the controller can use to react to nearby obstacles.",
+      "parameters": {
+        "rangeMeters": 3.0,
+        "obstacleDistanceMeters": 1.2
+      },
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "sensor_geometry"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-004",
+      "sequence": 4,
+      "title": "Controller: deciding what to do",
+      "educationalObjective": "Explain controller: deciding what to do to a complete beginner",
+      "engine": "manim",
+      "template": "sense_think_act",
+      "durationTargetSeconds": 55,
+      "narration": "A controller receives sensor readings and follows instructions. For example, if an obstacle is too close, the robot can stop and turn.",
+      "parameters": {
+        "thresholdMeters": 0.5
+      },
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-005",
+      "sequence": 5,
+      "title": "Actuators: moving parts",
+      "educationalObjective": "Explain actuators: moving parts to a complete beginner",
+      "engine": "manim",
+      "template": "servo_rotation",
+      "durationTargetSeconds": 45,
+      "narration": "Motors and actuators turn decisions into movement. Wheels roll, grippers close, and robotic joints rotate to new positions.",
+      "parameters": {
+        "startAngleDegrees": 0,
+        "endAngleDegrees": 60
+      },
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "joint_constraints"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-006",
+      "sequence": 6,
+      "title": "Obstacle avoidance demo",
+      "educationalObjective": "Explain obstacle avoidance demo to a complete beginner",
+      "engine": "blender",
+      "template": "mobile_robot_avoidance",
+      "durationTargetSeconds": 45,
+      "narration": "Watch this simple mobile robot move forward, detect an obstacle, stop, turn, and continue along a clear path.",
+      "parameters": {
+        "robotAsset": "simple_mobile_robot_v1",
+        "obstacle": "cube",
+        "collisionCheck": true
+      },
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "video_probe",
+          "safe_asset"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-007",
+      "sequence": 7,
+      "title": "Recap and challenge",
+      "educationalObjective": "Explain recap and challenge to a complete beginner",
+      "engine": "manim",
+      "template": "recap_quiz",
+      "durationTargetSeconds": 25,
+      "narration": "A robot senses, decides, and acts. Next time, we will look more closely at the sensors that help robots understand their surroundings.",
+      "parameters": {
+        "question": "Which part of the robot measures distance?"
+      },
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible"
+        ]
+      }
+    }
+  ]
+}

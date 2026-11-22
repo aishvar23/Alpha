@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RenderJob",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "runId",
+    "episodeId",
+    "episodeVersion",
+    "sceneId",
+    "sceneVersion",
+    "engine",
+    "inputSpecArtifactId",
+    "idempotencyKey",
+    "attempt",
+    "renderProfile"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "jobId": {
+      "type": "string"
+    },
+    "runId": {
+      "type": "string"
+    },
+    "episodeId": {
+      "type": "string"
+    },
+    "episodeVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sceneId": {
+      "type": "string"
+    },
+    "sceneVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "engine": {
+      "enum": [
+        "manim",
+        "blender",
+        "static"
+      ]
+    },
+    "inputSpecArtifactId": {
+      "type": "string"
+    },
+    "idempotencyKey": {
+      "type": "string"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "renderProfile": {
+      "enum": [
+        "preview",
+        "final"
+      ]
+    }
+  }
+}
