@@ -37,6 +37,7 @@ FPS = 30
 LEAD_IN_S, TAIL_S = 0.4, 0.8
 GAP_SAME_S, GAP_SWITCH_S = 0.25, 0.35
 SFX_ADVANCE_S = 0.45
+KOKORO_PACE_MAX_WPS, KOKORO_PACE_TARGET_WPS = 4.8, 4.3   # Kokoro-only per-line pace fix (rushed short lines)
 SFX_AT_END = frozenset({"bonk", "boing", "skid", "clap"})
 SFX_AT_START = frozenset({"zoom", "whoosh", "motor", "charge", "ping", "nib_whistle", "stars"})
 ECHO_DELAY_S = 0.4
@@ -167,6 +168,17 @@ def voice_episode(spec: dict, registry: Registry, out_dir: Path, backend: Backen
         raw, was_cached = cache.get_or_render(backend, p.request)
         dst = lines_dir / f"{p.sceneId}-{p.index:02d}-{p.speaker}.wav"
         decode_to_wav(raw, dst, p.fx)
+        if backend.name == "kokoro":                 # local + free: re-voice rushed short lines a little slower
+            words = len(p.text.split())
+            wps = words / max(1e-6, _wav_seconds(dst))
+            if words >= 4 and wps > KOKORO_PACE_MAX_WPS:
+                voice = json.loads(json.dumps(registry.get(p.speaker).voice))
+                base = float(voice["kokoro"].get("speed", 1.0))
+                voice["kokoro"]["speed"] = round(max(0.75, base * KOKORO_PACE_TARGET_WPS / wps), 2)
+                p.request = backend.request(voice, p.request.text)
+                raw, _ = cache.get_or_render(backend, p.request)
+                decode_to_wav(raw, dst, p.fx)
+                log(f"  {p.sceneId}#{p.index} {p.speaker}: {wps:.1f} w/s -> kokoro speed {voice['kokoro']['speed']}")
         line_wavs[(p.sceneId, p.index)] = (dst, p)
         if not was_cached:
             log(f"  [{n}/{len(plans)}] synthesized {p.sceneId}#{p.index} {p.speaker} ({p.request.chars} chars)")

@@ -163,6 +163,11 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - 2D obstacle plan can target the robot-cam's stop reading; never fires a sample early.
 - Full 1080p30 render of all 8 scenes (video only): 8568 frames, ~8 min on this box; presence ≥ 0.93 for all cast.
 
+## M02.7 — what exists
+- `cartoon/audio.py`: numpy music synth (marimba/bell/bass/kick/clap/shaker, C major 112 BPM): a seeded looping bed per scene + the six cues; all 19 SFX synthesised; BS.1770 meter (matches ffmpeg ebur128 within 0.3 LU); deterministic ducking envelope from the line windows (−12 dB, 80 ms attack / 350 ms release); mix = dialogue −16 LUFS + music −27 LUFS (ducked) + SFX, trim to −16 LUFS, `alimiter` −1.5 dBFS; stems + mix 48 kHz stereo; byte-identical re-runs.
+- `robotics101 mix` + mix QA (loudness ±1 LU, true peak ≤ −1 dBFS, dialogue stem level, dialogue-over-music ≥ 10 dB in every line, longest silence ≤ 2.5 s, exact sample length, licence coverage). `assets/LICENSES.json` (fonts OFL/Apache, generated music/SFX, voices).
+- Kokoro-only pace fix: lines > 4.8 w/s are re-voiced slower (speed × 4.3/wps, ≥ 0.75; local and free). Robot-cam readout now has a backing card.
+
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.
 - Not met by design / owner decisions pending: the sample narration is a short stub (66 s of speech in 300 s) so QA flags every scene for voice coverage and each scene animates ~10–20 s then holds; espeak is a robotic placeholder voice. Fuller narration + production voice (and then pacing animations to the narration window) are pending the owner's decision.

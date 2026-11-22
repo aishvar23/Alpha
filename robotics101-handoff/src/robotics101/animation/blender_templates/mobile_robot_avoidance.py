@@ -385,6 +385,12 @@ def build_hud(cam, title: str, scene) -> dict:
     readout = text("Readout", "", 44 * px, m_dark, hud, (half_w - margin, sy + half_h - margin - 18 * px, z), "RIGHT")
     rule = text("Rule", "", 34 * px, material("hud_mid", TEXT_MID), hud,
                 (half_w - margin, sy + half_h - margin - 74 * px, z), "RIGHT")
+    if OUTLINE is not None:                       # cartoon robot-cam: backing card so the readout reads over the floor
+        bpy.ops.mesh.primitive_plane_add(size=1.0)
+        card = finish(bpy.context.active_object, "ReadoutCard", material("hud_card", PANEL), hud)
+        card.scale = (820 * px, 150 * px, 1)
+        card.location = (half_w - margin - 390 * px, sy + half_h - margin - 48 * px, z - 0.001)
+        card.visible_shadow = False
     # bottom panel with the step chips "Drive → Obstacle detected → Stop → Turn → Resume"
     bar_h = 120 * px
     bpy.ops.mesh.primitive_plane_add(size=1.0)

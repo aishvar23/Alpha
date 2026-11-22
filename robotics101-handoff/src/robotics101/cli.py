@@ -358,6 +358,25 @@ def _cmd_render_cartoon(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_mix(args: argparse.Namespace) -> int:
+    from robotics101.cartoon.audio import check_mix, mix_episode
+    from robotics101.qa import QaReport
+
+    tp = args.voice_dir / "timing.json"
+    if not tp.is_file():
+        print(f"error: {tp} missing — run `robotics101 voice` first", file=sys.stderr)
+        return EXIT_INPUT
+    timing = json.loads(tp.read_text(encoding="utf-8"))
+    mix_episode(timing, args.voice_dir, args.out)
+    rep = QaReport(timing.get("episodeId"), "mix", str(args.out))
+    lic = Path(__file__).resolve().parents[2] / "assets" / "LICENSES.json"
+    res = check_mix(rep, args.out, timing, json.loads(lic.read_text(encoding="utf-8")) if lic.is_file() else None)
+    for c in rep.checks:
+        print(f"  {'PASS' if c.ok else 'FAIL'} {c.id}: {c.message}")
+    print(json.dumps(res, indent=2))
+    return EXIT_OK if all(c.ok for c in rep.checks if c.severity == "hard") else 1
+
+
 AUDITION_LINES = {
     "bolt": "Ow! Who put a wall there? Sense, think, act. Like a tiny dance, but with math!",
     "maya": "Bolt, that's not a wall. It's a pile of boxes! Today, you're going to learn how robots notice things.",
@@ -457,6 +476,11 @@ def build_parser() -> argparse.ArgumentParser:
     rc.add_argument("--only", action="append", help="sceneId (repeatable)")
     rc.add_argument("--no-robotcam", action="store_true", help="skip the Blender robot-cam cutaway in the rematch")
     rc.set_defaults(func=_cmd_render_cartoon)
+
+    mx = sub.add_parser("mix", help="cartoon: generate music + SFX and mix with the dialogue -> <out>/audio (+ mix QA)")
+    mx.add_argument("--voice-dir", type=Path, required=True)
+    mx.add_argument("--out", type=Path, required=True)
+    mx.set_defaults(func=_cmd_mix)
     return parser
 
 

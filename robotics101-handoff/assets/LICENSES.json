@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "robotics101.licenses/1",
+  "note": "Every non-code asset in a cartoon episode and its licence. Checked by QA (assets.licenses).",
+  "fonts": [
+    {"family": "Fredoka", "license": "OFL-1.1", "source": "https://fonts.google.com/specimen/Fredoka", "use": "props, cards, HUD"},
+    {"family": "Luckiest Guy", "license": "Apache-2.0", "source": "https://fonts.google.com/specimen/Luckiest+Guy", "use": "title card, box labels"},
+    {"family": "Bangers", "license": "OFL-1.1", "source": "https://fonts.google.com/specimen/Bangers", "use": "comic SFX lettering"}
+  ],
+  "generated": {
+    "license": "project (generated in code by robotics101.cartoon.audio; no samples)",
+    "music": ["theme_intro", "title_sting", "idea_sting", "chant_beat", "victory_sting", "outro", "bed"],
+    "sfx": ["zoom", "bonk", "boing", "pop", "ping", "echo", "charge", "skid", "whoosh", "clap", "motor", "nib_beep",
+            "nib_whistle", "ding", "chalk", "sparkle", "page_flip", "stars", "toaster_pop"]
+  },
+  "voices": [
+    {"provider": "kokoro", "model": "Kokoro-82M (kokoro-onnx)", "license": "Apache-2.0", "note": "offline fallback voice"},
+    {"provider": "espeak", "model": "espeak-ng", "license": "GPL-3.0 (tool only; output audio unrestricted)", "note": "CI fallback"},
+    {"provider": "elevenlabs", "license": "ElevenLabs paid plan terms (owner account)", "note": "production voice once approved"}
+  ],
+  "art": {"characters_sets_props": "drawn in code (robotics101.cartoon.rigs/sets/props)", "robot_cam": "rendered by the project's Blender template"}
+}
