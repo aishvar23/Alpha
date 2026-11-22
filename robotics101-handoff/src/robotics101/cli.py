@@ -46,8 +46,8 @@ def _cartoon_not_ready(episode: Path) -> bool:
     except (OSError, json.JSONDecodeError, AttributeError):
         return False
     if version == "1.1":
-        print(f"error: {episode} is a cartoon episode (schema 1.1); the cartoon render pipeline is not "
-              "implemented yet (M02.2-M02.8). Use `validate` for now.", file=sys.stderr)
+        print(f"error: {episode} is a cartoon episode (schema 1.1); this command is for 1.0 "
+              "narrator episodes. Use `render` (end-to-end cartoon pipeline) or `voice` / `render-cartoon` / `mix`.", file=sys.stderr)
         return True
     return False
 
@@ -153,11 +153,41 @@ def _print_qa(doc: dict, out: Path) -> None:
     print(f"QA {doc['status']}: {out / 'qa_report.md'}, {out / 'qa_report.json'}, manifest {out / 'manifest.json'}")
 
 
+def _schema_version(path: Path) -> str | None:
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8")).get("schemaVersion")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return None
+
+
+def _cmd_render_cartoon_episode(args: argparse.Namespace) -> int:
+    from robotics101.cartoon.pipeline import CartoonPipelineError, render_cartoon_episode
+    from robotics101.media import MediaError
+    from robotics101.voice import VoiceError
+
+    size = "1920x1080" if args.profile == "full" else "854x480"
+    try:
+        res = render_cartoon_episode(args.episode, args.out, tts=args.tts or "auto", size=size,
+                                     log=lambda m: print(m, flush=True))
+    except CartoonPipelineError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return e.code
+    except (VoiceError, MediaError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_INPUT
+    _print_qa(res["qa"], args.out)
+    print(f"stage seconds: {res['manifest'].get('stageSeconds')}")
+    return EXIT_QA_FAILED if res["status"] == "FAIL" else EXIT_OK
+
+
 def _cmd_render(args: argparse.Namespace) -> int:
     from robotics101.pipeline import FAIL, PipelineError, render_episode
 
-    if _cartoon_not_ready(args.episode):
-        return EXIT_NOT_IMPLEMENTED
+    if _schema_version(args.episode) == "1.1":
+        return _cmd_render_cartoon_episode(args)
+    if args.tts in ("auto", "kokoro", "elevenlabs"):
+        print(f"error: --tts {args.tts} is for cartoon (1.1) episodes; use espeak or fixture", file=sys.stderr)
+        return EXIT_INPUT
     try:
         outcome = render_episode(args.episode, args.out, args.profile, args.tts, workers=args.workers,
                                  timeout_s=args.timeout, log=lambda m: print(m, flush=True))
@@ -169,6 +199,13 @@ def _cmd_render(args: argparse.Namespace) -> int:
     return EXIT_QA_FAILED if outcome.status == FAIL else EXIT_OK
 
 
+def _bundle_profile(out_dir: Path) -> str:
+    try:
+        return json.loads((out_dir / "manifest.json").read_text(encoding="utf-8")).get("profile") or "full"
+    except (OSError, json.JSONDecodeError):
+        return "full"
+
+
 def _cmd_qa(args: argparse.Namespace) -> int:
     from robotics101.media import MediaError
     from robotics101.pipeline import FAIL, qa_bundle
@@ -177,7 +214,11 @@ def _cmd_qa(args: argparse.Namespace) -> int:
         print(f"error: {args.out_dir} is not a directory", file=sys.stderr)
         return EXIT_INPUT
     try:
-        doc = qa_bundle(args.out_dir, args.profile)
+        if _schema_version(args.out_dir / "episode.json") == "1.1":
+            from robotics101.cartoon.pipeline import qa_and_seal_cartoon
+            doc = qa_and_seal_cartoon(args.out_dir, args.profile or _bundle_profile(args.out_dir))
+        else:
+            doc = qa_bundle(args.out_dir, args.profile)
     except MediaError as e:
         print(f"error: {e}", file=sys.stderr)
         return EXIT_INPUT
@@ -411,13 +452,16 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--timeout", type=float, default=900.0, help="per-scene render timeout in seconds (manim / blender + encode)")
     rs.set_defaults(func=_cmd_render_scenes)
 
-    r = sub.add_parser("render", help="end-to-end: validate -> narrate -> render-scenes -> compose -> manifest -> QA")
+    r = sub.add_parser("render", help="end-to-end: validate -> narrate/voice -> render scenes -> (mix) -> compose -> "
+                                      "manifest -> QA. Schema 1.1 specs use the cartoon pipeline.")
     r.add_argument("episode", type=Path)
     r.add_argument("--out", type=Path, required=True, help="bundle directory, e.g. out/episode-001")
     r.add_argument("--profile", choices=["preview", "full"], default="preview",
                    help="preview = 854x480@30 (default, fast), full = 1920x1080@30")
-    r.add_argument("--tts", choices=["espeak", "fixture"], default=None,
-                   help="TTS provider (default: env TTS_PROVIDER, else espeak)")
+    r.add_argument("--tts", choices=["espeak", "fixture", "auto", "kokoro", "elevenlabs"], default=None,
+                   help="1.0: espeak|fixture (default env TTS_PROVIDER, else espeak). 1.1 cartoon: auto (default; "
+                        "ElevenLabs only once the registry voices are approved, else Kokoro, else espeak)|kokoro|"
+                        "espeak|elevenlabs")
     r.add_argument("--workers", type=int, default=4, help="scenes rendered in parallel (default 4)")
     r.add_argument("--timeout", type=float, default=900.0, help="per-scene render timeout in seconds")
     r.set_defaults(func=_cmd_render)

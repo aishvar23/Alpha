@@ -282,8 +282,9 @@ def tag(text: str, at: np.ndarray, color: str = ALERT, size: int = 26) -> VGroup
 
 # ------------------------------------------------------------------------------------------ rule board
 
-def chalkboard(rule_words: list[str], u: float, at: np.ndarray = P(-0.6, 2.1), width: float = 7.2) -> VGroup:
-    board = RoundedRectangle(width=width, height=2.0, corner_radius=0.12, fill_color="#2D6A4F", fill_opacity=1)
+def chalkboard(rule_words: list[str], u: float, at: np.ndarray = P(-0.6, 2.1), width: float = 7.2,
+               height: float = 2.0) -> VGroup:
+    board = RoundedRectangle(width=width, height=height, corner_radius=0.12, fill_color="#2D6A4F", fill_opacity=1)
     board.set_stroke("#8D5524", 14).move_to(at)
     head = txt("THE RULE", 22, color="#FFD166").move_to(board.get_top() + DOWN * 0.3)
     n = len(rule_words)

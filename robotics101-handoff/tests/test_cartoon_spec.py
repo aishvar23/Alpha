@@ -131,7 +131,7 @@ def test_cartoon_templates_registered():
     assert get_template("cartoon", "cartoon_rule_board").validate_params({"thresholdMeters": 0.5, "readings": [1.0, 2.0]})
 
 
-@pytest.mark.parametrize("cmd", ["narrate", "render-scenes", "render"])
+@pytest.mark.parametrize("cmd", ["narrate", "render-scenes"])   # `render` runs the cartoon pipeline (M02.8)
 def test_m01_pipeline_refuses_cartoon_spec_cleanly(cmd, tmp_path):
     from robotics101.cli import main
     assert main([cmd, str(CARTOON), "--out", str(tmp_path / "o")]) == 3

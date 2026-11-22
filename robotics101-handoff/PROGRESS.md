@@ -14,7 +14,10 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 | M02.2 | Voice layer: ElevenLabs (env key, content-hash cache) → Kokoro → espeak; dialogue timeline; speaker SRT | **done** (ElevenLabs path tested with a mocked API; real calls wait for the key) |
 | M02.3 | Character rigs (Bolt, Maya, Nib): expressions, Rhubarb mouth shapes, blink/gaze/squash/lean/arms/facing; model sheets + golden-image tests | **done** |
 | M02.4 | Motion (performers, actions, blinks, idle/talk, squash/stretch hops) + Rhubarb lip sync (RMS fallback) + parallel 2D clip renderer; 15 s motion test | **done** |
-| M02.5–M02.8 | Sets/props, cartoon scene engine, music/SFX, full episode (see docs/PLAN-cartoon.md) | todo |
+| M02.5 | Sets/props, 2D obstacle demo, cartoon-styled Blender robot-cam | **done** |
+| M02.6 | Cartoon scene engine (8 templates), SFX anchoring, robot-cam splice | **done** |
+| M02.7 | Generated music + SFX, ducked mix, stems, mix/licence QA | **done** |
+| M02.8 | End-to-end cartoon `render` (1080p final), cartoon QA, manifest registry fingerprint, key-art thumbnail, publish dry-run (madeForKids) | **done** (Kokoro voices; ElevenLabs waits for key + sample approval) |
 
 ## M01.1 — what exists
 - `pyproject.toml` (hatchling, src layout, console script `robotics101`, deps: jsonschema; dev: pytest).
@@ -168,6 +171,14 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - `robotics101 mix` + mix QA (loudness ±1 LU, true peak ≤ −1 dBFS, dialogue stem level, dialogue-over-music ≥ 10 dB in every line, longest silence ≤ 2.5 s, exact sample length, licence coverage). `assets/LICENSES.json` (fonts OFL/Apache, generated music/SFX, voices).
 - Kokoro-only pace fix: lines > 4.8 w/s are re-voiced slower (speed × 4.3/wps, ≥ 0.75; local and free). Robot-cam readout now has a backing card.
 
+## M02.8 — what exists
+- `robotics101 render <1.1 spec> --out DIR --profile full` = `cartoon/pipeline.py`: validate → voice (auto: ElevenLabs only once registry voices are approved, else Kokoro, else espeak) → cartoon scenes + Blender robot-cam → mix → one-pass compose (H.264 High CRF 20 `-tune animation`, AAC 192k, faststart) → `cartoon/thumbnail.py` key art (1280×720) → manifest → `cartoon/qa.py` → sealed. `robotics101 qa DIR` re-runs cartoon QA on 1.1 bundles; `publish --dry-run` works unchanged (madeForKids true).
+- Manifest `characterRegistry` {sha256, rigVersion, drawingVersion} + `tts.isSyntheticPlaceholder`; scenes.json records per-line lip-sync agreement.
+- Cartoon QA: final media + captions + dialogue + mix/licences, per-scene frames/resolution/presence ≥ 0.8 (hard), lip-sync mean ≥ 0.9 (soft), teaching facts vs spec (threshold 0.5, rule board, rematch stop 0.47 m, sensor 3 m / Nib 1.2 m, servo 60°/30°, quiz), robot-cam present, registry/drawing version, voice identity, madeForKids, thumbnail.
+- out/m02.8 (Kokoro, 1080p): 8579 frames / 285.967 s, −16.0 LUFS, TP −1.4 dBFS, QA PASS_WITH_WARNINGS (only warning: non-production voice); full run 609 s on 8 CPUs.
+- Review fix: scene-005 SENSE/THINK/ACT chips overlapped the rule board's "THE RULE" header → board 1.7 high at y 2.45, chips at y 3.68 (`chalkboard(height=)`); scene-005 re-rendered and final recomposed (final sha256 5dfad1e8…). QA 101 checks, 0 hard, 1 warning; publish dry-run madeForKids true, wouldUpload false.
+- Next: owner approves ElevenLabs sample lines for Bolt/Maya (needs `ELEVENLABS_API_KEY`) → set `voice.elevenlabs.approved` → re-render with `--tts auto`.
+
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.
 - Not met by design / owner decisions pending: the sample narration is a short stub (66 s of speech in 300 s) so QA flags every scene for voice coverage and each scene animates ~10–20 s then holds; espeak is a robotic placeholder voice. Fuller narration + production voice (and then pacing animations to the narration window) are pending the owner's decision.
@@ -188,11 +199,13 @@ make demo                          # end-to-end preview -> out/episode-001/{fina
 make demo-full                     # end-to-end 1920x1080@30 (~8 min)
 .venv/bin/robotics101 render examples/episode-001.json --out out/episode-001-full --profile full --tts espeak
 .venv/bin/robotics101 qa out/episode-001-full
+.venv/bin/robotics101 render examples/episode-001-cartoon.json --out out/m02.8 --profile full   # cartoon episode (~10 min)
 .venv/bin/robotics101 render-scenes examples/episode-001.json --out out/episode-001 --only scene-003
 .venv/bin/robotics101 render-scenes examples/episode-001.json --out out/episode-001 --profile preview --only scene-006
 ```
 Environment notes: `.venv` is Python 3.12 with manim/jsonschema/pytest; add packages with `uv pip install --python .venv/bin/python <pkg>`. GNU `make` was installed via apt in the dev container (wasn't present by default). espeak-ng 1.52, ffmpeg/ffprobe and sox are installed in the dev container; Blender 4.3.2 is at /usr/bin/blender (headless, no GPU; EEVEE Next works via software GL but is slow; Cycles build lacks OpenImageDenoise).
 
 ## Next steps
-- Owner decisions: expand narration to ~600–700 words (then pace animation beats to each scene's narration window) and pick a production TTS voice.
+- ElevenLabs: once `ELEVENLABS_API_KEY` is set, `voices samples` for Bolt + Maya → owner approval → `approved: true` in the registry → re-render (`--tts auto`).
+- (M01 narrator path) expanded narration superseded by the cartoon script (M02.1).
 - M02 AI authoring (fixture LLM mode), M03 template library + render sandbox, M04 Azure orchestration, M05 review dashboard (approval UI writing `approval.json`), M06 real YouTube private upload (needs owner OAuth + explicit approval bound to `finalVideoSha256`).

@@ -312,7 +312,7 @@ def stage_rule_board(sc: Scene) -> None:
     words = ["IF", "distance", "<", f"{thr:g} m", "→", "STOP", "&", "TURN"]
     sc.back.append(lambda t, m: [pile, tape])
     sc.screen.append(lambda t, m: [PR.chalkboard(words, _u(t, rule_line["start_s"], rule_line["end_s"]),
-                                                 at=PR.P(-1.2, 2.55), width=7.6)] if t >= rule_line["start_s"] - 1 else [])
+                                                 at=PR.P(-1.2, 2.45), width=7.6, height=1.7)] if t >= rule_line["start_s"] - 1 else [])
     expl = sc.lines("maya")[2]
     marks = [(n, sc.word_time(w, after=expl["start_s"] - 0.01)) for n, w in
              (("SENSE", "sense"), ("THINK", "think"), ("ACT", "act"))]
@@ -321,7 +321,7 @@ def stage_rule_board(sc: Scene) -> None:
         if not marks[0][1] or t < marks[0][1]:
             return []
         active = next((n for n, wt in reversed(marks) if wt and t >= wt), None)
-        return [PR.stc_chips(active if t < expl["end_s"] + 3 else None, at=PR.P(-1.2, 3.62))]
+        return [PR.stc_chips(active if t < expl["end_s"] + 3 else None, at=PR.P(-1.2, 3.68))]
     sc.screen.append(chips)
     drive = sc.beat("action", "do", "drive")
     bolt.face(drive["start_s"] - 1.2, 1)
@@ -624,9 +624,14 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
         pres = {cid: min(presence(sc, t)[cid] for t in samples if t >= 6.0 or sc.template != "cartoon_cold_open")
                 for cid in sc.perf}
         facts = {k: v for k, v in sc.facts.items() if k != "approach"}
+        from robotics101.cartoon.lipsync import lipsync_agreement
+        agree = {f"{sid}#{b['index']}": round(lipsync_agreement(sc.perf[b["speaker"]].mouth, Path(voice_dir) / b["wav"],
+                                                                 b["start_s"]), 3)
+                 for b in sc.lines() if b["speaker"] in sc.perf}
         report["scenes"].append({"sceneId": sid, "template": sc.template, "frames": sc.n_frames,
                                  "duration_s": sc.duration, "video": str(final.relative_to(out_dir)),
-                                 "minPresence": pres, "lipsync": sc.lipsync_methods, "facts": facts,
+                                 "minPresence": pres, "lipsync": sc.lipsync_methods,
+                                 "lipsyncAgreement": agree, "facts": facts,
                                  "cutaways": [{**c, "clip": str(Path(c["clip"]).relative_to(out_dir))}
                                               for c in sc.cutaways],
                                  "render_s": round(time.monotonic() - t0, 1)})
