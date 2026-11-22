@@ -1,0 +1,42 @@
+# Robotics 101 — AI Video Production Platform
+
+Repository-ready **implementation handoff for Claude Code and OpenAI Codex**. The desired product autonomously proposes a beginner robotics lesson, researches and verifies it, writes an ~5-minute script, creates parameterized 2D/3D visuals, synthesizes narration, assembles an MP4, validates it and presents it for **human approval** before YouTube publishing.
+
+## Decisions
+- Audience: absolute beginners; lesson duration target 300 s (acceptable 270–330 s).
+- Visual style: hybrid; template-driven Manim (2D), optional headless Blender (3D); never rely on unconstrained text-to-video for technical diagrams.
+- Delivery: **local vertical slice first**, then Azure Durable Functions + Service Bus + Container Apps Jobs.
+- Stack: .NET API/orchestrator, Python AI/render workers, Next.js dashboard, PostgreSQL/Supabase metadata, Azure Blob assets, FFmpeg media composition.
+- Single owner review: draft generation automatic, publication **never** automatic without approval of exact final artifact hash.
+- Grok Bot (optional): editorial coordinator through approved endpoints only; not an execution authority or source of truth.
+
+## Start here (human)
+1. Read `docs/PRODUCT_REQUIREMENTS.md`, `architecture/SYSTEM_DESIGN.md` and `docs/SECURITY_AND_QA.md`.
+2. Open this folder in Claude Code or Codex. Both have tool-specific entrypoints in `CLAUDE.md` and `AGENTS.md`.
+3. Instruct the coding agent: **"Implement `tasks/M01_LOCAL_VERTICAL_SLICE.md` end-to-end. Follow AGENTS.md, do not deploy cloud resources, do not publish to YouTube. Run tests and report artifacts."**
+4. Iterate on the sample episode in `examples/episode-001.json` before adding distributed orchestration.
+
+## Artifact directory
+| Path | Purpose |
+|---|---|
+| `CLAUDE.md` | Claude Code project instructions |
+| `AGENTS.md` | Codex and general coding-agent instructions |
+| `docs/PRODUCT_REQUIREMENTS.md` | Product scope and acceptance |
+| `architecture/SYSTEM_DESIGN.md` | Components, workflows, sequencing |
+| `architecture/STATE_MACHINE.md` | Explicit events, guard conditions, retries |
+| `docs/SECURITY_AND_QA.md` | Sandboxing, trust, quality checks |
+| `docs/OPERATIONS_AND_COST.md` | Observability, cost model, runbook |
+| `docs/GROKBOT_INTEGRATION.md` | Optional Grok Bot role + controlled API |
+| `contracts/episode.schema.json` | JSON Schema contract for episode spec |
+| `contracts/render-job.schema.json` | Render job contract |
+| `examples/episode-001.json` | First pilot structured storyboard |
+| `database/migrations/0001_initial.sql` | Relational source-of-truth schema |
+| `tasks/` | Six gated milestones, implementation checklist |
+| `prompts/AGENT_CONTRACTS.md` | Agent I/O and grounding rules |
+| `docs/DECISIONS.md` | ADR-style agreed choices and open questions |
+
+## Completion definition
+MVP: 3 full episodes generated, each 270–330 seconds, synchronized voice/captions, >=1 deterministic 2D demonstration and >=1 3D demonstration where educationally justified; scene-level retries work; secure isolated rendering; review and version-pinned approval; no unapproved publications. Cost and failure telemetry visible per run.
+
+## Important boundaries
+This is a **design and scaffold**, not a deployed running system. The SQL is a first migration and should be reviewed against actual services before production. Do not commit API keys, private OAuth tokens, or production credentials. Validate vendor costs, API quotas, and content policies at implementation time.
