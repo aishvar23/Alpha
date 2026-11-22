@@ -2,7 +2,8 @@
 
 Exit codes: 0 ok (render/qa: QA PASS or PASS_WITH_WARNINGS), 1 validation failed, 2 usage/input error
 (missing file, bad JSON, missing render prerequisites), 3 command not implemented yet, 4 a scene
-render/probe or the composer failed, 5 QA status FAIL.
+render/probe or the composer failed, 5 QA status FAIL, 6 publish refused (bundle integrity, or any real
+upload: only `publish --dry-run` exists and it never contacts YouTube).
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from robotics101 import __version__
 from robotics101.validation import validate_file
 
 EXIT_OK, EXIT_INVALID, EXIT_INPUT, EXIT_NOT_IMPLEMENTED, EXIT_RENDER_FAILED, EXIT_QA_FAILED = 0, 1, 2, 3, 4, 5
+EXIT_PUBLISH_REFUSED = 6
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
@@ -164,6 +166,37 @@ def _cmd_qa(args: argparse.Namespace) -> int:
     return EXIT_QA_FAILED if doc["status"] == FAIL else EXIT_OK
 
 
+def _cmd_publish(args: argparse.Namespace) -> int:
+    from robotics101.publish import PLAN_NAME, PublishRefused, dry_run, refuse_real_upload
+
+    if not args.dry_run:
+        print(f"REFUSED: {refuse_real_upload()}", file=sys.stderr)
+        return EXIT_PUBLISH_REFUSED
+    if not args.out_dir.is_dir():
+        print(f"error: {args.out_dir} is not a directory", file=sys.stderr)
+        return EXIT_INPUT
+    try:
+        plan = dry_run(args.out_dir)
+    except PublishRefused as e:
+        print(f"REFUSED: {e}", file=sys.stderr)
+        return EXIT_PUBLISH_REFUSED
+    sn, st = plan["snippet"], plan["status"]
+    print("DRY RUN — no network calls, nothing uploaded (YouTube upload is not implemented; M06).")
+    print(f"  video:     {plan['video']['file']} sha256 {plan['video']['sha256']} ({plan['video']['bytes']} bytes, "
+          f"{plan['video']['durationSeconds']} s, {plan['video']['resolution']})")
+    print(f"  title:     {sn['title']}")
+    print(f"  privacy:   {st['privacyStatus']}  category {sn['categoryId']}  syntheticMedia {st['containsSyntheticMedia']}")
+    print(f"  tags:      {', '.join(sn['tags'])}")
+    print(f"  captions:  {(plan['captions'] or {}).get('file')}   thumbnail: {(plan['thumbnail'] or {}).get('file')}")
+    print(f"  chapters:  {len(plan['chapters'])} (valid for YouTube: {plan['chaptersValidForYouTube']})")
+    print(f"  approval:  {plan['approval']['status']} — {plan['approval']['message']}")
+    print(f"  wouldUpload: {plan['wouldUpload']}; blockers:")
+    for b in plan["blockers"]:
+        print(f"    - {b}")
+    print(f"wrote {args.out_dir / PLAN_NAME}")
+    return EXIT_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="robotics101", description="Robotics 101 episode pipeline")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -208,6 +241,12 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--profile", choices=["preview", "full"], default=None,
                    help="expected profile (default: from manifest.json / compose.json)")
     q.set_defaults(func=_cmd_qa)
+
+    pb = sub.add_parser("publish", help="YouTube publisher STUB: --dry-run writes publish_plan.json; never uploads")
+    pb.add_argument("out_dir", type=Path)
+    pb.add_argument("--dry-run", action="store_true",
+                    help="build publish_plan.json (metadata, file refs, chapters, blockers). Without it: refused.")
+    pb.set_defaults(func=_cmd_publish)
     return parser
 
 

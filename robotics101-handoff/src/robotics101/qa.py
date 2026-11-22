@@ -301,6 +301,18 @@ def run_qa(out_dir: Path, profile: str | Profile | None = None) -> QaReport:
     rep.soft("profile.publishable", profile_name == "full",
              f"profile {profile_name} ({profile.width}x{profile.height})" +
              (" is a low-res preview — not publishable" if profile_name != "full" else ""), profile_name)
+    thumb = out_dir / "thumbnail.png"
+    size = None
+    if thumb.is_file():
+        try:
+            tv = summarize(thumb, ffprobe).video or {}
+            size = (tv.get("width"), tv.get("height"))
+        except MediaError:
+            size = None
+    rep.soft("thumbnail", size == (1280, 720),
+             "thumbnail.png 1280x720" if size == (1280, 720) else
+             (f"thumbnail.png is {size[0]}x{size[1]} (expected 1280x720)" if size else "thumbnail.png missing/unreadable"),
+             list(size) if size else None)
     return rep
 
 

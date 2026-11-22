@@ -17,12 +17,13 @@ from robotics101.animation.render import PROFILES, RenderSetupError, render_scen
 from robotics101.animation.timing import resolve_scene_durations
 from robotics101.compose import ComposeError, compose_episode
 from robotics101.manifest import attach_qa, build_manifest, new_run_id, write_manifest
-from robotics101.media import MediaError, check_ffmpeg, tool_versions
+from robotics101.media import MediaError, check_ffmpeg, find_ffmpeg, tool_versions
 from robotics101.narration import TtsError, get_provider, narrate_episode
 from robotics101.qa import FAIL, run_qa, write_qa_report
 from robotics101.validation import validate_file
 
-STALE_OUTPUTS = ("final.mp4", "compose.json", "manifest.json", "qa_report.json", "qa_report.md", "episode.json")
+STALE_OUTPUTS = ("final.mp4", "compose.json", "manifest.json", "qa_report.json", "qa_report.md", "episode.json",
+                 "thumbnail.png", "publish_plan.json")
 
 
 class PipelineError(RuntimeError):
@@ -141,8 +142,17 @@ def render_episode(episode: Path, out_dir: Path, profile_name: str = "preview", 
         comp = compose_episode(spec, timing, out_dir, profile, log=log)
     except ComposeError as e:
         raise PipelineError(f"compose failed: {e}", 4) from e
+    try:
+        from dataclasses import asdict as _asdict
+
+        from robotics101.compose.thumbnail import THUMB_NAME, make_thumbnail, pick_thumbnail_time, thumbnail_title
+        at = pick_thumbnail_time(spec, [_asdict(s) for s in comp.segments])
+        make_thumbnail(out_dir / "final.mp4", out_dir / THUMB_NAME, thumbnail_title(spec), at, find_ffmpeg()[0])
+    except MediaError as e:
+        raise PipelineError(f"thumbnail failed: {e}", 4) from e
     stage("compose", t0)
-    log(f"  final {comp.total_frames} frames = {comp.total_duration_s:.3f}s [{stages['compose']}s]")
+    log(f"  final {comp.total_frames} frames = {comp.total_duration_s:.3f}s; thumbnail.png from t={at:.1f}s "
+        f"[{stages['compose']}s]")
 
     # 5. manifest (everything except the QA reports, which QA writes next)
     t0 = time.monotonic()

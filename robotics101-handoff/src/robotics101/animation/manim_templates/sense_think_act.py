@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from manim import (
     DOWN, RIGHT, UP, Arrow, CurvedArrow, Create, FadeIn, Indicate, Line, RoundedRectangle, Triangle, ValueTracker,
     VGroup, Write, always_redraw,
@@ -53,19 +55,20 @@ class SenseThinkActScene(TemplateScene):
         # -- reading on a scale with the threshold marked
         line_y = rule.get_bottom()[1] - 0.85
         x0, x1 = left + 1.0, right - 1.0
-        vmax = start * 1.1
+        vmax = math.ceil(start * 1.1 / 0.5) * 0.5   # round scale end (e.g. 2.0 m) so it can be labelled
 
         def vx(v: float) -> float:
             return x0 + (x1 - x0) * v / vmax
 
         scale = Line([x0, line_y, 0], [x1, line_y, 0], color=MUTED, stroke_width=4)
         zero = text("0 m", LABEL_SIZE, MUTED).next_to(scale.get_start(), DOWN, buff=0.15)
+        end_lbl = text(fmt_m(vmax), LABEL_SIZE, MUTED).next_to(scale.get_end(), DOWN, buff=0.15)
         thr_tick = Line([vx(thr), line_y + 0.35, 0], [vx(thr), line_y - 0.35, 0], color=ALERT, stroke_width=5)
         thr_lbl = text(f"threshold {fmt_m(thr)}", LABEL_SIZE, ALERT).next_to(thr_tick, DOWN, buff=0.1)
         if thr_lbl.get_left()[0] < zero.get_right()[0] + 0.2:
             thr_lbl.next_to(zero, RIGHT, buff=0.3)
         danger = Line([x0, line_y, 0], [vx(thr), line_y, 0], color=ALERT, stroke_width=8)
-        self.anim(Create(scale), FadeIn(zero), Create(danger), Create(thr_tick), FadeIn(thr_lbl), seconds=1.0)
+        self.anim(Create(scale), FadeIn(zero), FadeIn(end_lbl), Create(danger), Create(thr_tick), FadeIn(thr_lbl), seconds=1.0)
 
         reading = ValueTracker(start)
 

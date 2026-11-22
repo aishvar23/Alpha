@@ -5,7 +5,7 @@ OUT     ?= out/episode-001
 TTS_PROVIDER ?= espeak
 PROFILE ?= preview
 
-.PHONY: install test test-e2e validate narrate scenes scenes-full render qa demo demo-full clean
+.PHONY: install test test-e2e validate narrate scenes scenes-full render qa demo demo-full publish-dry-run clean
 
 install:  ## editable install of robotics101 (+ pytest) into the existing .venv
 	uv pip install --python $(PYTHON) -e ".[dev]"
@@ -39,6 +39,9 @@ demo:  ## full pipeline, preview 854x480 (~1.5-2 min on 8 CPUs) -> $(OUT)/final.
 
 demo-full:  ## full pipeline at 1920x1080@30 (~8-10 min on 8 CPUs; Blender scene dominates)
 	$(MAKE) render PROFILE=full
+
+publish-dry-run:  ## YouTube publisher STUB: writes $(OUT)/publish_plan.json; no network, never uploads
+	$(VENV)/bin/robotics101 publish $(OUT) --dry-run
 
 clean:
 	rm -rf out .pytest_cache build dist src/*.egg-info

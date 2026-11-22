@@ -38,6 +38,8 @@ def collect_artifacts(out_dir: Path, scene_ids: list[str]) -> list[tuple[str, st
         items.append((f"clips/{sid}.mp4", "scene_clip", sid))
     items += [("final.mp4", "final_video", None), ("captions.srt", "captions", None),
               ("compose.json", "compose_report", None)]
+    if (Path(out_dir) / "thumbnail.png").is_file():
+        items.append(("thumbnail.png", "thumbnail", None))
     if (Path(out_dir) / "scenes" / "render-report.json").is_file():
         items.append(("scenes/render-report.json", "render_report", None))
     return items

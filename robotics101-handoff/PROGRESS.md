@@ -9,7 +9,7 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 | M01.3 | Manim templates: robot_intro, robot_anatomy, sensor_range, sense_think_act, servo_rotation, recap_quiz; `render-scenes` CLI | **done** |
 | M01.4 | Headless Blender scene: mobile_robot_avoidance (primitives only) | **done** |
 | M01.5 | Composer (FFmpeg) + ffprobe QA report + SHA-256 manifest + `robotics101 render` / `make demo` | **done** |
-| M01.6 | First E2E run → `out/episode-001/final.mp4`; publisher dry-run stub (no uploads) | todo (next) |
+| M01.6 | First E2E run → `out/episode-001/final.mp4`; publisher dry-run stub (no uploads) | **done** |
 
 ## M01.1 — what exists
 - `pyproject.toml` (hatchling, src layout, console script `robotics101`, deps: jsonschema; dev: pytest).
@@ -102,6 +102,28 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - AAC bitrate shows ~40 kb/s average because most of the programme is silence (encoder target 192k).
 - Audio built in Python from PCM (whole programme in memory: ~115 MB at 300 s stereo 48 kHz float) — fine for 5-min episodes.
 
+## M01.6 — what exists
+- **First E2E run + frame-by-frame review** of `examples/episode-001.json` at 1080p (`render … --out out/episode-001 --profile full --tts espeak`). Every second of every scene was sampled into contact sheets (plus key frames at cuts and beats) and inspected; narration onsets checked with `silencedetect` (speech starts at +0.5 s of every scene, matching captions). Defects found and fixed:
+  1. scene-004 (sense_think_act): the distance scale had only "0 m" and the threshold label — no end value, so the bar's scale was unreadable. Scale end is now rounded up to a 0.5 m step (2.0 m for threshold 0.5) and labelled.
+  2. scene-006 (Blender HUD): the active "Drive" step chip was red (the alert colour) while the robot simply drove; Drive/Resume chips are now green, Detected/Stop/Turn red.
+  (M01.5 already fixed the 0.6 m vs 0.5 m threshold and the "Sensor: 0.50 m" < "0.50 m" readout.) No sync, cut, overflow or clipping defects found.
+- `compose/thumbnail.py` — `thumbnail.png` 1280×720 from the 3D demo (≈10 s into scene-006, the obstacle-detected beat) with an "Ep. 1: What Is a Robot?" band (ffmpeg `drawtext`, Inter via fontconfig; untitled if no font). Listed in the manifest (role `thumbnail`); QA soft-checks 1280×720.
+- `publish/youtube_stub.py` + `robotics101 publish <out> --dry-run` / `make publish-dry-run` — dry run only: verifies final.mp4 against manifest (mismatch/tampering → refused, exit 6), writes `publish_plan.json` (snippet title/description/tags/category 27, status private + containsSyntheticMedia, selfDeclaredMadeForKids left null for the owner, captions/thumbnail refs with SHA-256, chapters from scene starts, QA summary, `approval.json` state, blockers; `wouldUpload: false`, `networkCalls: 0`). Without `--dry-run`: "real upload not implemented (M06); requires owner approval…", exit 6. `approval.json` = `{approvedSha256, reviewer, decision: "approved", timestamp}` bound to the exact video hash. No network/Google/OAuth imports (AST test) and a socket-blocking test. ADR-014.
+- Tests: 162 collected — `make test` 161 passed, 1 skipped (E2E; `make test-e2e` 2 passed, ~110 s). New `test_publish.py` (11).
+
+### Sample run (2026-11-22, espeak, full)
+- Stage seconds: narrate 1.0, render-scenes 468, compose+thumbnail 36, manifest 2, QA 22 (total ≈ 8.8 min on 8 CPUs).
+- final.mp4: h264 High yuv420p 1920×1080 30/1, 9000 frames, 300.000 s; AAC-LC 48 kHz stereo 300.000 s; 16.2 MB; −16.1 LUFS integrated, max −1.2 dBFS. captions.srt 16 cues. manifest 30 artifacts, `finalVideoSha256` 193dee4f…7b42, publish not_published. QA PASS_WITH_WARNINGS (0 hard, 8 warnings: voice coverage 18–41 % ×7, synthetic TTS).
+
+## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
+- Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.
+- Not met by design / owner decisions pending: the sample narration is a short stub (66 s of speech in 300 s) so QA flags every scene for voice coverage and each scene animates ~10–20 s then holds; espeak is a robotic placeholder voice. Fuller narration + production voice (and then pacing animations to the narration window) are pending the owner's decision.
+
+### Known limitations
+- Thumbnail title band is 88 % opaque, so the HUD step chips faintly show through under it.
+- Thumbnail frame choice is a fixed heuristic (not content-aware).
+- Publisher is a stub: no OAuth, no upload, no resumable-upload/quota logic (M06).
+
 ## Commands
 ```bash
 make install && make test && make validate
@@ -118,5 +140,6 @@ make demo-full                     # end-to-end 1920x1080@30 (~8 min)
 ```
 Environment notes: `.venv` is Python 3.12 with manim/jsonschema/pytest; add packages with `uv pip install --python .venv/bin/python <pkg>`. GNU `make` was installed via apt in the dev container (wasn't present by default). espeak-ng 1.52, ffmpeg/ffprobe and sox are installed in the dev container; Blender 4.3.2 is at /usr/bin/blender (headless, no GPU; EEVEE Next works via software GL but is slow; Cycles build lacks OpenImageDenoise).
 
-## Next step: M01.6
-First end-to-end review of episode-001 (frame-by-frame review of final.mp4, fix what it shows; consider expanding the stub narration so scenes are not mostly holds) + a YouTube publisher **stub, dry-run only** (no network, no uploads; must bind to `manifest.json` `finalVideoSha256` and refuse without explicit approval).
+## Next steps
+- Owner decisions: expand narration to ~600–700 words (then pace animation beats to each scene's narration window) and pick a production TTS voice.
+- M02 AI authoring (fixture LLM mode), M03 template library + render sandbox, M04 Azure orchestration, M05 review dashboard (approval UI writing `approval.json`), M06 real YouTube private upload (needs owner OAuth + explicit approval bound to `finalVideoSha256`).

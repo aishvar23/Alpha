@@ -67,6 +67,8 @@ STEPS = [  # HUD step chips: (label, phases that highlight it)
     ("Turn", {K.PHASE_TURN}),
     ("Resume", {K.PHASE_RESUME}),
 ]
+# chip colour: green while the robot drives (Drive / Resume), red for the stop-and-turn response
+GO_PHASES = {K.PHASE_START, K.PHASE_DRIVE, K.PHASE_RESUME}
 BEAM_HALF_ANGLE = math.radians(7.0)
 HUD_DIST = 1.0                          # HUD plane distance in front of the camera (m)
 # Allowed region (normalised camera coords) for the 3D action, leaving room for the HUD bands.
@@ -409,7 +411,7 @@ def apply_pose(p: K.Pose, plan, robot, wheels, beam_pivot, beam_mat, hud) -> Non
     hud["rule"].data.body = f"rule: stop & turn if distance < {format_threshold_m(plan.cfg.stop_threshold)}"
     for chip, (_, phases) in zip(hud["chips"], STEPS):
         active = p.phase in phases
-        chip.data.materials[0] = (m_go if p.phase == K.PHASE_RESUME else m_act) if active else m_dim
+        chip.data.materials[0] = (m_go if p.phase in GO_PHASES else m_act) if active else m_dim
 
 
 # ---------------------------------------------------------------- main

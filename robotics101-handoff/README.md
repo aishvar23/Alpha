@@ -40,6 +40,7 @@ make demo       # END-TO-END, preview 854x480@30 (~1.5-2 min on 8 CPUs) -> out/e
 make demo-full  # same at 1920x1080@30 (~8-10 min on 8 CPUs; the Blender scene dominates)
 make demo TTS_PROVIDER=fixture   # labelled beep placeholder instead of espeak-ng
 make qa         # re-run QA on out/episode-001 (e.g. after inspecting/tampering)
+make publish-dry-run  # YouTube publisher STUB -> out/episode-001/publish_plan.json (no network, never uploads)
 
 # equivalent CLI
 .venv/bin/robotics101 render examples/episode-001.json --out out/episode-001 [--profile preview|full] [--tts espeak|fixture]
@@ -60,13 +61,24 @@ make scenes     # Manim 2D + Blender 3D scenes -> out/episode-001/scenes/<sceneI
 | `captions.srt` | cues on the final (frame-quantised) timeline |
 | `qa_report.json` / `qa_report.md` | status `PASS` / `PASS_WITH_WARNINGS` / `FAIL`, every check, per-scene table |
 | `manifest.json` | every artifact: relative path, SHA-256, bytes, ffprobe summary; `finalVideoSha256`; `publish.status = not_published`, `requiresApprovalOfSha256`; tool versions, run id, TTS label, stage timings |
+| `thumbnail.png` | 1280x720 frame (3D demo scene ≈10 s in, else mid-video) + episode title band |
+| `publish_plan.json` | only after `publish --dry-run`: what an upload would send + why it is blocked |
 | `episode.json`, `timing.json`, `compose.json` | exact input spec copy, narration timeline, composer report |
 | `audio/<sceneId>.wav`, `scenes/<sceneId>.mp4`, `clips/<sceneId>.mp4` | narration, video-only scene renders, per-scene A/V clips |
 | `logs/<sceneId>.log`, `scenes/render-report.json` | render logs |
 
 QA hard gates (→ `FAIL`): decodable; h264 High yuv420p; resolution of the profile; 30 fps CFR; AAC 48 kHz stereo present; not silent (programme mean > −60 dBFS, each narrated clip peak > −50 dBFS); no clipping (max < −0.1 dBFS); total 270–330 s and equal to the scene timeline (±2 frames); audio/video stream lengths within 0.1 s; captions present, monotonic, inside the video; every scene + clip present with its scheduled duration (±1 frame); manifest hashes/sizes match and publish block untouched. Warnings (→ `PASS_WITH_WARNINGS`): synthetic/fixture TTS, voice coverage < 60 % of a scene ("holds fill gap — not acceptable educational pacing"), preview profile (not publishable), loudness outside −16 ± 2 LUFS, missing +faststart.
 
-`validate` exit codes: 0 valid, 1 invalid (errors, or warnings with `--strict`), 2 unreadable/bad JSON. Errors = schema, scene IDs/sequence, unknown template, invalid template parameters; warnings = duration pacing (see `src/robotics101/validation.py`). `narrate` audio is labelled synthetic (espeak-ng) or FIXTURE placeholder — never production narration. `render-scenes` renders each `engine: manim` scene (Manim) and `engine: blender` scene (headless Blender, Workbench engine, primitives only; `collisionCheck` asserted before and inside Blender; the robot's stop threshold is the episode's `sense_think_act.thresholdMeters`, default 0.5 m) for exactly its `timing.json` duration, video only, then ffprobe-checks it. Blender: `BLENDER_BIN`, `ROBOTICS101_BLENDER_PROCS` (default min(4, CPUs/2), capped by free RAM), `ROBOTICS101_BLENDER_ENGINE=eevee` (slower). Nothing in this repo uploads or publishes. Milestone status: `PROGRESS.md`.
+`validate` exit codes: 0 valid, 1 invalid (errors, or warnings with `--strict`), 2 unreadable/bad JSON. Errors = schema, scene IDs/sequence, unknown template, invalid template parameters; warnings = duration pacing (see `src/robotics101/validation.py`). `narrate` audio is labelled synthetic (espeak-ng) or FIXTURE placeholder — never production narration. `render-scenes` renders each `engine: manim` scene (Manim) and `engine: blender` scene (headless Blender, Workbench engine, primitives only; `collisionCheck` asserted before and inside Blender; the robot's stop threshold is the episode's `sense_think_act.thresholdMeters`, default 0.5 m) for exactly its `timing.json` duration, video only, then ffprobe-checks it. Blender: `BLENDER_BIN`, `ROBOTICS101_BLENDER_PROCS` (default min(4, CPUs/2), capped by free RAM), `ROBOTICS101_BLENDER_ENGINE=eevee` (slower). Nothing in this repo uploads or publishes.
+
+### Publisher stub (dry run only)
+`robotics101 publish <out_dir> --dry-run` re-hashes `final.mp4` against `manifest.json` (any mismatch or tampered manifest → refused, exit 6) and writes `publish_plan.json`: YouTube `snippet` (title, description with learning objectives + chapters + synthetic-voice note, tags, category 27 Education), `status` (`privacyStatus: private`, `containsSyntheticMedia`, `selfDeclaredMadeForKids: null` = owner decision), caption/thumbnail file refs with SHA-256, chapters from the scene timeline, QA summary, the state of `approval.json`, and the list of blockers. `wouldUpload` is always `false`. Without `--dry-run` the command refuses (exit 6): real upload is M06 and needs an owner approval file bound to the exact video hash:
+```json
+{"approvedSha256": "<sha256 of final.mp4>", "reviewer": "<name>", "decision": "approved", "timestamp": "<ISO-8601>"}
+```
+The stub imports no network/Google/OAuth library and reads no credentials (enforced by tests).
+
+Milestone status: `PROGRESS.md`.
 
 ## Artifact directory
 | Path | Purpose |
