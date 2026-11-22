@@ -12,7 +12,7 @@
 - ADR-009: Grok Bot optional editorial coordinator, not production control plane.
 
 ## Open decisions (do not block M01)
-- TTS provider and desired narrator voice.
+- TTS provider and desired narrator voice. (M01.2 uses offline espeak-ng / labelled fixture beeps via `TTS_PROVIDER`; production provider still open — `external` is a no-network stub.)
 - Exact LLM provider/model and per-agent quality-cost routing.
 - How much of pilot episode must use Blender versus stylized 2D, while satisfying hybrid test.
 - Reviewer authentication provider and multi-user future.

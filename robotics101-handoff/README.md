@@ -22,9 +22,11 @@ Requires Python 3.12, [uv](https://docs.astral.sh/uv/) and GNU make; uses the ex
 make install    # editable install of the `robotics101` package + pytest into .venv
 make test       # pytest suite (no network, no API keys)
 make validate   # robotics101 validate examples/episode-001.json
+make narrate    # per-scene TTS -> out/episode-001/{audio/*.wav,timing.json,captions.srt}
+                # needs espeak-ng + ffmpeg; or: make narrate TTS_PROVIDER=fixture (no binaries)
 .venv/bin/robotics101 validate path/to/episode.json [--strict]
 ```
-`validate` exit codes: 0 valid, 1 invalid (errors, or warnings with `--strict`), 2 unreadable/bad JSON. Errors = schema, scene IDs/sequence, unknown template, invalid template parameters; warnings = duration pacing (see `src/robotics101/validation.py`). `render` and `make demo` are placeholders until M01.5. Milestone status: `PROGRESS.md`.
+`validate` exit codes: 0 valid, 1 invalid (errors, or warnings with `--strict`), 2 unreadable/bad JSON. Errors = schema, scene IDs/sequence, unknown template, invalid template parameters; warnings = duration pacing (see `src/robotics101/validation.py`). `narrate` audio is labelled synthetic (espeak-ng) or FIXTURE placeholder — never production narration; `timing.json` flags scenes where speech covers <60% of the scene. `render` and `make demo` are placeholders until M01.5. Milestone status: `PROGRESS.md`.
 
 ## Artifact directory
 | Path | Purpose |
