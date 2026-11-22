@@ -1,7 +1,8 @@
 """`robotics101` command-line entry point.
 
-Exit codes: 0 ok, 1 validation failed, 2 usage/input error (missing file, bad JSON,
-missing render prerequisites), 3 command not implemented yet, 4 a scene render/probe failed.
+Exit codes: 0 ok (render/qa: QA PASS or PASS_WITH_WARNINGS), 1 validation failed, 2 usage/input error
+(missing file, bad JSON, missing render prerequisites), 3 command not implemented yet, 4 a scene
+render/probe or the composer failed, 5 QA status FAIL.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from pathlib import Path
 from robotics101 import __version__
 from robotics101.validation import validate_file
 
-EXIT_OK, EXIT_INVALID, EXIT_INPUT, EXIT_NOT_IMPLEMENTED, EXIT_RENDER_FAILED = 0, 1, 2, 3, 4
+EXIT_OK, EXIT_INVALID, EXIT_INPUT, EXIT_NOT_IMPLEMENTED, EXIT_RENDER_FAILED, EXIT_QA_FAILED = 0, 1, 2, 3, 4, 5
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
@@ -116,9 +117,51 @@ def _cmd_render_scenes(args: argparse.Namespace) -> int:
     return EXIT_RENDER_FAILED if failed else EXIT_OK
 
 
+def _print_qa(doc: dict, out: Path) -> None:
+    for c in doc["failures"]:
+        print(f"  FAIL {c['id']}: {c['message']}")
+    for c in doc["warnings"]:
+        print(f"  warn {c['id']}: {c['message']}")
+    f = doc.get("final") or {}
+    v = ((f.get("probe") or {}).get("video")) or {}
+    a = ((f.get("probe") or {}).get("audio")) or {}
+    if v:
+        print(f"final.mp4: {v.get('codec')} {v.get('profile')} {v.get('pix_fmt')} {v.get('width')}x{v.get('height')} "
+              f"@{v.get('fps'):g}fps {v.get('frames')} frames; audio {a.get('codec')} {a.get('sample_rate')} Hz "
+              f"{a.get('channels')}ch; {(f.get('probe') or {}).get('duration_s')}s")
+    if f.get("sha256"):
+        print(f"finalVideoSha256: {f['sha256']}  (publish: not_published; approval must bind to this hash)")
+    print(f"QA {doc['status']}: {out / 'qa_report.md'}, {out / 'qa_report.json'}, manifest {out / 'manifest.json'}")
+
+
 def _cmd_render(args: argparse.Namespace) -> int:
-    print("error: render not implemented yet (M01.5)", file=sys.stderr)
-    return EXIT_NOT_IMPLEMENTED
+    from robotics101.pipeline import FAIL, PipelineError, render_episode
+
+    try:
+        outcome = render_episode(args.episode, args.out, args.profile, args.tts, workers=args.workers,
+                                 timeout_s=args.timeout, log=lambda m: print(m, flush=True))
+    except PipelineError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return e.exit_code
+    _print_qa(outcome.qa, args.out)
+    print(f"stage seconds: {outcome.stage_seconds}")
+    return EXIT_QA_FAILED if outcome.status == FAIL else EXIT_OK
+
+
+def _cmd_qa(args: argparse.Namespace) -> int:
+    from robotics101.media import MediaError
+    from robotics101.pipeline import FAIL, qa_bundle
+
+    if not args.out_dir.is_dir():
+        print(f"error: {args.out_dir} is not a directory", file=sys.stderr)
+        return EXIT_INPUT
+    try:
+        doc = qa_bundle(args.out_dir, args.profile)
+    except MediaError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_INPUT
+    _print_qa(doc, args.out_dir)
+    return EXIT_QA_FAILED if doc["status"] == FAIL else EXIT_OK
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -149,10 +192,22 @@ def build_parser() -> argparse.ArgumentParser:
     rs.add_argument("--timeout", type=float, default=900.0, help="per-scene render timeout in seconds (manim / blender + encode)")
     rs.set_defaults(func=_cmd_render_scenes)
 
-    r = sub.add_parser("render", help="render an episode (not implemented yet: M01.5)")
+    r = sub.add_parser("render", help="end-to-end: validate -> narrate -> render-scenes -> compose -> manifest -> QA")
     r.add_argument("episode", type=Path)
-    r.add_argument("--out", type=Path, default=None)
+    r.add_argument("--out", type=Path, required=True, help="bundle directory, e.g. out/episode-001")
+    r.add_argument("--profile", choices=["preview", "full"], default="preview",
+                   help="preview = 854x480@30 (default, fast), full = 1920x1080@30")
+    r.add_argument("--tts", choices=["espeak", "fixture"], default=None,
+                   help="TTS provider (default: env TTS_PROVIDER, else espeak)")
+    r.add_argument("--workers", type=int, default=4, help="scenes rendered in parallel (default 4)")
+    r.add_argument("--timeout", type=float, default=900.0, help="per-scene render timeout in seconds")
     r.set_defaults(func=_cmd_render)
+
+    q = sub.add_parser("qa", help="re-run QA on an existing bundle (rewrites qa_report.*, re-seals manifest)")
+    q.add_argument("out_dir", type=Path)
+    q.add_argument("--profile", choices=["preview", "full"], default=None,
+                   help="expected profile (default: from manifest.json / compose.json)")
+    q.set_defaults(func=_cmd_qa)
     return parser
 
 

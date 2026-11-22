@@ -180,3 +180,52 @@ def test_kinematics_is_blender_python_compatible():
                 for m in mods:
                     assert m.split(".")[0] in {"__future__", "math", "json", "dataclasses", "pathlib", "typing",
                                                "robotics101"}, (rel, m)
+
+
+# ---------------------------------------------------------------- stop threshold from the episode (M01.5 fix)
+
+def test_default_stop_threshold_matches_taught_rule():
+    from robotics101.animation.blender_templates import DEFAULT_STOP_THRESHOLD_M
+    assert CFG.stop_threshold == DEFAULT_STOP_THRESHOLD_M == 0.5
+
+
+def test_episode_stop_threshold_from_sense_think_act(spec):
+    import copy
+
+    from robotics101.animation.blender_templates import episode_stop_threshold
+    assert episode_stop_threshold(spec) == 0.5            # episode-001 scene-004 thresholdMeters
+    s = copy.deepcopy(spec)
+    for sc in s["scenes"]:
+        if sc["template"] == "sense_think_act":
+            sc["parameters"]["thresholdMeters"] = 0.8
+    assert episode_stop_threshold(s) == 0.8
+    s["scenes"] = [sc for sc in s["scenes"] if sc["template"] != "sense_think_act"]
+    assert episode_stop_threshold(s) == 0.5               # no sense_think_act -> default
+
+
+@pytest.mark.parametrize("thr", [0.3, 0.5, 0.8, 1.2])
+def test_plan_uses_given_threshold_and_stays_collision_free(thr):
+    plan = plan_mobile_robot_avoidance(PARAMS, 45.0, 30, thr)
+    assert plan.cfg.stop_threshold == thr and plan.collision_checked
+    step = plan.cfg.drive_speed / 30
+    assert thr - step <= plan.path.stop_reading < thr
+    K.assert_collision_free(plan.path, plan.geom, plan.cfg)
+
+
+def test_plan_default_threshold_is_half_metre():
+    plan = plan_mobile_robot_avoidance(PARAMS, 45.0, 30)
+    assert plan.cfg.stop_threshold == 0.5 and plan.path.stop_reading < 0.5
+
+
+def test_plan_rejects_threshold_beyond_sensor_range():
+    with pytest.raises(K.PathPlanningError):
+        plan_mobile_robot_avoidance(PARAMS, 45.0, 30, 2.0)
+
+
+def test_hud_readout_never_shows_threshold_value_when_stopping():
+    from robotics101.animation.blender_templates import format_reading_m, format_threshold_m
+    plan = plan_mobile_robot_avoidance(PARAMS, 45.0, 30)
+    assert format_reading_m(plan.path.stop_reading) != "0.50 m"     # 0.498 -> "0.49 m"
+    assert format_reading_m(0.4983) == "0.49 m" and format_reading_m(0.5) == "0.50 m"
+    assert format_reading_m(1.2) == "1.20 m" and format_reading_m(0.29) == "0.29 m"
+    assert format_threshold_m(0.5) == "0.5 m" and format_threshold_m(0.75) == "0.75 m"

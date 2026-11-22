@@ -31,7 +31,12 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from robotics101 import kinematics as K  # noqa: E402
-from robotics101.animation.blender_templates import plan_mobile_robot_avoidance  # noqa: E402
+from robotics101.animation.blender_templates import (  # noqa: E402
+    JOB_STOP_THRESHOLD_KEY,
+    format_reading_m,
+    format_threshold_m,
+    plan_mobile_robot_avoidance,
+)
 from robotics101.templates.registry import get_template  # noqa: E402
 
 # ---------------------------------------------------------------- style
@@ -399,9 +404,9 @@ def apply_pose(p: K.Pose, plan, robot, wheels, beam_pivot, beam_mat, hud) -> Non
         hud["readout"].data.body = "Sensor: path clear"
         hud["readout"].data.materials[0] = m_go
     else:
-        hud["readout"].data.body = f"Sensor: {p.reading:.2f} m"
+        hud["readout"].data.body = f"Sensor: {format_reading_m(p.reading)}"
         hud["readout"].data.materials[0] = m_act if p.alert else m_dark
-    hud["rule"].data.body = f"rule: stop & turn if distance < {plan.cfg.stop_threshold:.2f} m"
+    hud["rule"].data.body = f"rule: stop & turn if distance < {format_threshold_m(plan.cfg.stop_threshold)}"
     for chip, (_, phases) in zip(hud["chips"], STEPS):
         active = p.phase in phases
         chip.data.materials[0] = (m_go if p.phase == K.PHASE_RESUME else m_act) if active else m_dim
@@ -419,7 +424,8 @@ def main() -> int:
     if errors:
         raise SystemExit("invalid parameters: " + "; ".join(errors))
 
-    plan = plan_mobile_robot_avoidance(params, float(job["durationSeconds"]), args.fps)  # raises on collision
+    plan = plan_mobile_robot_avoidance(params, float(job["durationSeconds"]), args.fps,
+                                       job.get(JOB_STOP_THRESHOLD_KEY))  # raises on collision
     n = plan.path.motion_frames
     first, last = 0, n
     if args.frames:

@@ -17,20 +17,56 @@ Repository-ready **implementation handoff for Claude Code and OpenAI Codex**. Th
 4. Iterate on the sample episode in `examples/episode-001.json` before adding distributed orchestration.
 
 ## Local quickstart
-Requires Python 3.12, [uv](https://docs.astral.sh/uv/) and GNU make; uses the existing `.venv`. No credentials needed.
+Requires Python 3.12, [uv](https://docs.astral.sh/uv/) and GNU make; uses the existing `.venv`. No credentials, no network.
+
+### Prerequisites (checked at runtime; missing/old tools fail with an exact install hint)
+| Tool | Tested | Needed for | Check |
+|---|---|---|---|
+| Python + `robotics101` (`make install`) | 3.12 | everything | — |
+| Manim Community (`uv pip install --python .venv/bin/python 'manim==0.22.1'`), cairo/pango libs | 0.22.1 | 2D scenes | `render-scenes`/`render` (no LaTeX needed) |
+| Blender (headless, no GPU) | 4.3.2 | 3D scene | `>= 4.2` via `blender --background --version`; `BLENDER_BIN` overrides |
+| FFmpeg + ffprobe (libx264, AAC) | 7.1 | encode, compose, QA | `>= 5.1` (`-fps_mode`, `alimiter latency`) |
+| espeak-ng | 1.52 | `--tts espeak` only | provider errors if absent; `--tts fixture` needs nothing |
+
+Exact versions used for a bundle are recorded in its `manifest.json` → `toolVersions`.
+
+### Commands
 ```bash
 make install    # editable install of the `robotics101` package + pytest into .venv
-make test       # pytest suite (no network, no API keys)
+make test       # pytest suite (~25 s; no network, no API keys; real render smoke tests auto-skip if tools are missing)
+make test-e2e   # + full sample-episode render test (~100 s; or ROBOTICS101_E2E=1)
 make validate   # robotics101 validate examples/episode-001.json
+make demo       # END-TO-END, preview 854x480@30 (~1.5-2 min on 8 CPUs) -> out/episode-001/
+make demo-full  # same at 1920x1080@30 (~8-10 min on 8 CPUs; the Blender scene dominates)
+make demo TTS_PROVIDER=fixture   # labelled beep placeholder instead of espeak-ng
+make qa         # re-run QA on out/episode-001 (e.g. after inspecting/tampering)
+
+# equivalent CLI
+.venv/bin/robotics101 render examples/episode-001.json --out out/episode-001 [--profile preview|full] [--tts espeak|fixture]
+.venv/bin/robotics101 qa out/episode-001 [--profile preview|full]
+
+# individual stages (what `render` chains)
 make narrate    # per-scene TTS -> out/episode-001/{audio/*.wav,timing.json,captions.srt}
-                # needs espeak-ng + ffmpeg; or: make narrate TTS_PROVIDER=fixture (no binaries)
-make scenes     # Manim 2D + Blender 3D scenes -> out/episode-001/scenes/<sceneId>.mp4 (preview 854x480@30)
-                # make scenes PROFILE=full for 1920x1080@30; needs manim 0.22.1, Blender >= 4.2 + ffmpeg (no LaTeX, no GPU)
-.venv/bin/robotics101 validate path/to/episode.json [--strict]
+make scenes     # Manim 2D + Blender 3D scenes -> out/episode-001/scenes/<sceneId>.mp4 (PROFILE=full for 1080p)
 .venv/bin/robotics101 render-scenes examples/episode-001.json --out out/episode-001 \
     [--profile preview|full] [--only scene-003] [--workers 4] [--timeout 900]
 ```
-`validate` exit codes: 0 valid, 1 invalid (errors, or warnings with `--strict`), 2 unreadable/bad JSON. Errors = schema, scene IDs/sequence, unknown template, invalid template parameters; warnings = duration pacing (see `src/robotics101/validation.py`). `narrate` audio is labelled synthetic (espeak-ng) or FIXTURE placeholder — never production narration; `timing.json` flags scenes where speech covers <60% of the scene. `render-scenes` renders each `engine: manim` scene (Manim) and `engine: blender` scene (headless Blender, Workbench engine, primitives only; `collisionCheck` asserted before and inside Blender) for exactly its `timing.json` duration (falls back to `durationTargetSeconds` if `narrate` has not run), video only, then ffprobe-checks resolution, fps, decodability and duration (±1 frame); logs go to `out/episode-001/logs/<sceneId>.log`, a summary to `out/episode-001/scenes/render-report.json`. Blender: set `BLENDER_BIN` to pick the binary, `ROBOTICS101_BLENDER_PROCS` for parallel Blender processes per scene (default min(4, CPUs/2), capped by free RAM), `ROBOTICS101_BLENDER_ENGINE=eevee` for the slower EEVEE look. Exit codes: 0 ok, 1 invalid spec, 2 input error/missing prerequisites, 4 a scene failed. `render` and `make demo` are placeholders until M01.5. Milestone status: `PROGRESS.md`.
+`render` = validate → narrate → render-scenes → compose → manifest → QA. Re-running regenerates everything (stale `final.mp4`/clips/QA/manifest are deleted first, so a failed run never leaves a valid-looking bundle). Exit codes: 0 QA `PASS`/`PASS_WITH_WARNINGS`, 1 invalid spec, 2 input error / missing prerequisites / TTS failure, 4 a scene render or the composer failed, 5 QA `FAIL`. `qa` uses the same 0/2/5 codes.
+
+### Output bundle (`out/` is gitignored)
+| Path | Content |
+|---|---|
+| `final.mp4` | H.264 High yuv420p, CFR 30 fps, +faststart; AAC-LC 48 kHz stereo 192 kb/s; narration normalised to −16 LUFS, limited at −1.5 dBFS; hard cuts |
+| `captions.srt` | cues on the final (frame-quantised) timeline |
+| `qa_report.json` / `qa_report.md` | status `PASS` / `PASS_WITH_WARNINGS` / `FAIL`, every check, per-scene table |
+| `manifest.json` | every artifact: relative path, SHA-256, bytes, ffprobe summary; `finalVideoSha256`; `publish.status = not_published`, `requiresApprovalOfSha256`; tool versions, run id, TTS label, stage timings |
+| `episode.json`, `timing.json`, `compose.json` | exact input spec copy, narration timeline, composer report |
+| `audio/<sceneId>.wav`, `scenes/<sceneId>.mp4`, `clips/<sceneId>.mp4` | narration, video-only scene renders, per-scene A/V clips |
+| `logs/<sceneId>.log`, `scenes/render-report.json` | render logs |
+
+QA hard gates (→ `FAIL`): decodable; h264 High yuv420p; resolution of the profile; 30 fps CFR; AAC 48 kHz stereo present; not silent (programme mean > −60 dBFS, each narrated clip peak > −50 dBFS); no clipping (max < −0.1 dBFS); total 270–330 s and equal to the scene timeline (±2 frames); audio/video stream lengths within 0.1 s; captions present, monotonic, inside the video; every scene + clip present with its scheduled duration (±1 frame); manifest hashes/sizes match and publish block untouched. Warnings (→ `PASS_WITH_WARNINGS`): synthetic/fixture TTS, voice coverage < 60 % of a scene ("holds fill gap — not acceptable educational pacing"), preview profile (not publishable), loudness outside −16 ± 2 LUFS, missing +faststart.
+
+`validate` exit codes: 0 valid, 1 invalid (errors, or warnings with `--strict`), 2 unreadable/bad JSON. Errors = schema, scene IDs/sequence, unknown template, invalid template parameters; warnings = duration pacing (see `src/robotics101/validation.py`). `narrate` audio is labelled synthetic (espeak-ng) or FIXTURE placeholder — never production narration. `render-scenes` renders each `engine: manim` scene (Manim) and `engine: blender` scene (headless Blender, Workbench engine, primitives only; `collisionCheck` asserted before and inside Blender; the robot's stop threshold is the episode's `sense_think_act.thresholdMeters`, default 0.5 m) for exactly its `timing.json` duration, video only, then ffprobe-checks it. Blender: `BLENDER_BIN`, `ROBOTICS101_BLENDER_PROCS` (default min(4, CPUs/2), capped by free RAM), `ROBOTICS101_BLENDER_ENGINE=eevee` (slower). Nothing in this repo uploads or publishes. Milestone status: `PROGRESS.md`.
 
 ## Artifact directory
 | Path | Purpose |

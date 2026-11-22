@@ -8,8 +8,8 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 | M01.2 | Narration: TTS provider interface + labelled fixture/placeholder voice, per-scene audio, SRT | **done** |
 | M01.3 | Manim templates: robot_intro, robot_anatomy, sensor_range, sense_think_act, servo_rotation, recap_quiz; `render-scenes` CLI | **done** |
 | M01.4 | Headless Blender scene: mobile_robot_avoidance (primitives only) | **done** |
-| M01.5 | Composer (FFmpeg) + ffprobe QA report + SHA-256 manifest + `robotics101 render` / `make demo` | todo (next) |
-| M01.6 | First E2E run → `out/episode-001/final.mp4`; publisher dry-run stub (no uploads) | todo |
+| M01.5 | Composer (FFmpeg) + ffprobe QA report + SHA-256 manifest + `robotics101 render` / `make demo` | **done** |
+| M01.6 | First E2E run → `out/episode-001/final.mp4`; publisher dry-run stub (no uploads) | todo (next) |
 
 ## M01.1 — what exists
 - `pyproject.toml` (hatchling, src layout, console script `robotics101`, deps: jsonschema; dev: pytest).
@@ -65,7 +65,7 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - Not sandboxed yet: manim runs as a normal local subprocess (acceptable for template-only code; isolation is a production requirement per AGENTS.md).
 
 ## M01.4 — what exists
-- `src/robotics101/kinematics.py` (pure, stdlib, Python 3.11-compatible because Blender imports it): `Box2D`, `RobotGeometry` (box chassis 0.60×0.40 m, 2 drive wheels r=0.11 m on a 0.52 m track + front caster, sensor 0.32 m ahead of centre), `AvoidanceConfig` (cube 0.6 m at x=4, sensor range 1.5 m, stop threshold 0.6 m, 0.35 m/s, 45°/s, 90° left turn, 2.4 m resume, 0.05 m collision margin). `generate_avoidance_path()` simulates sense→think→act once per frame with `geometry.threshold_decision` (stop on the first reading < threshold) → `Pose` per frame (x, y, heading, cumulative wheel angles = distance / r, differential counter-rotation when turning, reading, alert, phase start/drive/detected/turn/resume). `time_scale` compresses the script for short scenes. `ray_box_distance` (slab), `footprint_corners`, `polygon_intersects_box` (SAT, margin-grown box), `find_collision`, `assert_collision_free` (`CollisionError`), `scene_bounds`.
+- `src/robotics101/kinematics.py` (pure, stdlib, Python 3.11-compatible because Blender imports it): `Box2D`, `RobotGeometry` (box chassis 0.60×0.40 m, 2 drive wheels r=0.11 m on a 0.52 m track + front caster, sensor 0.32 m ahead of centre), `AvoidanceConfig` (cube 0.6 m at x=4, sensor range 1.5 m, stop threshold 0.5 m (M01.5: overridden by the episode's sense_think_act thresholdMeters), 0.35 m/s, 45°/s, 90° left turn, 2.4 m resume, 0.05 m collision margin). `generate_avoidance_path()` simulates sense→think→act once per frame with `geometry.threshold_decision` (stop on the first reading < threshold) → `Pose` per frame (x, y, heading, cumulative wheel angles = distance / r, differential counter-rotation when turning, reading, alert, phase start/drive/detected/turn/resume). `time_scale` compresses the script for short scenes. `ray_box_distance` (slab), `footprint_corners`, `polygon_intersects_box` (SAT, margin-grown box), `find_collision`, `assert_collision_free` (`CollisionError`), `scene_bounds`.
 - `src/robotics101/animation/blender_templates/__init__.py`: `TEMPLATE_SCRIPTS` allowlist + `plan_mobile_robot_avoidance(params, duration, fps)` (nominal ≈19.8 s script, `animation_speed` compression only if the scene is too short, `collisionCheck` default on). Shared by host and Blender so both run the identical plan.
 - `src/robotics101/animation/blender_templates/mobile_robot_avoidance.py` — Blender script (`blender --background --factory-startup --python-exit-code 1 --python … -- --params job.json --out FRAMES --width W --height H --fps 30 [--engine workbench|eevee] [--aa N] [--frames A:B] [--summary plan.json]`). Re-validates params via the registry, re-runs the plan + collision check, builds primitives only (ground + 1 m grid, blue box chassis + lid, wheels with yellow spoke so spin is visible, caster, two-"eye" ultrasonic sensor, cube or cylinder obstacle, translucent cone beam whose length = the reading, green clear / amber in range / red < threshold), 3-point lights (EEVEE only), camera at a 3/4 front-left angle pulled back + lens-shifted until every footprint, beam tip and the obstacle project inside a safe region clear of the HUD (fails otherwise). Camera-parented HUD (sizes in 1080p px, resolution-independent): title, live "Sensor: 0.59 m" / "path clear" readout, the rule "stop & turn if distance < 0.60 m", and step chips "Drive → Obstacle detected → Stop → Turn → Resume" with the current step highlighted. Each motion frame is set explicitly and rendered to `NNNNN.png`.
 - `src/robotics101/animation/blender_render.py` — `find_blender()` (`$BLENDER_BIN` → PATH, runs `--background --version`, requires ≥ 4.2, else `RenderSetupError` with `BLENDER_PREREQS`), host-side plan + collision check (fails the scene without launching Blender), frames split over `ROBOTICS101_BLENDER_PROCS` Blender processes (default min(4, CPUs/2), capped so N × ~800 MB (full) / ~500 MB (preview) fits in 75% of MemAvailable), overall timeout (kills all), per-process logs merged into `<out>/logs/<sceneId>.log`, frame-completeness check, ffmpeg encode (libx264 crf 18 yuv420p, `tpad` clones the last frame for the hold, `-frames:v` = target), then the shared `render.verify_clip` (same ffprobe checks as Manim). Work dir `<out>/.blender/<sceneId>` removed on success.
@@ -84,6 +84,24 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - Collision check samples every rendered frame (≤1.2 cm motion per frame at nominal speed); it is not a continuous swept-volume check.
 - Blender runs as a normal local subprocess (`--factory-startup`, `PYTHONNOUSERSITE=1`, no asset loading) — not sandboxed; isolation is still a production requirement.
 
+## M01.5 — what exists
+- **Threshold fix**: the Blender scene's stop threshold now comes from the episode's first `sense_think_act.thresholdMeters` (`blender_templates.episode_stop_threshold`, default 0.5 m), passed as job context `stopThresholdMeters` (not a template param); `AvoidanceConfig.stop_threshold` default 0.5. HUD readout is truncated to the cm (`format_reading_m`: 0.4983 → "0.49 m", never "0.50 m" next to "< 0.5 m") and the rule is written like the 2D scene ("< 0.5 m"). ADR-013.
+- `src/robotics101/media.py` — ffmpeg/ffprobe discovery + version check, `run`, probe `summarize`, EBU R128 / volumedetect `audio_levels`, loudness gain + limiter filter, faststart check, `tool_versions`.
+- `src/robotics101/compose/composer.py` — per scene: narration → 48 kHz stereo, gain to −16 LUFS + `alimiter` −1.5 dBFS, delayed by the lead-in, padded sample-exactly to the clip's frame count, 5 ms edge fades → `clips/<id>.mp4` (video stream copy + AAC). `final.mp4` = concat filter, one re-encode (libx264 High yuv420p CFR 30, GOP 60, crf 20, +faststart) + concatenated PCM → AAC 192k. Hard cuts. Captions regenerated on the frame-quantised timeline. Writes `compose.json`. ADR-012.
+- `src/robotics101/manifest.py` — every artifact (path, SHA-256, bytes, probe summary), `specSha256`, `finalVideoSha256`, `publish = {status: not_published, requiresApprovalOfSha256}`, tool versions, run id, TTS label, stage timings; `verify_manifest`; QA report hashes sealed in after QA.
+- `src/robotics101/qa.py` — hard gates (decodable, h264 High yuv420p, resolution, 30 fps CFR, AAC 48k stereo, not silent, no clipping, 270–330 s and = timeline, A/V lengths ±0.1 s, captions, scene/clip durations, manifest hashes) and soft warnings (synthetic TTS, voice coverage < 60 %, preview profile, loudness ±2 LU, faststart) → `qa_report.json` + `qa_report.md` (per-scene table). Status PASS / PASS_WITH_WARNINGS / FAIL.
+- `src/robotics101/pipeline.py` + CLI: `robotics101 render <episode> --out DIR [--profile preview|full] [--tts espeak|fixture]` (validate → narrate → render-scenes → compose → manifest → QA; stale outputs deleted first) and `robotics101 qa DIR`. Exit codes 0 / 1 / 2 / 4 / 5 (QA FAIL). Make: `render`, `qa`, `demo` (preview), `demo-full`, `test-e2e`.
+- Tests: 151 collected (`make test`: 150 passed, 1 skipped = the slow E2E, run with `make test-e2e` / `ROBOTICS101_E2E=1`, 2 passed in ~110 s). New `test_compose.py` (synthetic colour clips + tones → compose, durations/streams, QA FAILs on wrong resolution / silent audio, manifest detects a 1-byte change, …), `test_render_e2e.py`, threshold tests in `test_kinematics.py` / `test_blender.py`.
+
+### Sample run (2026-11-22, `render … --profile full --tts espeak` → out/episode-001-full)
+- Stage seconds: narrate 0.9, render-scenes 406 (scene-006 Blender ≈ 6–7 min dominates; Manim scenes 25–65 s each in parallel), compose 34, manifest 2, QA 22; total ≈ 7.7 min on 8 CPUs.
+- final.mp4: h264 High yuv420p 1920×1080 30/1, 9000 frames, 300.000 s; AAC-LC 48 kHz stereo 300.000 s; 16.2 MB. Integrated −16.1 LUFS, max −1.2 dBFS, mean −26 dB. captions.srt 16 cues, last ends 284.7 s. 29 manifest artifacts. QA **PASS_WITH_WARNINGS**: 0 hard failures, 8 warnings (7× voice coverage 18–41 %, synthetic espeak TTS). Robot stops at reading 0.498 m < 0.5 m (HUD "Sensor: 0.49 m", "rule: … < 0.5 m").
+
+### Known limitations
+- Sample narration is a short stub (66 s of speech in 300 s): each scene animates for ~10–20 s then holds a still; QA warns per scene. espeak voice is a robotic placeholder.
+- AAC bitrate shows ~40 kb/s average because most of the programme is silence (encoder target 192k).
+- Audio built in Python from PCM (whole programme in memory: ~115 MB at 300 s stereo 48 kHz float) — fine for 5-min episodes.
+
 ## Commands
 ```bash
 make install && make test && make validate
@@ -91,10 +109,14 @@ make narrate                       # espeak (needs espeak-ng + ffmpeg)
 make narrate TTS_PROVIDER=fixture  # no external binaries
 make scenes                        # Manim + Blender preview clips -> out/episode-001/scenes/*.mp4 (needs manim, blender, ffmpeg)
 make scenes PROFILE=full           # 1920x1080@30 (scene-006 alone takes ~6 min on 8 CPUs)
+make demo                          # end-to-end preview -> out/episode-001/{final.mp4,captions.srt,qa_report.*,manifest.json}
+make demo-full                     # end-to-end 1920x1080@30 (~8 min)
+.venv/bin/robotics101 render examples/episode-001.json --out out/episode-001-full --profile full --tts espeak
+.venv/bin/robotics101 qa out/episode-001-full
 .venv/bin/robotics101 render-scenes examples/episode-001.json --out out/episode-001 --only scene-003
 .venv/bin/robotics101 render-scenes examples/episode-001.json --out out/episode-001 --profile preview --only scene-006
 ```
 Environment notes: `.venv` is Python 3.12 with manim/jsonschema/pytest; add packages with `uv pip install --python .venv/bin/python <pkg>`. GNU `make` was installed via apt in the dev container (wasn't present by default). espeak-ng 1.52, ffmpeg/ffprobe and sox are installed in the dev container; Blender 4.3.2 is at /usr/bin/blender (headless, no GPU; EEVEE Next works via software GL but is slow; Cycles build lacks OpenImageDenoise).
 
-## Next step: M01.5
-Composer (FFmpeg): concatenate `<out>/scenes/<sceneId>.mp4` on the `timing.json` timeline with `<out>/audio/*.wav` (narration starts at each scene's lead-in) and burn-in or mux `captions.srt`; ffprobe QA report over every scene clip + final (reuse `animation/probe.py` / `render.verify_clip`); SHA-256 artifact manifest; `robotics101 render` and `make demo` (narrate → render-scenes → compose → QA → manifest) producing `out/episode-001/final.mp4`. No uploads/publishing.
+## Next step: M01.6
+First end-to-end review of episode-001 (frame-by-frame review of final.mp4, fix what it shows; consider expanding the stub narration so scenes are not mostly holds) + a YouTube publisher **stub, dry-run only** (no network, no uploads; must bind to `manifest.json` `finalVideoSha256` and refuse without explicit approval).

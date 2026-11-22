@@ -81,7 +81,8 @@ class AvoidanceConfig:
     obstacle: Box2D = Box2D(4.0, 0.0, 0.30, 0.30)
     start: tuple[float, float, float] = (0.0, 0.0, 0.0)  # x, y, heading
     sensor_range: float = 1.5        # beam length (m)
-    stop_threshold: float = 0.6      # stop & turn when reading < threshold (m)
+    stop_threshold: float = 0.5      # stop & turn when reading < threshold (m); the render plan overrides it
+                                     # with the episode's sense_think_act thresholdMeters (same rule as taught)
     drive_speed: float = 0.35        # m/s (slow enough for beginners to follow)
     turn_rate_deg: float = 45.0      # deg/s, in place
     turn_angle_deg: float = 90.0     # + = left (CCW)

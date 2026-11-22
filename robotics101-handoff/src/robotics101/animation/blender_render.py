@@ -20,7 +20,11 @@ import subprocess
 import time
 from pathlib import Path
 
-from robotics101.animation.blender_templates import TEMPLATE_SCRIPTS, plan_mobile_robot_avoidance
+from robotics101.animation.blender_templates import (
+    JOB_STOP_THRESHOLD_KEY,
+    TEMPLATE_SCRIPTS,
+    plan_mobile_robot_avoidance,
+)
 from robotics101.animation.render import Profile, RenderSetupError, SceneResult, verify_clip
 from robotics101.kinematics import CollisionError, PathPlanningError
 
@@ -125,7 +129,8 @@ def render_blender_scene(blender: str, ffmpeg: str, ffprobe: str, job: dict, out
 
     # 1. plan + collisionCheck on the host (same pure code the Blender script runs)
     try:
-        plan = plan_mobile_robot_avoidance(job["params"], job["durationSeconds"], profile.fps)
+        plan = plan_mobile_robot_avoidance(job["params"], job["durationSeconds"], profile.fps,
+                                           job.get(JOB_STOP_THRESHOLD_KEY))
     except (CollisionError, PathPlanningError) as e:
         log_path.write_text(f"planning failed before launching Blender:\n{e}\n", encoding="utf-8")
         result.message = str(e)

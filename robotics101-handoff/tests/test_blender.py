@@ -133,3 +133,20 @@ def test_smoke_render_blender_scene_tiny(spec, tmp_path):
     log = (tmp_path / "logs" / "scene-006.log").read_text()
     assert "collisionCheck passed" in log and "RENDERED" in log
     assert not (tmp_path / ".blender").exists()
+
+
+def test_blender_job_carries_episode_threshold_and_host_plan_uses_it(spec, tmp_path, monkeypatch):
+    from robotics101.animation.blender_templates import JOB_STOP_THRESHOLD_KEY
+    job = build_job(spec, scene_by_template(spec, "mobile_robot_avoidance"), 45.0)
+    assert job[JOB_STOP_THRESHOLD_KEY] == 0.5
+    assert JOB_STOP_THRESHOLD_KEY not in job["params"]          # context, not a template parameter
+    assert JOB_STOP_THRESHOLD_KEY not in build_job(spec, scene_by_template(spec, "sense_think_act"), 30.0)
+    seen = {}
+
+    def fake_plan(params, duration, fps, thr=None):
+        seen["thr"] = thr
+        raise CollisionError("stop here")
+    monkeypatch.setattr(BR, "plan_mobile_robot_avoidance", fake_plan)
+    (tmp_path / "logs").mkdir()
+    BR.render_blender_scene("/nonexistent/blender", "ffmpeg", "ffprobe", job, tmp_path, PROFILES["preview"], 60)
+    assert seen["thr"] == 0.5

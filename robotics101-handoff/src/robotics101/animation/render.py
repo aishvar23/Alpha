@@ -84,7 +84,7 @@ def check_prerequisites() -> tuple[str, str]:
 
 def build_job(spec: dict, scene: dict, duration_s: float) -> dict:
     """The only data handed to a template process (validated parameters + timing)."""
-    return {
+    job = {
         "episodeId": spec["episodeId"],
         "episodeTitle": spec.get("title", ""),
         "episodeNumber": spec.get("episodeNumber"),
@@ -94,6 +94,11 @@ def build_job(spec: dict, scene: dict, duration_s: float) -> dict:
         "params": scene.get("parameters", {}),
         "durationSeconds": duration_s,
     }
+    if scene.get("engine") == "blender":
+        # episode-level context (not a template param): the 3D robot obeys the rule taught in 2D
+        from robotics101.animation.blender_templates import JOB_STOP_THRESHOLD_KEY, episode_stop_threshold
+        job[JOB_STOP_THRESHOLD_KEY] = episode_stop_threshold(spec)
+    return job
 
 
 def _render_one(manim: str, ffprobe: str, job: dict, out_dir: Path, profile: Profile, timeout_s: float) -> SceneResult:
