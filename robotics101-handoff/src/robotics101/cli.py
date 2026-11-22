@@ -1,7 +1,7 @@
 """`robotics101` command-line entry point.
 
-Exit codes: 0 ok, 1 validation failed, 2 usage/input error (missing file, bad JSON),
-3 command not implemented yet.
+Exit codes: 0 ok, 1 validation failed, 2 usage/input error (missing file, bad JSON,
+missing render prerequisites), 3 command not implemented yet, 4 a scene render/probe failed.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 from robotics101 import __version__
 from robotics101.validation import validate_file
 
-EXIT_OK, EXIT_INVALID, EXIT_INPUT, EXIT_NOT_IMPLEMENTED = 0, 1, 2, 3
+EXIT_OK, EXIT_INVALID, EXIT_INPUT, EXIT_NOT_IMPLEMENTED, EXIT_RENDER_FAILED = 0, 1, 2, 3, 4
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
@@ -66,6 +66,56 @@ def _cmd_narrate(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_render_scenes(args: argparse.Namespace) -> int:
+    from dataclasses import asdict
+
+    from robotics101.animation.render import PROFILES, RenderSetupError, render_scenes
+    from robotics101.animation.timing import resolve_scene_durations
+
+    rc = _cmd_validate(argparse.Namespace(episode=args.episode, strict=False))
+    if rc != EXIT_OK:
+        return rc
+    spec = json.loads(args.episode.read_text(encoding="utf-8"))
+    known = {s["sceneId"] for s in spec["scenes"]}
+    only = set(args.only or [])
+    if only - known:
+        print(f"error: --only names unknown scene(s): {sorted(only - known)}", file=sys.stderr)
+        return EXIT_INPUT
+    try:
+        durations, source = resolve_scene_durations(spec, args.out / "timing.json")
+    except (ValueError, json.JSONDecodeError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_INPUT
+    profile = PROFILES[args.profile]
+    print(f"render-scenes: profile {profile.name} {profile.width}x{profile.height}@{profile.fps}fps, "
+          f"durations from {source}, workers {args.workers}")
+
+    def report(r):
+        tag = {"rendered": "ok  ", "skipped": "skip", "failed": "FAIL"}[r.status]
+        extra = f" ({r.elapsed_s:.1f}s)" if r.status != "skipped" else ""
+        print(f"  [{tag}] {r.sceneId} {r.template}: {r.message}{extra}", flush=True)
+        for p in r.problems:
+            print(f"         - {p}")
+        if r.status == "failed" and r.log:
+            print(f"         log: {r.log}")
+
+    try:
+        results = render_scenes(spec, durations, args.out, profile, only=only or None,
+                                workers=args.workers, timeout_s=args.timeout, on_result=report)
+    except RenderSetupError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_INPUT
+    report_path = args.out / "scenes" / "render-report.json"
+    report_path.write_text(json.dumps({
+        "episodeId": spec["episodeId"], "profile": asdict(profile), "durationSource": source,
+        "scenes": [asdict(r) for r in results]}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    failed = [r.sceneId for r in results if r.status == "failed"]
+    n_ok = sum(r.status == "rendered" for r in results)
+    print(f"{n_ok} rendered, {sum(r.status == 'skipped' for r in results)} skipped, {len(failed)} failed; "
+          f"clips in {args.out / 'scenes'}, logs in {args.out / 'logs'}, report {report_path}")
+    return EXIT_RENDER_FAILED if failed else EXIT_OK
+
+
 def _cmd_render(args: argparse.Namespace) -> int:
     print("error: render not implemented yet (M01.5)", file=sys.stderr)
     return EXIT_NOT_IMPLEMENTED
@@ -87,6 +137,17 @@ def build_parser() -> argparse.ArgumentParser:
     n.add_argument("--provider", choices=["espeak", "fixture", "external"], default=None,
                    help="TTS provider (default: env TTS_PROVIDER, else espeak)")
     n.set_defaults(func=_cmd_narrate)
+
+    rs = sub.add_parser("render-scenes", help="render Manim scenes to <out>/scenes/<sceneId>.mp4 (video only)")
+    rs.add_argument("episode", type=Path)
+    rs.add_argument("--out", type=Path, required=True,
+                    help="episode output dir; uses <out>/timing.json from `narrate` if present")
+    rs.add_argument("--profile", choices=["preview", "full"], default="preview",
+                    help="preview = 854x480@30 (default), full = 1920x1080@30")
+    rs.add_argument("--only", action="append", metavar="SCENE_ID", help="render only this scene (repeatable)")
+    rs.add_argument("--workers", type=int, default=4, help="parallel manim processes (default 4)")
+    rs.add_argument("--timeout", type=float, default=900.0, help="per-scene manim timeout in seconds")
+    rs.set_defaults(func=_cmd_render_scenes)
 
     r = sub.add_parser("render", help="render an episode (not implemented yet: M01.5)")
     r.add_argument("episode", type=Path)

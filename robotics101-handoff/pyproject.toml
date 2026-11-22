@@ -14,6 +14,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# 2D scene rendering (M01.3). Also needs cairo/pango system libs + ffmpeg; LaTeX is not required.
+render = ["manim==0.22.1"]
 
 [project.scripts]
 robotics101 = "robotics101.cli:main"
