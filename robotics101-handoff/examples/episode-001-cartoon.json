@@ -1,0 +1,945 @@
+{
+  "schemaVersion": "1.1",
+  "episodeId": "ep-001",
+  "episodeNumber": 1,
+  "title": "Bolt Bumps Into Everything",
+  "audience": "beginner",
+  "durationTargetSeconds": 300,
+  "learningObjectives": [
+    "Explain that a robot senses, thinks and acts",
+    "Name the main parts of a robot",
+    "Describe how a distance sensor and a stop rule help a robot avoid obstacles"
+  ],
+  "sources": [],
+  "characters": [
+    "bolt",
+    "maya",
+    "nib"
+  ],
+  "set": "garage",
+  "music": {
+    "theme": "theme_intro",
+    "enabled": true
+  },
+  "publishing": {
+    "madeForKids": true,
+    "audienceNote": "Children under 13; kid-appropriate tone, no external links."
+  },
+  "scenes": [
+    {
+      "sceneId": "scene-001",
+      "sequence": 1,
+      "title": "Cold open: Bolt bumps into everything",
+      "educationalObjective": "Hook: robots need to notice the world around them",
+      "engine": "cartoon",
+      "template": "cartoon_cold_open",
+      "durationTargetSeconds": 25,
+      "parameters": {
+        "obstacle": "boxes"
+      },
+      "beats": [
+        {
+          "type": "music",
+          "cue": "theme_intro"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "zoom",
+          "seconds": 1.2
+        },
+        {
+          "type": "sfx",
+          "id": "zoom"
+        },
+        {
+          "type": "sfx",
+          "id": "bonk"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "dizzy",
+          "emotion": "dizzy"
+        },
+        {
+          "type": "sfx",
+          "id": "stars"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Ow! Who put a wall there?",
+          "emotion": "dizzy"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Bolt, that's not a wall. It's a pile of boxes. It's been there since Tuesday!",
+          "emotion": "laugh",
+          "action": "facepalm"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Tuesday? That's sneaky! Boxes should beep before they jump out at people.",
+          "emotion": "surprised"
+        },
+        {
+          "type": "action",
+          "who": "nib",
+          "do": "land"
+        },
+        {
+          "type": "sfx",
+          "id": "nib_beep",
+          "who": "nib"
+        },
+        {
+          "type": "action",
+          "who": "nib",
+          "do": "fall"
+        },
+        {
+          "type": "sfx",
+          "id": "boing"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Boxes don't beep, silly. Robots have to notice things by themselves. Today, you're going to learn how!",
+          "emotion": "grin",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Ooh! Is it a dance?",
+          "emotion": "happy",
+          "action": "hop"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Even better. It's Robotics 101!",
+          "emotion": "happy",
+          "action": "cheer"
+        },
+        {
+          "type": "music",
+          "cue": "title_sting"
+        }
+      ],
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-002",
+      "sequence": 2,
+      "title": "Am I even a robot?",
+      "educationalObjective": "A robot is a machine that can sense, think and act; examples of robots",
+      "engine": "cartoon",
+      "template": "cartoon_robot_family",
+      "durationTargetSeconds": 40,
+      "parameters": {
+        "examples": [
+          "robot vacuum",
+          "factory arm",
+          "space rover"
+        ]
+      },
+      "beats": [
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Wait a second. Maya... am I even a real robot?",
+          "emotion": "worried"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Let's find out! A robot is a machine that can sense the world, think about what it senses, and then act.",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Sense, think, act. Got it! So my cousin the toaster is a robot!",
+          "emotion": "thinking"
+        },
+        {
+          "type": "sfx",
+          "id": "toaster_pop"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "flinch",
+          "emotion": "surprised"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "The toaster doesn't think. It just makes toast. Sometimes very crispy toast.",
+          "emotion": "laugh"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "But look, here's your real robot family!",
+          "emotion": "grin",
+          "action": "open_album"
+        },
+        {
+          "type": "sfx",
+          "id": "page_flip"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "A robot vacuum senses dirt and cleans the floor. A factory arm builds things, piece by piece.",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "And a space rover explores far-away places, all by itself!",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "sfx",
+          "id": "sparkle"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Wow. I come from a very hard-working family.",
+          "emotion": "proud",
+          "action": "flex"
+        }
+      ],
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-003",
+      "sequence": 3,
+      "title": "Robot check-up",
+      "educationalObjective": "The five main parts of a robot: structure, sensors, actuators, power, controller",
+      "engine": "cartoon",
+      "template": "cartoon_robot_checkup",
+      "durationTargetSeconds": 45,
+      "parameters": {
+        "parts": [
+          "structure",
+          "sensors",
+          "actuators",
+          "power",
+          "controller"
+        ]
+      },
+      "beats": [
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Time for your robot check-up! Every robot has five main parts.",
+          "emotion": "grin",
+          "action": "stethoscope"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "First, the structure. That's your body, the frame that holds everything together.",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Check out these structures!",
+          "emotion": "proud",
+          "action": "flex"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Next, sensors. They help you notice the world, a bit like eyes and ears.",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Actuators are the parts that move, like your wheels and your arms.",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "wiggle",
+          "emotion": "happy"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Wheee!",
+          "emotion": "laugh"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "The power source gives you energy. Hmm... your battery is a little low.",
+          "emotion": "worried"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "I'm not sleepy... you're sleepy...",
+          "emotion": "sleepy",
+          "action": "yawn"
+        },
+        {
+          "type": "action",
+          "who": "maya",
+          "do": "plug_in"
+        },
+        {
+          "type": "sfx",
+          "id": "charge"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "And last, the controller. It's your robot brain, and it decides what to do.",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "My brain is fully charged and ready to think!",
+          "emotion": "happy",
+          "action": "hop"
+        },
+        {
+          "type": "sfx",
+          "id": "ding"
+        }
+      ],
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-004",
+      "sequence": 4,
+      "title": "Sensors: ping!",
+      "educationalObjective": "A distance sensor sends a sound and times the echo; it has a range",
+      "engine": "cartoon",
+      "template": "cartoon_sensor_ping",
+      "durationTargetSeconds": 50,
+      "parameters": {
+        "rangeMeters": 3.0,
+        "obstacleDistanceMeters": 1.2
+      },
+      "beats": [
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Let's test your distance sensor. It sends out a sound that's too high for people to hear.",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "ping"
+        },
+        {
+          "type": "sfx",
+          "id": "ping"
+        },
+        {
+          "type": "sfx",
+          "id": "echo"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "The sound bounces off things and comes back. The faster the echo comes back, the closer the thing is. Bats do this too!",
+          "emotion": "grin"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "So I'm basically a bat. A bat with wheels!",
+          "emotion": "proud"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Nib, fly over there, please!",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "action",
+          "who": "nib",
+          "do": "fly_to:1.2"
+        },
+        {
+          "type": "sfx",
+          "id": "nib_whistle",
+          "who": "nib"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "ping"
+        },
+        {
+          "type": "sfx",
+          "id": "ping"
+        },
+        {
+          "type": "sfx",
+          "id": "echo"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Ping! Nib is 1.2 meters away!",
+          "emotion": "surprised"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Perfect! Your sensor can measure things up to 3 meters away.",
+          "emotion": "happy"
+        },
+        {
+          "type": "action",
+          "who": "nib",
+          "do": "fly_to:3.6"
+        },
+        {
+          "type": "sfx",
+          "id": "whoosh"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Nib? Nib! My sensor can't find you!",
+          "emotion": "worried",
+          "action": "ping"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "He flew farther than 3 meters, so he's out of range.",
+          "emotion": "thinking"
+        },
+        {
+          "type": "action",
+          "who": "nib",
+          "do": "return"
+        },
+        {
+          "type": "sfx",
+          "id": "nib_beep",
+          "who": "nib"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Phew. Don't scare me like that, buddy!",
+          "emotion": "happy"
+        }
+      ],
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-005",
+      "sequence": 5,
+      "title": "The stop-and-turn rule",
+      "educationalObjective": "Sense, think, act: a controller rule with a 0.5 m threshold",
+      "engine": "cartoon",
+      "template": "cartoon_rule_board",
+      "durationTargetSeconds": 50,
+      "parameters": {
+        "thresholdMeters": 0.5,
+        "readings": [
+          1.5,
+          1.0,
+          0.6,
+          0.4
+        ]
+      },
+      "beats": [
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Now your robot brain needs a rule. Here's a good one.",
+          "emotion": "thinking",
+          "action": "write_board"
+        },
+        {
+          "type": "sfx",
+          "id": "chalk"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "If the distance is less than half a meter, stop and turn.",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Less than half a meter, stop and turn. Got it!",
+          "emotion": "thinking"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Here's how it works. First you sense: your sensor measures the distance. Then you think: you compare it with the rule. Then you act: you keep going, or you stop and turn.",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Sense, think, act. Like a tiny dance, but with math!",
+          "emotion": "laugh",
+          "action": "wiggle"
+        },
+        {
+          "type": "music",
+          "cue": "idea_sting"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Let's practice. Sense!",
+          "emotion": "grin"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "drive"
+        },
+        {
+          "type": "sfx",
+          "id": "ping"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "1.5 meters. Keep going!",
+          "emotion": "happy"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "1 meter. Still fine!",
+          "emotion": "happy"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "0.6 meters. Getting close...",
+          "emotion": "worried"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Is 0.6 less than 0.5?",
+          "emotion": "thinking"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Nope! Bigger. So I keep going... slowly.",
+          "emotion": "thinking"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "0.4 meters! That's less than half a meter. STOP!",
+          "emotion": "surprised",
+          "action": "skid"
+        },
+        {
+          "type": "sfx",
+          "id": "skid"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Great stop! A little dramatic, but great.",
+          "emotion": "laugh"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Sense, think, act. My antenna is glowing with brain power!",
+          "emotion": "proud"
+        },
+        {
+          "type": "sfx",
+          "id": "sparkle"
+        }
+      ],
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible",
+          "sensor_geometry"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-006",
+      "sequence": 6,
+      "title": "Actuators: high-five!",
+      "educationalObjective": "Actuators turn decisions into movement; a servo turns to an exact angle",
+      "engine": "cartoon",
+      "template": "cartoon_servo_highfive",
+      "durationTargetSeconds": 35,
+      "parameters": {
+        "startAngleDegrees": 0,
+        "endAngleDegrees": 60,
+        "missAngleDegrees": 30
+      },
+      "beats": [
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Actuators turn decisions into movement. Your arm has a servo motor that turns to an exact angle.",
+          "emotion": "happy",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Let's try a high-five at 60 degrees!",
+          "emotion": "grin",
+          "action": "wave"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Sixty degrees? Easy peasy. Watch this!",
+          "emotion": "proud",
+          "action": "flex"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "arm_to:30"
+        },
+        {
+          "type": "sfx",
+          "id": "whoosh"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Oops! That was only 30 degrees.",
+          "emotion": "worried"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "The servo turns exactly as far as your brain tells it. Try sixty!",
+          "emotion": "grin",
+          "action": "point"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "arm_to:60"
+        },
+        {
+          "type": "sfx",
+          "id": "clap"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "60 degrees! High-five!",
+          "emotion": "happy"
+        },
+        {
+          "type": "action",
+          "who": "nib",
+          "do": "highfive"
+        },
+        {
+          "type": "sfx",
+          "id": "nib_beep",
+          "who": "nib"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "And a high-one for Nib!",
+          "emotion": "laugh"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Motors turn wheels, servos turn arms, and I turn into a high-five champion!",
+          "emotion": "proud",
+          "action": "hop"
+        }
+      ],
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible",
+          "joint_constraints"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-007",
+      "sequence": 7,
+      "title": "The rematch",
+      "educationalObjective": "Applying sense-think-act: stop and turn before the obstacle, then keep going",
+      "engine": "cartoon",
+      "template": "cartoon_obstacle_rematch",
+      "durationTargetSeconds": 35,
+      "parameters": {
+        "thresholdMeters": 0.5,
+        "obstacle": "boxes"
+      },
+      "beats": [
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Okay, Bolt. Time for a rematch with the boxes!",
+          "emotion": "grin",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Sense, think, act. Let's roll!",
+          "emotion": "proud",
+          "action": "drive"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Keep sensing the whole time. The boxes won't move, but you will!",
+          "emotion": "grin",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Sensing... sensing... boxes getting closer... still more than half a meter...",
+          "emotion": "thinking",
+          "action": "drive"
+        },
+        {
+          "type": "sfx",
+          "id": "motor"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "ping"
+        },
+        {
+          "type": "sfx",
+          "id": "ping"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Less than half a meter. Stop, and turn!",
+          "emotion": "thinking",
+          "action": "stop"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Turning... and the path is clear! Rolling on!",
+          "emotion": "happy",
+          "action": "resume"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "turn"
+        },
+        {
+          "type": "action",
+          "who": "bolt",
+          "do": "resume"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "You did it! No bonk!",
+          "emotion": "happy",
+          "action": "cheer"
+        },
+        {
+          "type": "music",
+          "cue": "victory_sting"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Victory spin!",
+          "emotion": "laugh",
+          "action": "spin"
+        },
+        {
+          "type": "sfx",
+          "id": "bonk"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Remember, your sensor only sees what's in front of you!",
+          "emotion": "laugh",
+          "action": "facepalm"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Noted.",
+          "emotion": "dizzy"
+        }
+      ],
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "kinematics_consistency"
+        ]
+      }
+    },
+    {
+      "sceneId": "scene-008",
+      "sequence": 8,
+      "title": "Recap and quiz",
+      "educationalObjective": "Recap sense-think-act and ask a question",
+      "engine": "cartoon",
+      "template": "cartoon_recap_chant",
+      "durationTargetSeconds": 20,
+      "parameters": {
+        "question": "Which part of a robot measures distance?"
+      },
+      "beats": [
+        {
+          "type": "music",
+          "cue": "chant_beat"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Sense!",
+          "emotion": "happy",
+          "action": "hop"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Think!",
+          "emotion": "grin",
+          "action": "point"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Act!",
+          "emotion": "proud",
+          "action": "flex"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Robots sense the world, think with a rule, and act with motors. Just like you did today, Bolt!",
+          "emotion": "happy",
+          "action": "cheer"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "And I only bonked into one door. Well... two doors.",
+          "emotion": "laugh"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Here's your question. Which part of a robot measures distance?",
+          "emotion": "thinking"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "Think about it, and say your answer out loud!",
+          "emotion": "grin"
+        },
+        {
+          "type": "action",
+          "who": "nib",
+          "do": "beep_dance"
+        },
+        {
+          "type": "sfx",
+          "id": "nib_beep",
+          "who": "nib"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Nib already knows. Show-off!",
+          "emotion": "laugh"
+        },
+        {
+          "type": "line",
+          "speaker": "maya",
+          "text": "See you next time on Robotics 101!",
+          "emotion": "happy",
+          "action": "wave"
+        },
+        {
+          "type": "music",
+          "cue": "outro"
+        }
+      ],
+      "validation": {
+        "requiredChecks": [
+          "render_success",
+          "labels_visible"
+        ]
+      }
+    }
+  ]
+}

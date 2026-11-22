@@ -164,7 +164,10 @@ def build_publish_plan(out_dir: Path) -> dict:
     approval = check_approval(out_dir, actual)
     media = (manifest.get("finalVideo") or {}).get("media") or {}
 
+    made_for_kids = (spec.get("publishing") or {}).get("madeForKids")
     blockers = [REAL_UPLOAD_REFUSAL]
+    if made_for_kids is None:
+        blockers.append("audience not declared: set publishing.madeForKids in the episode spec")
     qa_status = qa.get("status")
     if qa_status is None:
         blockers.append("no qa_report.json")
@@ -199,8 +202,10 @@ def build_publish_plan(out_dir: Path) -> dict:
                     "defaultLanguage": "en", "defaultAudioLanguage": "en"},
         "status": {"privacyStatus": "private", "embeddable": True, "license": "youtube",
                    "containsSyntheticMedia": synthetic,
-                   "selfDeclaredMadeForKids": None,
-                   "_notes": "selfDeclaredMadeForKids must be set by the owner before any real upload"},
+                   "selfDeclaredMadeForKids": made_for_kids,
+                   "_notes": ("madeForKids from the episode spec (publishing.madeForKids; owner decision)"
+                              if made_for_kids is not None else
+                              "selfDeclaredMadeForKids must be set by the owner before any real upload")},
         "captions": dict(_file_ref(out_dir, "captions.srt") or {"file": None}, language="en", name="English"),
         "thumbnail": _file_ref(out_dir, "thumbnail.png"),
         "chapters": chapters,

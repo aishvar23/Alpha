@@ -39,12 +39,27 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return EXIT_INVALID if failed else EXIT_OK
 
 
+def _cartoon_not_ready(episode: Path) -> bool:
+    """Schema 1.1 (cartoon dialogue) specs are not renderable by the M01 narrator/scene pipeline."""
+    try:
+        version = json.loads(Path(episode).read_text(encoding="utf-8")).get("schemaVersion")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return False
+    if version == "1.1":
+        print(f"error: {episode} is a cartoon episode (schema 1.1); the cartoon render pipeline is not "
+              "implemented yet (M02.2-M02.8). Use `validate` for now.", file=sys.stderr)
+        return True
+    return False
+
+
 def _cmd_narrate(args: argparse.Namespace) -> int:
     from robotics101.narration import TtsError, get_provider, narrate_episode
 
     rc = _cmd_validate(argparse.Namespace(episode=args.episode, strict=False))
     if rc != EXIT_OK:
         return rc
+    if _cartoon_not_ready(args.episode):
+        return EXIT_NOT_IMPLEMENTED
     try:
         provider = get_provider(args.provider)
     except TtsError as e:
@@ -78,6 +93,8 @@ def _cmd_render_scenes(args: argparse.Namespace) -> int:
     rc = _cmd_validate(argparse.Namespace(episode=args.episode, strict=False))
     if rc != EXIT_OK:
         return rc
+    if _cartoon_not_ready(args.episode):
+        return EXIT_NOT_IMPLEMENTED
     spec = json.loads(args.episode.read_text(encoding="utf-8"))
     known = {s["sceneId"] for s in spec["scenes"]}
     only = set(args.only or [])
@@ -139,6 +156,8 @@ def _print_qa(doc: dict, out: Path) -> None:
 def _cmd_render(args: argparse.Namespace) -> int:
     from robotics101.pipeline import FAIL, PipelineError, render_episode
 
+    if _cartoon_not_ready(args.episode):
+        return EXIT_NOT_IMPLEMENTED
     try:
         outcome = render_episode(args.episode, args.out, args.profile, args.tts, workers=args.workers,
                                  timeout_s=args.timeout, log=lambda m: print(m, flush=True))

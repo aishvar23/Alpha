@@ -10,6 +10,9 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 | M01.4 | Headless Blender scene: mobile_robot_avoidance (primitives only) | **done** |
 | M01.5 | Composer (FFmpeg) + ffprobe QA report + SHA-256 manifest + `robotics101 render` / `make demo` | **done** |
 | M01.6 | First E2E run → `out/episode-001/final.mp4`; publisher dry-run stub (no uploads) | **done** |
+| M02.1 | Cartoon contract v1.1 (dialogue beats), character registry, cartoon episode-001 script, fact + kid-safe lints | **done** |
+| M02.2 | Voice layer: ElevenLabs (env key, content-hash cache) → Kokoro → espeak; dialogue timeline; speaker SRT | todo |
+| M02.3–M02.8 | Rigs, motion + lip-flap, sets/props, cartoon scene engine, music/SFX, full episode (see docs/PLAN-cartoon.md) | todo |
 
 ## M01.1 — what exists
 - `pyproject.toml` (hatchling, src layout, console script `robotics101`, deps: jsonschema; dev: pytest).
@@ -114,6 +117,15 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 ### Sample run (2026-11-22, espeak, full)
 - Stage seconds: narrate 1.0, render-scenes 468, compose+thumbnail 36, manifest 2, QA 22 (total ≈ 8.8 min on 8 CPUs).
 - final.mp4: h264 High yuv420p 1920×1080 30/1, 9000 frames, 300.000 s; AAC-LC 48 kHz stereo 300.000 s; 16.2 MB; −16.1 LUFS integrated, max −1.2 dBFS. captions.srt 16 cues. manifest 30 artifacts, `finalVideoSha256` 193dee4f…7b42, publish not_published. QA PASS_WITH_WARNINGS (0 hard, 8 warnings: voice coverage 18–41 % ×7, synthetic TTS).
+
+## M02.1 — what exists
+- `contracts/episode.v1.1.schema.json`: schemaVersion "1.1", required `characters`, `set`, `publishing.madeForKids`; scenes on engine `cartoon` carry `beats` (line{speaker,text,emotion?,action?,target?} / sfx{id,who?} / action{who,do,emotion?,seconds?} / pause{seconds} / music{cue}). v1.0 still validates and renders as before.
+- `characters/registry.json` + `src/robotics101/characters.py`: Bolt (speaks; ElevenLabs voice provisional "Lawrence" ktkP7Nsj67dw2zcplQYt, Kokoro am_puck, espeak en-us+m3 + robot fx), Maya (speaks; provisional "Jade" g7LVvkPWALzPxOQbF6OE, Kokoro af_bella, espeak en-us+f4), Nib (no voice; beeps). Expressions/actions/palette/caption colour per character; registry is hashed and checked (no credential fields, espeak fallback required).
+- `src/robotics101/cartoon/`: SFX ids, music cues, sets; `lint.py` spoken-quantity parser (digits or words + unit, "half a meter", "zero point six") → teaching facts must match scene parameters; kid-safe deny list.
+- 8 cartoon templates in the registry (cold_open, robot_family, robot_checkup, sensor_ping, rule_board, servo_highfive, obstacle_rematch, recap_chant) with parameter validation.
+- `examples/episode-001-cartoon.json` "Bolt Bumps Into Everything": 8 scenes, 300 s target, 679 spoken words (Bolt/Maya), madeForKids true; `validate --strict` clean. `examples/episode-001.json` (v1.0) unchanged.
+- Publish plan: `selfDeclaredMadeForKids` from `publishing.madeForKids`; undeclared audience is a blocker.
+- `narrate`/`render-scenes`/`render` refuse schema-1.1 specs with exit 3 (cartoon pipeline lands in M02.2–M02.8).
 
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.

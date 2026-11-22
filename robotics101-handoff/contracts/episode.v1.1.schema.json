@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/episode.v1.1.schema.json",
+  "title": "Robotics101 EpisodeSpec v1.1 (cartoon: characters + dialogue beats)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "episodeId",
+    "episodeNumber",
+    "title",
+    "audience",
+    "durationTargetSeconds",
+    "scenes",
+    "characters",
+    "set"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.1"
+    },
+    "episodeId": {
+      "type": "string",
+      "pattern": "^ep-[0-9]{3,}$"
+    },
+    "episodeNumber": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 140
+    },
+    "audience": {
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ]
+    },
+    "durationTargetSeconds": {
+      "type": "integer",
+      "minimum": 120,
+      "maximum": 900
+    },
+    "learningObjectives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "maxItems": 5
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claimId",
+          "sourceUrl",
+          "verificationStatus"
+        ],
+        "properties": {
+          "claimId": {
+            "type": "string"
+          },
+          "sourceUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "verificationStatus": {
+            "enum": [
+              "verified",
+              "unverified"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 25,
+      "items": {
+        "$ref": "#/$defs/scene"
+      }
+    },
+    "characters": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{1,31}$"
+      }
+    },
+    "set": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+    },
+    "music": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "theme": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,31}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "publishing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "madeForKids"
+      ],
+      "properties": {
+        "madeForKids": {
+          "type": "boolean"
+        },
+        "audienceNote": {
+          "type": "string",
+          "maxLength": 300
+        }
+      }
+    }
+  },
+  "$defs": {
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sceneId",
+        "sequence",
+        "title",
+        "educationalObjective",
+        "engine",
+        "template",
+        "durationTargetSeconds",
+        "parameters",
+        "validation",
+        "beats"
+      ],
+      "properties": {
+        "sceneId": {
+          "type": "string",
+          "minLength": 4
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 3
+        },
+        "educationalObjective": {
+          "type": "string",
+          "minLength": 5
+        },
+        "engine": {
+          "enum": [
+            "cartoon"
+          ]
+        },
+        "template": {
+          "type": "string",
+          "minLength": 3
+        },
+        "durationTargetSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 180
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requiredChecks"
+          ],
+          "properties": {
+            "requiredChecks": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "enum": [
+                  "render_success",
+                  "video_probe",
+                  "labels_visible",
+                  "kinematics_consistency",
+                  "joint_constraints",
+                  "duration_match",
+                  "sensor_geometry",
+                  "safe_asset"
+                ]
+              }
+            }
+          }
+        },
+        "beats": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 80,
+          "items": {
+            "$ref": "#/$defs/beat"
+          }
+        }
+      }
+    },
+    "beat": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "speaker",
+            "text"
+          ],
+          "properties": {
+            "type": {
+              "const": "line"
+            },
+            "speaker": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "emotion": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "action": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}(:[A-Za-z0-9_.\\-]{1,32})?$"
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "const": "sfx"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "who": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "who",
+            "do"
+          ],
+          "properties": {
+            "type": {
+              "const": "action"
+            },
+            "who": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "do": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}(:[A-Za-z0-9_.\\-]{1,32})?$"
+            },
+            "emotion": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "seconds": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 8
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "seconds"
+          ],
+          "properties": {
+            "type": {
+              "const": "pause"
+            },
+            "seconds": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 4
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "cue"
+          ],
+          "properties": {
+            "type": {
+              "const": "music"
+            },
+            "cue": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -17,7 +17,7 @@ def test_sample_spec_is_valid_without_warnings(spec):
 def test_registry_covers_sample_templates(spec):
     used = {(s["engine"], s["template"]) for s in spec["scenes"]}
     assert used <= set(REGISTRY)
-    assert len(REGISTRY) == 7
+    assert len([k for k in REGISTRY if k[0] != "cartoon"]) == 7
 
 
 def test_schema_violation_rejected(spec):

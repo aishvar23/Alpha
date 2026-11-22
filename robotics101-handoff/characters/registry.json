@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "robotics101.characters/1",
+  "rigVersion": 1,
+  "outlineColor": "#2B2140",
+  "characters": {
+    "bolt": {
+      "displayName": "Bolt",
+      "role": "hero",
+      "description": "Teal rounded robot with a dark screen face (green LED eyes and mouth), antenna bulb that lights up when he thinks, orange belly panel, tread base with yellow wheels, noodle arms with orange hands.",
+      "personality": "Eager, over-confident learner who rushes in, bonks into things and learns the rule by the end. Never mean; laughs at himself.",
+      "palette": {"body": "#2EC4B6", "screen": "#1B1B3A", "led": "#7CFFCB", "belly": "#FF9F1C", "tread": "#45505E", "wheel": "#FFC93C", "bulb": "#FFE66D", "cheek": "#FF6B9A"},
+      "rig": "bolt",
+      "expressions": ["happy", "surprised", "worried", "proud", "sleepy", "dizzy", "thinking", "laugh"],
+      "actions": ["zoom", "bonk", "dizzy", "flinch", "flex", "wiggle", "yawn", "plug_in", "ping", "skid", "drive", "stop", "turn", "resume", "spin", "arm_to", "hop", "wave", "idle", "enter", "exit", "look_at"],
+      "captionColor": "#2EC4B6",
+      "speaks": true,
+      "voice": {
+        "elevenlabs": {
+          "voiceId": "ktkP7Nsj67dw2zcplQYt",
+          "voiceName": "Lawrence - Bright and Informative (provisional; audition pending)",
+          "modelId": "eleven_multilingual_v2",
+          "settings": {"stability": 0.35, "similarity_boost": 0.75, "style": 0.45, "use_speaker_boost": true, "speed": 1.05}
+        },
+        "kokoro": {"voice": "am_puck", "speed": 1.08},
+        "espeak": {"voice": "en-us+m3", "pitch": 70, "speed": 165},
+        "fx": ["pitch", "250", "tremolo", "60", "15", "chorus", "0.6", "0.9", "25", "0.3", "0.25", "2", "-t"],
+        "intent": "playful, slightly robotic young male"
+      }
+    },
+    "maya": {
+      "displayName": "Maya",
+      "role": "kid inventor",
+      "description": "9-year-old girl, brown skin, two curly dark hair puffs, purple-strap goggles worn on her head, yellow hoodie, brown tool belt, blue trousers, red sneakers.",
+      "personality": "Patient, clever and funny big-sister energy; explains with quick experiments, not lectures; cheers Bolt on.",
+      "palette": {"skin": "#A8673F", "hair": "#2A1A12", "hoodie": "#FFD23F", "goggles": "#9BF6FF", "strap": "#6C4AB6", "belt": "#8D5524", "trousers": "#3D5A80", "shoes": "#E63946", "cheek": "#FF6B9A"},
+      "rig": "maya",
+      "expressions": ["happy", "grin", "surprised", "worried", "thinking", "laugh", "proud"],
+      "actions": ["point", "wave", "write_board", "open_album", "stethoscope", "plug_in", "cheer", "hop", "idle", "enter", "exit", "look_at", "facepalm"],
+      "captionColor": "#FFD23F",
+      "speaks": true,
+      "voice": {
+        "elevenlabs": {
+          "voiceId": "g7LVvkPWALzPxOQbF6OE",
+          "voiceName": "Jade - Upbeat and Natural (provisional; audition pending)",
+          "modelId": "eleven_multilingual_v2",
+          "settings": {"stability": 0.4, "similarity_boost": 0.75, "style": 0.35, "use_speaker_boost": true, "speed": 1.0}
+        },
+        "kokoro": {"voice": "af_bella", "speed": 1.0},
+        "espeak": {"voice": "en-us+f4", "pitch": 75, "speed": 160},
+        "fx": [],
+        "intent": "bright, upbeat young girl"
+      }
+    },
+    "nib": {
+      "displayName": "Nib",
+      "role": "sidekick",
+      "description": "Tiny pink bird-drone with one big eye, yellow beak, stubby wings and a light-blue propeller hat.",
+      "personality": "Curious, mischievous show-off; never talks, only beeps and whistles; physical comedy.",
+      "palette": {"body": "#FF6B9A", "wing": "#FF9FC0", "beak": "#FFC93C", "prop": "#9BF6FF"},
+      "rig": "nib",
+      "expressions": ["happy", "surprised", "proud", "dizzy"],
+      "actions": ["fly_to", "land", "fall", "return", "beep_dance", "highfive", "hover", "idle", "enter", "exit", "look_at"],
+      "captionColor": "#FF9FC0",
+      "speaks": false,
+      "voice": null
+    }
+  }
+}

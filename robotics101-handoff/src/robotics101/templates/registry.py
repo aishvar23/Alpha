@@ -20,6 +20,7 @@ ParamValidator = Callable[[dict[str, Any]], list[str]]
 # Primitive-geometry assets the Blender worker is allowed to build (no downloads).
 SAFE_BLENDER_ROBOT_ASSETS = frozenset({"simple_mobile_robot_v1"})
 SAFE_BLENDER_OBSTACLES = frozenset({"cube", "cylinder"})
+CARTOON_OBSTACLES = frozenset({"boxes"})
 
 
 @dataclass(frozen=True)
@@ -127,6 +128,66 @@ def _recap_quiz(p: dict[str, Any]) -> list[str]:
     return _check_keys(p, {"question"}) + _non_empty_string(p, "question")
 
 
+# ---------------------------------------------------------------- cartoon (M02) validators
+
+def _positive(p: dict[str, Any], key: str) -> list[str]:
+    v = p.get(key)
+    if key in p and not (_is_number(v) and v > 0):
+        return [f"'{key}' must be a number > 0, got {v!r}"]
+    return []
+
+
+def _cartoon_cold_open(p: dict[str, Any]) -> list[str]:
+    errors = _check_keys(p, set(), {"obstacle"})
+    if "obstacle" in p and p["obstacle"] not in CARTOON_OBSTACLES:
+        errors.append(f"'obstacle' must be one of {sorted(CARTOON_OBSTACLES)}")
+    return errors
+
+
+def _cartoon_robot_family(p: dict[str, Any]) -> list[str]:
+    return _check_keys(p, {"examples"}) + _string_list(p, "examples", 1, 4)
+
+
+def _cartoon_robot_checkup(p: dict[str, Any]) -> list[str]:
+    return _check_keys(p, {"parts"}) + _string_list(p, "parts", 1, 6)
+
+
+def _cartoon_sensor_ping(p: dict[str, Any]) -> list[str]:
+    return _sensor_range(p)
+
+
+def _cartoon_rule_board(p: dict[str, Any]) -> list[str]:
+    errors = _check_keys(p, {"thresholdMeters", "readings"}) + _positive(p, "thresholdMeters")
+    r = p.get("readings")
+    if "readings" in p:
+        if not isinstance(r, list) or not (2 <= len(r) <= 6) or not all(_is_number(x) and x > 0 for x in r):
+            errors.append("'readings' must be a list of 2..6 numbers > 0")
+        elif any(b >= a for a, b in zip(r, r[1:])):
+            errors.append("'readings' must be strictly decreasing (the robot drives closer)")
+        elif not errors and not (r[-1] < p["thresholdMeters"] <= r[0]):
+            errors.append("'readings' must start at/above the threshold and end below it (so the robot stops)")
+    return errors
+
+
+def _cartoon_servo_highfive(p: dict[str, Any]) -> list[str]:
+    errors = _check_keys(p, {"startAngleDegrees", "endAngleDegrees"}, {"missAngleDegrees"})
+    for key in ("startAngleDegrees", "endAngleDegrees", "missAngleDegrees"):
+        if key in p and (not _is_number(p[key]) or not servo_angle_in_limits(p[key])):
+            errors.append(f"joint constraint: '{key}' must be a number in {SERVO_MIN_DEGREES:g}..{SERVO_MAX_DEGREES:g}")
+    return errors
+
+
+def _cartoon_obstacle_rematch(p: dict[str, Any]) -> list[str]:
+    errors = _check_keys(p, {"thresholdMeters", "obstacle"}) + _positive(p, "thresholdMeters")
+    if "obstacle" in p and p["obstacle"] not in CARTOON_OBSTACLES:
+        errors.append(f"'obstacle' must be one of {sorted(CARTOON_OBSTACLES)}")
+    return errors
+
+
+def _cartoon_recap_chant(p: dict[str, Any]) -> list[str]:
+    return _check_keys(p, {"question"}) + _non_empty_string(p, "question")
+
+
 # ---------------------------------------------------------------- registry
 
 _TEMPLATES = [
@@ -136,6 +197,14 @@ _TEMPLATES = [
     TemplateSpec("manim", "sense_think_act", "Sense -> think -> act loop with threshold rule", _sense_think_act),
     TemplateSpec("manim", "servo_rotation", "Servo joint rotating between two angles", _servo_rotation),
     TemplateSpec("manim", "recap_quiz", "Recap bullets and closing question", _recap_quiz),
+    TemplateSpec("cartoon", "cartoon_cold_open", "Cold open gag in the garage set", _cartoon_cold_open),
+    TemplateSpec("cartoon", "cartoon_robot_family", "What is a robot + family-album examples", _cartoon_robot_family),
+    TemplateSpec("cartoon", "cartoon_robot_checkup", "Robot check-up: the main parts glow in turn", _cartoon_robot_checkup),
+    TemplateSpec("cartoon", "cartoon_sensor_ping", "Ultrasonic ping, echo distance and sensor range", _cartoon_sensor_ping),
+    TemplateSpec("cartoon", "cartoon_rule_board", "Chalkboard rule + readings crossing the threshold", _cartoon_rule_board),
+    TemplateSpec("cartoon", "cartoon_servo_highfive", "Servo arm rotates to an angle for a high-five", _cartoon_servo_highfive),
+    TemplateSpec("cartoon", "cartoon_obstacle_rematch", "Drive, sense, stop, turn, resume (2D)", _cartoon_obstacle_rematch),
+    TemplateSpec("cartoon", "cartoon_recap_chant", "Sense-think-act chant + closing question", _cartoon_recap_chant),
     TemplateSpec(
         "blender",
         "mobile_robot_avoidance",

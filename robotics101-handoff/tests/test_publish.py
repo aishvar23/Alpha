@@ -188,3 +188,14 @@ def test_make_thumbnail_real(tmp_path):
     png = make_thumbnail(src, tmp_path / "thumbnail.png", "Ep. 1: What Is a Robot?", 1.0)
     v = summarize(png).video
     assert (v["width"], v["height"]) == (1280, 720)
+
+
+def test_made_for_kids_comes_from_spec(spec, tmp_path):
+    plan = build_publish_plan(make_bundle(tmp_path / "a", spec))       # v1.0 spec: undeclared audience
+    assert plan["status"]["selfDeclaredMadeForKids"] is None
+    assert any(x.startswith("audience not declared") for x in plan["blockers"])
+    cartoon = json.loads((Path(__file__).resolve().parents[1] / "examples" / "episode-001-cartoon.json").read_text())
+    plan = build_publish_plan(make_bundle(tmp_path / "b", cartoon))
+    assert plan["status"]["selfDeclaredMadeForKids"] is True
+    assert not any(x.startswith("audience not declared") for x in plan["blockers"])
+    assert plan["wouldUpload"] is False and plan["networkCalls"] == 0
