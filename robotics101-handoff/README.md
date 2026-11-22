@@ -83,6 +83,8 @@ The stub imports no network/Google/OAuth library and reads no credentials (enfor
 
 Voices (M02.2): `robotics101 voice examples/episode-001-cartoon.json --out out/ep1-cartoon [--tts auto|elevenlabs|kokoro|espeak|fixture] [--plan-only]` synthesizes every line with the character's voice from the registry and writes `voice/lines/*.wav`, per-scene dialogue stems `voice/scenes/<sceneId>.wav` (48 kHz mono, exactly the scene length), speaker-labelled `captions.srt`, `timing.json` (schema `robotics101.timing/2`: every beat timed, scene durations in whole frames) and `voice_qa.json`. `auto` = ElevenLabs if `ELEVENLABS_API_KEY` is set, else Kokoro, else espeak. Audio is cached in `tts-cache/` by content hash, so reruns never re-bill; `--plan-only` prints billable characters without synthesizing; `ROBOTICS101_ELEVENLABS_MAX_CHARS` (default 8000) caps uncached characters per run. With a key: `robotics101 voices list` (free) and `robotics101 voices audition bolt --voice-id <id> --out /tmp/bolt.wav` (one short line). Never commit the key; put it only in your environment.
 
+Model sheets (M02.3): `robotics101 model-sheet --out out/model-sheets` renders the cast lineup and each character's expressions, mouth shapes and poses (`src/robotics101/cartoon/rigs.py`).
+
 Kokoro fallback setup: `uv pip install --python .venv/bin/python -e '.[kokoro]'`, then download `kokoro-v1.0.onnx` and `voices-v1.0.bin` from https://github.com/thewh1teagle/kokoro-onnx/releases (model-files-v1.0) into `models/kokoro/` (gitignored).
 
 Milestone status: `PROGRESS.md`.

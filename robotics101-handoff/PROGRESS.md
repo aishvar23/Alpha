@@ -12,7 +12,8 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 | M01.6 | First E2E run → `out/episode-001/final.mp4`; publisher dry-run stub (no uploads) | **done** |
 | M02.1 | Cartoon contract v1.1 (dialogue beats), character registry, cartoon episode-001 script, fact + kid-safe lints | **done** |
 | M02.2 | Voice layer: ElevenLabs (env key, content-hash cache) → Kokoro → espeak; dialogue timeline; speaker SRT | **done** (ElevenLabs path tested with a mocked API; real calls wait for the key) |
-| M02.3–M02.8 | Rigs, motion + lip-flap, sets/props, cartoon scene engine, music/SFX, full episode (see docs/PLAN-cartoon.md) | todo |
+| M02.3 | Character rigs (Bolt, Maya, Nib): expressions, Rhubarb mouth shapes, blink/gaze/squash/lean/arms/facing; model sheets + golden-image tests | **done** |
+| M02.4–M02.8 | Motion + lip-flap, sets/props, cartoon scene engine, music/SFX, full episode (see docs/PLAN-cartoon.md) | todo |
 
 ## M01.1 — what exists
 - `pyproject.toml` (hatchling, src layout, console script `robotics101`, deps: jsonschema; dev: pytest).
@@ -134,6 +135,12 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - Episode-001 cartoon targets re-balanced to dialogue (30/40/40/45/50/35/30/30 = 300 s).
 - Kokoro run: 74 lines, 3,672 chars, 293.3 s, speech 74 %, QA PASS_WITH_WARNINGS (2 slightly fast short lines, not production voice); rerun fully cached and byte-identical. espeak run 342.4 s (over target; fallback only).
 - Waiting on the owner: ELEVENLABS_API_KEY; then `voices list` → audition Bolt/Maya (≈200 chars) → confirm voice ids → full episode ≈3.7k credits.
+
+## M02.3 — what exists
+- `src/robotics101/cartoon/rigs.py` (rig v1 = registry `rigVersion`): pure `Pose -> VGroup` builders for Bolt, Maya, Nib. Pose = expression, mouth (Rhubarb A–H, X = expression's rest mouth), blink, gaze, squash (area-preserving, pivot at the feet), lean, arm angles (Nib: wing flap), facing, antenna glow, propeller phase, extras (stars, sweat, sparkle, zzz, question, heart). Ground contact at y=0 for every rig; every part addressable via `group.parts`. Palette/outline from the registry.
+- Expressions implemented exactly match the registry lists (test). Bolt: happy, surprised, worried, proud, sleepy, dizzy, thinking, laugh; Maya: happy, grin, surprised, worried, thinking, laugh, proud; Nib: happy, surprised, proud, dizzy.
+- `src/robotics101/cartoon/model_sheet.py` + `robotics101 model-sheet --out DIR`: cast lineup + one sheet per character (expressions / mouths / poses) via Manim's Cairo camera (~1 s per sheet).
+- Golden images `tests/golden/model-sheet-*-960.png`: renders are bit-identical run to run; the test allows ≤ 60 changed pixels (a flipped Bolt smile changes ~400 px and fails). Re-bless after an intended rig change with `ROBOTICS101_UPDATE_GOLDEN=1 pytest tests/test_rigs.py` and review the PNGs.
 
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.

@@ -301,6 +301,22 @@ def _cmd_voices(args: argparse.Namespace) -> int:
         return EXIT_INPUT
 
 
+def _cmd_model_sheet(args: argparse.Namespace) -> int:
+    try:
+        from robotics101.cartoon.model_sheet import render_sheets
+    except ImportError as e:
+        print(f"error: model sheets need manim ({e})", file=sys.stderr)
+        return EXIT_INPUT
+    try:
+        w, h = (int(x) for x in args.size.lower().split("x"))
+    except ValueError:
+        print("error: --size must look like 1920x1080", file=sys.stderr)
+        return EXIT_INPUT
+    for p in render_sheets(args.out, w, h):
+        print(f"wrote {p}")
+    return EXIT_OK
+
+
 AUDITION_LINES = {
     "bolt": "Ow! Who put a wall there? Sense, think, act. Like a tiny dance, but with math!",
     "maya": "Bolt, that's not a wall. It's a pile of boxes! Today, you're going to learn how robots notice things.",
@@ -377,6 +393,11 @@ def build_parser() -> argparse.ArgumentParser:
     au.add_argument("--text")
     au.add_argument("--out", type=Path, required=True, help="output .wav")
     vs.set_defaults(func=_cmd_voices)
+
+    ms = sub.add_parser("model-sheet", help="render the cast model sheets (rigs, expressions, mouths, poses) to PNG")
+    ms.add_argument("--out", type=Path, required=True)
+    ms.add_argument("--size", default="1920x1080")
+    ms.set_defaults(func=_cmd_model_sheet)
     return parser
 
 
