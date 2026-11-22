@@ -270,7 +270,7 @@ MAYA_EXPR = {
     # brow angle: + = inner ends up (worried/sad), - = inner ends down (determined); raise in units
     #            brow angle, brow raise, rest mouth, eye scale, cheek, extras
     "happy":     (0.0, 0.03, "smile", 1.0, 0.7, ()),
-    "grin":      (-0.12, 0.02, "grin", 1.0, 0.8, ()),
+    "grin":      (-0.04, 0.03, "grin", 1.0, 0.8, ()),
     "surprised": (0.1, 0.13, "o", 1.25, 0.4, ()),
     "worried":   (0.38, 0.06, "frown", 1.05, 0.3, ("sweat",)),
     "thinking":  (-0.2, 0.07, "side", 0.95, 0.4, ("question",)),

@@ -13,7 +13,8 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 | M02.1 | Cartoon contract v1.1 (dialogue beats), character registry, cartoon episode-001 script, fact + kid-safe lints | **done** |
 | M02.2 | Voice layer: ElevenLabs (env key, content-hash cache) → Kokoro → espeak; dialogue timeline; speaker SRT | **done** (ElevenLabs path tested with a mocked API; real calls wait for the key) |
 | M02.3 | Character rigs (Bolt, Maya, Nib): expressions, Rhubarb mouth shapes, blink/gaze/squash/lean/arms/facing; model sheets + golden-image tests | **done** |
-| M02.4–M02.8 | Motion + lip-flap, sets/props, cartoon scene engine, music/SFX, full episode (see docs/PLAN-cartoon.md) | todo |
+| M02.4 | Motion (performers, actions, blinks, idle/talk, squash/stretch hops) + Rhubarb lip sync (RMS fallback) + parallel 2D clip renderer; 15 s motion test | **done** |
+| M02.5–M02.8 | Sets/props, cartoon scene engine, music/SFX, full episode (see docs/PLAN-cartoon.md) | todo |
 
 ## M01.1 — what exists
 - `pyproject.toml` (hatchling, src layout, console script `robotics101`, deps: jsonschema; dev: pytest).
@@ -141,6 +142,12 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - Expressions implemented exactly match the registry lists (test). Bolt: happy, surprised, worried, proud, sleepy, dizzy, thinking, laugh; Maya: happy, grin, surprised, worried, thinking, laugh, proud; Nib: happy, surprised, proud, dizzy.
 - `src/robotics101/cartoon/model_sheet.py` + `robotics101 model-sheet --out DIR`: cast lineup + one sheet per character (expressions / mouths / poses) via Manim's Cairo camera (~1 s per sheet).
 - Golden images `tests/golden/model-sheet-*-960.png`: renders are bit-identical run to run; the test allows ≤ 60 changed pixels (a flipped Bolt smile changes ~400 px and fails). Re-bless after an intended rig change with `ROBOTICS101_UPDATE_GOLDEN=1 pytest tests/test_rigs.py` and review the PNGs.
+
+## M02.4 — what exists
+- `cartoon/motion.py`: `Performer` per character — eased moves (with flight/jump arcs), timed actions (every registry action has a motion: hop with anticipation/landing squash, bonk, dizzy, zoom, skid, turn (persists), wave, point, cheer, highfive, fly_to, land, fall, beep_dance, …), expression changes, gaze, airborne/perched, deterministic seeded blinks, idle breathing/hover and talk gestures. `state(t)` is a pure function of time → any frame renders independently.
+- `cartoon/lipsync.py`: Rhubarb Lip Sync 1.14 (phonetic recogniser, ~1 s per line, deterministic; `tools/rhubarb/` or `RHUBARB_BIN`) → mouth cues A–H/X per line, cached in `tts-cache/lipsync/`; RMS fallback; `lipsync_agreement` metric (share of voiced frames with an open mouth).
+- `cartoon/render2d.py`: frame function → Cairo frames → H.264 High yuv420p, chunked across processes and concatenated (450 frames of 1080p in ~10 s on this box); optional AAC 48 kHz stereo track trimmed sample-exactly.
+- `robotics101 motion-test`: 15 s cold-open gag with real voiced lines (Kokoro) — lip-sync agreement 0.89–1.0.
 
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.

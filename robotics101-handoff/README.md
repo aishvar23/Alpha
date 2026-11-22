@@ -85,6 +85,8 @@ Voices (M02.2): `robotics101 voice examples/episode-001-cartoon.json --out out/e
 
 Model sheets (M02.3): `robotics101 model-sheet --out out/model-sheets` renders the cast lineup and each character's expressions, mouth shapes and poses (`src/robotics101/cartoon/rigs.py`).
 
+Motion + lip sync (M02.4): `robotics101 motion-test --voice-dir out/ep1-cartoon --out out/motion-test.mp4` renders a 15 s performance of the cold-open gag (Bolt bonks the boxes, Maya laughs, Nib topples) with lip sync from Rhubarb Lip Sync (MIT). Install Rhubarb 1.14 by unzipping the Linux release from https://github.com/DanielSWolf/rhubarb-lip-sync/releases into `tools/rhubarb/` (gitignored) or set `RHUBARB_BIN`; without it mouths follow loudness (RMS fallback).
+
 Kokoro fallback setup: `uv pip install --python .venv/bin/python -e '.[kokoro]'`, then download `kokoro-v1.0.onnx` and `voices-v1.0.bin` from https://github.com/thewh1teagle/kokoro-onnx/releases (model-files-v1.0) into `models/kokoro/` (gitignored).
 
 Milestone status: `PROGRESS.md`.

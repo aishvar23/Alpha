@@ -317,6 +317,18 @@ def _cmd_model_sheet(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_motion_test(args: argparse.Namespace) -> int:
+    from robotics101.cartoon.motion_test import render_motion_test
+
+    if not (args.voice_dir / "timing.json").is_file():
+        print(f"error: {args.voice_dir}/timing.json missing — run `robotics101 voice` first", file=sys.stderr)
+        return EXIT_INPUT
+    w, h = (int(x) for x in args.size.lower().split("x"))
+    info = render_motion_test(args.voice_dir, args.out, w, h)
+    print(json.dumps(info, indent=2))
+    return EXIT_OK
+
+
 AUDITION_LINES = {
     "bolt": "Ow! Who put a wall there? Sense, think, act. Like a tiny dance, but with math!",
     "maya": "Bolt, that's not a wall. It's a pile of boxes! Today, you're going to learn how robots notice things.",
@@ -398,6 +410,12 @@ def build_parser() -> argparse.ArgumentParser:
     ms.add_argument("--out", type=Path, required=True)
     ms.add_argument("--size", default="1920x1080")
     ms.set_defaults(func=_cmd_model_sheet)
+
+    mt = sub.add_parser("motion-test", help="render the 15 s rig/lip-sync motion test from a `voice` output dir")
+    mt.add_argument("--voice-dir", type=Path, required=True)
+    mt.add_argument("--out", type=Path, required=True, help="output .mp4")
+    mt.add_argument("--size", default="1920x1080")
+    mt.set_defaults(func=_cmd_motion_test)
     return parser
 
 
