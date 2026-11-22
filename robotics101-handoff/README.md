@@ -16,6 +16,16 @@ Repository-ready **implementation handoff for Claude Code and OpenAI Codex**. Th
 3. Instruct the coding agent: **"Implement `tasks/M01_LOCAL_VERTICAL_SLICE.md` end-to-end. Follow AGENTS.md, do not deploy cloud resources, do not publish to YouTube. Run tests and report artifacts."**
 4. Iterate on the sample episode in `examples/episode-001.json` before adding distributed orchestration.
 
+## Local quickstart
+Requires Python 3.12, [uv](https://docs.astral.sh/uv/) and GNU make; uses the existing `.venv`. No credentials needed.
+```bash
+make install    # editable install of the `robotics101` package + pytest into .venv
+make test       # pytest suite (no network, no API keys)
+make validate   # robotics101 validate examples/episode-001.json
+.venv/bin/robotics101 validate path/to/episode.json [--strict]
+```
+`validate` exit codes: 0 valid, 1 invalid (errors, or warnings with `--strict`), 2 unreadable/bad JSON. Errors = schema, scene IDs/sequence, unknown template, invalid template parameters; warnings = duration pacing (see `src/robotics101/validation.py`). `render` and `make demo` are placeholders until M01.5. Milestone status: `PROGRESS.md`.
+
 ## Artifact directory
 | Path | Purpose |
 |---|---|

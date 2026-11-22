@@ -10,3 +10,10 @@ node_modules/
 *.wav
 *.mov
 *.blend1
+*.egg-info/
+build/
+dist/
+.mypy_cache/
+.ruff_cache/
+# Manim default output dir
+media/
