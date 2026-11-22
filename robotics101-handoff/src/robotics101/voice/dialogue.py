@@ -136,6 +136,12 @@ def voice_episode(spec: dict, registry: Registry, out_dir: Path, backend: Backen
     plans = plan_lines(spec, registry, backend, cache)
     cost = cost_summary(plans, backend)
     if backend.billable:
+        unapproved = sorted({p.speaker for p in plans
+                             if not (registry.get(p.speaker).voice.get(backend.name) or {}).get("approved")})
+        if unapproved:
+            raise VoiceError(f"{backend.name} voices for {unapproved} are not owner-approved yet: run "
+                             "`robotics101 voices samples` (short sample lines only), get the owner's approval, then "
+                             "set voice.elevenlabs.approved=true in characters/registry.json. Nothing was synthesized.")
         limit = budget_chars()
         if cost["billableChars"] > limit:
             raise VoiceError(f"{backend.name}: {cost['billableChars']} uncached characters exceed the per-run budget "

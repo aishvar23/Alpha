@@ -112,7 +112,7 @@ class ElevenLabsBackend(Backend):
     label: str = "ElevenLabs TTS (production voice)"
     is_production: bool = True
     billable: bool = True
-    transport: Transport = field(default=_urllib_transport, repr=False)
+    transport: Transport | None = field(default=None, repr=False)   # None = stdlib urllib (looked up per call)
     timeout_s: float = 60.0
     retries: int = 3
 
@@ -141,7 +141,7 @@ class ElevenLabsBackend(Backend):
                                          headers={"xi-api-key": key, "Accept": accept,
                                                   "Content-Type": "application/json"})
             try:
-                return self.transport(req, self.timeout_s)
+                return (self.transport or _urllib_transport)(req, self.timeout_s)
             except urllib.error.HTTPError as e:
                 try:
                     detail = e.read()[:300].decode("utf-8", "replace")

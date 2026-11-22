@@ -76,7 +76,8 @@
             "0.2",
             "2",
             "-t"
-          ]
+          ],
+          "approved": false
         },
         "kokoro": {
           "voice": "am_puck",
@@ -159,7 +160,8 @@
             "style": 0.35,
             "use_speaker_boost": true,
             "speed": 1.0
-          }
+          },
+          "approved": false
         },
         "kokoro": {
           "voice": "af_bella",

@@ -149,11 +149,37 @@ class FakeTransport:
         return self.payload
 
 
+def approved_registry():
+    reg = load_registry()
+    for cid in ("bolt", "maya"):
+        reg.get(cid).voice["elevenlabs"]["approved"] = True
+    return reg
+
+
+def test_unapproved_elevenlabs_voices_block_full_episode(small, tmp_path, monkeypatch, mp3_bytes):
+    monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
+    fake = FakeTransport(mp3_bytes)
+    with pytest.raises(VoiceError, match="not owner-approved"):
+        voice_episode(small, load_registry(), tmp_path / "o", ElevenLabsBackend(transport=fake),
+                      VoiceCache(tmp_path / "c"), log=lambda m: None)
+    assert fake.requests == []
+
+
+def test_voices_samples_writes_two_short_lines(tmp_path, monkeypatch, mp3_bytes):
+    monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
+    fake = FakeTransport(mp3_bytes)
+    monkeypatch.setattr(B, "_urllib_transport", fake)
+    assert main(["voices", "samples", "--out-dir", str(tmp_path / "s")]) == 0
+    assert sorted(p.name for p in (tmp_path / "s").iterdir()) == ["elevenlabs-sample-bolt.wav",
+                                                                  "elevenlabs-sample-maya.wav"]
+    assert len(fake.requests) == 2 and sum(len(json.loads(r.data)["text"]) for r in fake.requests) < 250
+
+
 def test_elevenlabs_request_cache_ledger_and_key_never_persisted(small, tmp_path, monkeypatch, mp3_bytes):
     monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
     fake = FakeTransport(mp3_bytes)
     el = ElevenLabsBackend(transport=fake)
-    cache, reg = VoiceCache(tmp_path / "cache"), load_registry()
+    cache, reg = VoiceCache(tmp_path / "cache"), approved_registry()
     doc = voice_episode(small, reg, tmp_path / "o", el, cache, log=lambda m: None)
     n = len(fake.requests)
     assert n == doc["cost"]["lines"] > 0 and doc["isProductionVoice"] is True
@@ -185,7 +211,7 @@ def test_budget_blocks_before_any_call(small, tmp_path, monkeypatch, mp3_bytes):
     monkeypatch.setenv("ROBOTICS101_ELEVENLABS_MAX_CHARS", "50")
     fake = FakeTransport(mp3_bytes)
     with pytest.raises(VoiceError, match="exceed the per-run budget"):
-        voice_episode(small, load_registry(), tmp_path / "o", ElevenLabsBackend(transport=fake),
+        voice_episode(small, approved_registry(), tmp_path / "o", ElevenLabsBackend(transport=fake),
                       VoiceCache(tmp_path / "c"), log=lambda m: None)
     assert fake.requests == []
 

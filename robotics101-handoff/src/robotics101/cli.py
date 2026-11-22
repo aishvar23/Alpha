@@ -273,6 +273,22 @@ def _cmd_voices(args: argparse.Namespace) -> int:
         print(f"error: {KEY_ENV} is not set; no ElevenLabs call was made", file=sys.stderr)
         return EXIT_INPUT
     try:
+        if args.voices_cmd == "samples":
+            reg = load_registry()
+            args.out_dir.mkdir(parents=True, exist_ok=True)
+            total = 0
+            for cid in ("bolt", "maya"):
+                voice = reg.get(cid).voice
+                text = AUDITION_LINES[cid]
+                total += len(text)
+                req = el.request(voice, text)
+                raw, cached = VoiceCache().get_or_render(el, req)
+                out = args.out_dir / f"elevenlabs-sample-{cid}.wav"
+                decode_to_wav(raw, out, el.fx(voice))
+                print(f"{'cached' if cached else 'synthesized'} {cid} ({voice['elevenlabs']['voiceId']}, "
+                      f"{len(text)} chars) -> {out}")
+            print(f"{total} characters. Ask the owner to approve these voices before voicing the full episode.")
+            return EXIT_OK
         if args.voices_cmd == "list":
             for v in el.list_voices():
                 labels = ", ".join(f"{k}={x}" for k, x in sorted(v["labels"].items()))
@@ -399,6 +415,9 @@ def build_parser() -> argparse.ArgumentParser:
     vs = sub.add_parser("voices", help="ElevenLabs voice tools (need ELEVENLABS_API_KEY)")
     vsub = vs.add_subparsers(dest="voices_cmd", required=True)
     vsub.add_parser("list", help="list voices available to the account (free; no credits)")
+    sm = vsub.add_parser("samples", help="one short sample line each for Bolt and Maya with the registry voices "
+                                         "(for owner approval; ~180 chars, cached)")
+    sm.add_argument("--out-dir", type=Path, default=Path("/workspace/robotics101-samples"))
     au = vsub.add_parser("audition", help="synthesize one short test line for a character (<=200 chars, cached)")
     au.add_argument("character")
     au.add_argument("--voice-id", help="try a different ElevenLabs voice id (registry unchanged)")
