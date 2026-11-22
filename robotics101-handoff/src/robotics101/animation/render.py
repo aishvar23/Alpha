@@ -1,4 +1,5 @@
-"""Host-side scene renderer: runs each Manim template in a subprocess and verifies the output.
+"""Host-side scene renderer: runs each Manim (and, via ``blender_render``, Blender) template in a
+subprocess and verifies the output.
 
 Only validated scene parameters are passed to the template, as a JSON job file referenced by
 the ``ROBOTICS101_SCENE_JOB`` environment variable. The template class is chosen from the fixed
@@ -73,6 +74,7 @@ def find_manim() -> str:
 
 
 def check_prerequisites() -> tuple[str, str]:
+    """Manim scenes: manim + ffmpeg/ffprobe (exact install hints on failure)."""
     manim = find_manim()
     ffprobe = shutil.which("ffprobe")
     if not ffprobe or not shutil.which("ffmpeg"):
@@ -138,8 +140,13 @@ def _render_one(manim: str, ffprobe: str, job: dict, out_dir: Path, profile: Pro
     shutil.move(str(produced[0]), final)
     shutil.rmtree(work, ignore_errors=True)
 
+    return verify_clip(result, final, job["durationSeconds"], profile, ffprobe)
+
+
+def verify_clip(result: SceneResult, final: Path, duration_s: float, profile: Profile, ffprobe: str) -> SceneResult:
+    """Shared post-render checks (Manim and Blender): ffprobe resolution/fps/frames/duration, no audio."""
     # Expected length is the frame-quantised schedule, which is within half a frame of the target.
-    expected = target_frames(job["durationSeconds"], profile.fps) / profile.fps
+    expected = target_frames(duration_s, profile.fps) / profile.fps
     check = check_clip(final, profile.width, profile.height, profile.fps, expected, ffprobe)
     result.output = str(final)
     if check.probe:
@@ -148,8 +155,8 @@ def _render_one(manim: str, ffprobe: str, job: dict, out_dir: Path, profile: Pro
         result.problems = check.problems
         result.message = "output failed probe checks"
         return result
-    if abs(expected - job["durationSeconds"]) > 1.0 / profile.fps:
-        result.problems = [f"scheduled {job['durationSeconds']}s cannot be met within 1 frame"]
+    if abs(expected - duration_s) > 1.0 / profile.fps:
+        result.problems = [f"scheduled {duration_s}s cannot be met within 1 frame"]
         result.message = "duration mismatch"
         return result
     result.status = "rendered"
@@ -157,43 +164,61 @@ def _render_one(manim: str, ffprobe: str, job: dict, out_dir: Path, profile: Pro
     return result
 
 
+def find_ffmpeg() -> tuple[str, str]:
+    ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
+    if not ffprobe or not ffmpeg:
+        raise RenderSetupError("ffmpeg/ffprobe not found on PATH (Debian/Ubuntu: apt-get install ffmpeg).")
+    return ffmpeg, ffprobe
+
+
 def render_scenes(spec: dict, durations: dict[str, float], out_dir: Path, profile: Profile,
                   only: set[str] | None = None, workers: int = 4, timeout_s: float = 900.0,
-                  on_result=None) -> list[SceneResult]:
-    """Render every manim scene (or the ``only`` subset). Blender scenes are skipped (M01.4)."""
-    out_dir = Path(out_dir)
-    manim, ffprobe = check_prerequisites()
-    (out_dir / "scenes").mkdir(parents=True, exist_ok=True)
-    (out_dir / "logs").mkdir(parents=True, exist_ok=True)
+                  on_result=None, blender_procs: int | None = None) -> list[SceneResult]:
+    """Render every scene (or the ``only`` subset): engine=manim via Manim, engine=blender via headless Blender.
 
+    Prerequisites are checked up front, only for the engines actually needed.
+    """
+    from robotics101.animation import blender_render  # lazy: blender_render imports this module
+
+    out_dir = Path(out_dir)
     results: list[SceneResult] = []
-    jobs = []
+    manim_jobs, blender_jobs = [], []
     for scene in sorted(spec["scenes"], key=lambda s: s["sequence"]):
         sid = scene["sceneId"]
         if only and sid not in only:
             continue
-        if scene["engine"] != "manim":
-            results.append(SceneResult(sid, scene["template"], "skipped",
-                                       f"engine={scene['engine']} is rendered in M01.4 (Blender), not by render-scenes"))
-            continue
-        if scene["template"] not in SCENE_CLASSES:
-            results.append(SceneResult(sid, scene["template"], "failed", "no Manim implementation for template"))
-            continue
-        jobs.append(build_job(spec, scene, durations[sid]))
+        engine, template = scene["engine"], scene["template"]
+        if engine == "manim" and template in SCENE_CLASSES:
+            manim_jobs.append(build_job(spec, scene, durations[sid]))
+        elif engine == "blender" and template in blender_render.TEMPLATE_SCRIPTS:
+            blender_jobs.append(build_job(spec, scene, durations[sid]))
+        else:
+            results.append(SceneResult(sid, template, "failed", f"no {engine} implementation for template"))
+
+    ffmpeg, ffprobe = find_ffmpeg()
+    manim = check_prerequisites()[0] if manim_jobs else None
+    blender = blender_render.find_blender() if blender_jobs else None
+    (out_dir / "scenes").mkdir(parents=True, exist_ok=True)
+    (out_dir / "logs").mkdir(parents=True, exist_ok=True)
 
     for r in results:
         if on_result:
             on_result(r)
-    with ThreadPoolExecutor(max_workers=max(1, min(workers, len(jobs) or 1))) as pool:
-        futures = [pool.submit(_render_one, manim, ffprobe, job, out_dir, profile, timeout_s) for job in jobs]
+    n_jobs = len(manim_jobs) + len(blender_jobs)
+    with ThreadPoolExecutor(max_workers=max(1, min(workers, n_jobs or 1))) as pool:
+        # Blender clips take longest: start them first.
+        futures = [pool.submit(blender_render.render_blender_scene, blender, ffmpeg, ffprobe, job, out_dir,
+                               profile, timeout_s, blender_procs) for job in blender_jobs]
+        futures += [pool.submit(_render_one, manim, ffprobe, job, out_dir, profile, timeout_s) for job in manim_jobs]
         for f in futures:
             r = f.result()
             if on_result:
                 on_result(r)
             results.append(r)
     results.sort(key=lambda r: r.sceneId)
-    try:
-        (out_dir / ".manim").rmdir()  # only removed when empty; failed scenes keep their work dir
-    except OSError:
-        pass
+    for work_root in (".manim", ".blender"):
+        try:
+            (out_dir / work_root).rmdir()  # only removed when empty; failed scenes keep their work dir
+        except OSError:
+            pass
     return results

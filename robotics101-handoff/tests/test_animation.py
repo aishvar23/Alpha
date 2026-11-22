@@ -148,12 +148,11 @@ def test_cli_render_scenes_invalid_spec(tmp_path, spec):
     assert main(["render-scenes", str(bad), "--out", str(tmp_path / "o")]) == 1
 
 
-@pytest.mark.skipif(not (_have_manim() and HAVE_FFMPEG), reason="manim and/or ffmpeg not installed")
-def test_blender_scene_is_skipped_not_rendered(spec, tmp_path):
-    results = render_scenes(spec, {"scene-006": 45.0}, tmp_path, PROFILES["preview"], only={"scene-006"})
-    assert [(r.sceneId, r.status) for r in results] == [("scene-006", "skipped")]
-    assert "M01.4" in results[0].message
-    assert not list((tmp_path / "scenes").glob("*.mp4"))
+def test_unknown_engine_template_fails_without_rendering(spec, tmp_path):
+    spec["scenes"][0]["engine"] = "blender"   # robot_intro has no Blender implementation
+    results = render_scenes(spec, {"scene-001": 30.0}, tmp_path, PROFILES["preview"], only={"scene-001"})
+    assert [(r.sceneId, r.status) for r in results] == [("scene-001", "failed")]
+    assert "no blender implementation" in results[0].message
 
 
 # ---------------------------------------------------------------- Manim smoke render

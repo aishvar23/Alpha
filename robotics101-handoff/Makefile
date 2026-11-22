@@ -19,7 +19,7 @@ validate:
 narrate:  ## per-scene TTS (espeak|fixture) -> $(OUT)/audio/*.wav, timing.json, captions.srt
 	$(VENV)/bin/robotics101 narrate $(EPISODE) --out $(OUT) --provider $(TTS_PROVIDER)
 
-scenes:  ## Manim 2D scenes -> $(OUT)/scenes/<sceneId>.mp4 (preview 854x480@30; uses $(OUT)/timing.json if present)
+scenes:  ## Manim 2D + Blender 3D scenes -> $(OUT)/scenes/<sceneId>.mp4 (preview 854x480@30; uses $(OUT)/timing.json if present)
 	$(VENV)/bin/robotics101 render-scenes $(EPISODE) --out $(OUT) --profile $(PROFILE)
 
 scenes-full:  ## same at 1920x1080@30

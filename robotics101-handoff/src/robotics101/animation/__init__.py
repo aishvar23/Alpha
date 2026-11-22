@@ -1,1 +1,1 @@
-"""Scene rendering (M01.3: Manim 2D templates). Blender (M01.4) and composition (M01.5) live elsewhere."""
+"""Scene rendering: Manim 2D templates (M01.3) and headless-Blender 3D templates (M01.4). Composition is M01.5."""

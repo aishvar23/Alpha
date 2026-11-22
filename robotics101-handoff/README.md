@@ -24,13 +24,13 @@ make test       # pytest suite (no network, no API keys)
 make validate   # robotics101 validate examples/episode-001.json
 make narrate    # per-scene TTS -> out/episode-001/{audio/*.wav,timing.json,captions.srt}
                 # needs espeak-ng + ffmpeg; or: make narrate TTS_PROVIDER=fixture (no binaries)
-make scenes     # Manim 2D scenes -> out/episode-001/scenes/<sceneId>.mp4 (preview 854x480@30)
-                # make scenes PROFILE=full for 1920x1080@30; needs manim 0.22.1 + ffmpeg (no LaTeX)
+make scenes     # Manim 2D + Blender 3D scenes -> out/episode-001/scenes/<sceneId>.mp4 (preview 854x480@30)
+                # make scenes PROFILE=full for 1920x1080@30; needs manim 0.22.1, Blender >= 4.2 + ffmpeg (no LaTeX, no GPU)
 .venv/bin/robotics101 validate path/to/episode.json [--strict]
 .venv/bin/robotics101 render-scenes examples/episode-001.json --out out/episode-001 \
     [--profile preview|full] [--only scene-003] [--workers 4] [--timeout 900]
 ```
-`validate` exit codes: 0 valid, 1 invalid (errors, or warnings with `--strict`), 2 unreadable/bad JSON. Errors = schema, scene IDs/sequence, unknown template, invalid template parameters; warnings = duration pacing (see `src/robotics101/validation.py`). `narrate` audio is labelled synthetic (espeak-ng) or FIXTURE placeholder — never production narration; `timing.json` flags scenes where speech covers <60% of the scene. `render-scenes` renders each `engine: manim` scene for exactly its `timing.json` duration (falls back to `durationTargetSeconds` if `narrate` has not run), video only, then ffprobe-checks resolution, fps, decodability and duration (±1 frame); logs go to `out/episode-001/logs/<sceneId>.log`, a summary to `out/episode-001/scenes/render-report.json`. Blender scenes are skipped until M01.4. Exit codes: 0 ok, 1 invalid spec, 2 input error/missing prerequisites, 4 a scene failed. `render` and `make demo` are placeholders until M01.5. Milestone status: `PROGRESS.md`.
+`validate` exit codes: 0 valid, 1 invalid (errors, or warnings with `--strict`), 2 unreadable/bad JSON. Errors = schema, scene IDs/sequence, unknown template, invalid template parameters; warnings = duration pacing (see `src/robotics101/validation.py`). `narrate` audio is labelled synthetic (espeak-ng) or FIXTURE placeholder — never production narration; `timing.json` flags scenes where speech covers <60% of the scene. `render-scenes` renders each `engine: manim` scene (Manim) and `engine: blender` scene (headless Blender, Workbench engine, primitives only; `collisionCheck` asserted before and inside Blender) for exactly its `timing.json` duration (falls back to `durationTargetSeconds` if `narrate` has not run), video only, then ffprobe-checks resolution, fps, decodability and duration (±1 frame); logs go to `out/episode-001/logs/<sceneId>.log`, a summary to `out/episode-001/scenes/render-report.json`. Blender: set `BLENDER_BIN` to pick the binary, `ROBOTICS101_BLENDER_PROCS` for parallel Blender processes per scene (default min(4, CPUs/2), capped by free RAM), `ROBOTICS101_BLENDER_ENGINE=eevee` for the slower EEVEE look. Exit codes: 0 ok, 1 invalid spec, 2 input error/missing prerequisites, 4 a scene failed. `render` and `make demo` are placeholders until M01.5. Milestone status: `PROGRESS.md`.
 
 ## Artifact directory
 | Path | Purpose |

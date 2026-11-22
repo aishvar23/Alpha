@@ -138,15 +138,15 @@ def build_parser() -> argparse.ArgumentParser:
                    help="TTS provider (default: env TTS_PROVIDER, else espeak)")
     n.set_defaults(func=_cmd_narrate)
 
-    rs = sub.add_parser("render-scenes", help="render Manim scenes to <out>/scenes/<sceneId>.mp4 (video only)")
+    rs = sub.add_parser("render-scenes", help="render Manim + Blender scenes to <out>/scenes/<sceneId>.mp4 (video only)")
     rs.add_argument("episode", type=Path)
     rs.add_argument("--out", type=Path, required=True,
                     help="episode output dir; uses <out>/timing.json from `narrate` if present")
     rs.add_argument("--profile", choices=["preview", "full"], default="preview",
                     help="preview = 854x480@30 (default), full = 1920x1080@30")
     rs.add_argument("--only", action="append", metavar="SCENE_ID", help="render only this scene (repeatable)")
-    rs.add_argument("--workers", type=int, default=4, help="parallel manim processes (default 4)")
-    rs.add_argument("--timeout", type=float, default=900.0, help="per-scene manim timeout in seconds")
+    rs.add_argument("--workers", type=int, default=4, help="scenes rendered in parallel (default 4)")
+    rs.add_argument("--timeout", type=float, default=900.0, help="per-scene render timeout in seconds (manim / blender + encode)")
     rs.set_defaults(func=_cmd_render_scenes)
 
     r = sub.add_parser("render", help="render an episode (not implemented yet: M01.5)")
