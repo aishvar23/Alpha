@@ -17,3 +17,7 @@ dist/
 .ruff_cache/
 # Manim default output dir
 media/
+
+# M02.2 voice cache + local model files (rebuildable; never commit)
+tts-cache/
+models/

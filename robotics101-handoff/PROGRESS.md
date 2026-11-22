@@ -11,7 +11,7 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 | M01.5 | Composer (FFmpeg) + ffprobe QA report + SHA-256 manifest + `robotics101 render` / `make demo` | **done** |
 | M01.6 | First E2E run → `out/episode-001/final.mp4`; publisher dry-run stub (no uploads) | **done** |
 | M02.1 | Cartoon contract v1.1 (dialogue beats), character registry, cartoon episode-001 script, fact + kid-safe lints | **done** |
-| M02.2 | Voice layer: ElevenLabs (env key, content-hash cache) → Kokoro → espeak; dialogue timeline; speaker SRT | todo |
+| M02.2 | Voice layer: ElevenLabs (env key, content-hash cache) → Kokoro → espeak; dialogue timeline; speaker SRT | **done** (ElevenLabs path tested with a mocked API; real calls wait for the key) |
 | M02.3–M02.8 | Rigs, motion + lip-flap, sets/props, cartoon scene engine, music/SFX, full episode (see docs/PLAN-cartoon.md) | todo |
 
 ## M01.1 — what exists
@@ -126,6 +126,14 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - `examples/episode-001-cartoon.json` "Bolt Bumps Into Everything": 8 scenes, 300 s target, 679 spoken words (Bolt/Maya), madeForKids true; `validate --strict` clean. `examples/episode-001.json` (v1.0) unchanged.
 - Publish plan: `selfDeclaredMadeForKids` from `publishing.madeForKids`; undeclared audience is a blocker.
 - `narrate`/`render-scenes`/`render` refuse schema-1.1 specs with exit 3 (cartoon pipeline lands in M02.2–M02.8).
+
+## M02.2 — what exists
+- `src/robotics101/voice/`: `backends.py` (ElevenLabs via stdlib urllib, key from env only, redacted errors, retry on 429/5xx, `list_voices`; Kokoro via kokoro-onnx with models in `models/kokoro/`; espeak-ng; fixture tones), `cache.py` (content-hash raw-audio cache in `tts-cache/`, atomic writes, ElevenLabs char ledger), `dialogue.py` (line plan, per-run char budget, beat timeline, whole-frame scene durations, per-scene 48 kHz stems, speaker-labelled SRT, timing.json v2), `qa.py` (stems match scene length, every line audible, speech-rate sanity, coverage, pacing vs target, total 270–330 s, production-voice warning, captions valid, API key not in any artifact).
+- CLI: `voice` (+ `--plan-only`), `voices list|audition` (need the key).
+- Registry: Bolt Kokoro speed 1.0; Bolt ElevenLabs gets a light chorus only (heavier pitch/tremolo fx stay for the fallbacks).
+- Episode-001 cartoon targets re-balanced to dialogue (30/40/40/45/50/35/30/30 = 300 s).
+- Kokoro run: 74 lines, 3,672 chars, 293.3 s, speech 74 %, QA PASS_WITH_WARNINGS (2 slightly fast short lines, not production voice); rerun fully cached and byte-identical. espeak run 342.4 s (over target; fallback only).
+- Waiting on the owner: ELEVENLABS_API_KEY; then `voices list` → audition Bolt/Maya (≈200 chars) → confirm voice ids → full episode ≈3.7k credits.
 
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.

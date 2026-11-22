@@ -216,6 +216,97 @@ def _cmd_publish(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_voice(args: argparse.Namespace) -> int:
+    from robotics101.characters import RegistryError, load_registry
+    from robotics101.qa import QaReport
+    from robotics101.voice import VoiceCache, VoiceError, select_backend, voice_episode
+    from robotics101.voice.dialogue import cost_summary, plan_lines
+    from robotics101.voice.qa import check_dialogue
+
+    rc = _cmd_validate(argparse.Namespace(episode=args.episode, strict=False))
+    if rc != EXIT_OK:
+        return rc
+    spec = json.loads(args.episode.read_text(encoding="utf-8"))
+    if spec.get("schemaVersion") != "1.1":
+        print("error: `voice` is for cartoon episodes (schema 1.1); use `narrate` for 1.0", file=sys.stderr)
+        return EXIT_INPUT
+    try:
+        registry = load_registry()
+        backend, skipped = select_backend(args.tts)
+        cache = VoiceCache()
+        for why in skipped:
+            print(f"voice: skipping {why}")
+        if args.plan_only:
+            c = cost_summary(plan_lines(spec, registry, backend, cache), backend)
+            print(f"plan: {c['provider']} {c['lines']} lines, {c['cachedLines']} cached, {c['charsTotal']} chars, "
+                  f"{c['billableChars']} billable (nothing synthesized)")
+            return EXIT_OK
+        args.out.mkdir(parents=True, exist_ok=True)
+        doc = voice_episode(spec, registry, args.out, backend, cache, skipped=skipped,
+                            log=lambda m: print(m, flush=True))
+    except (VoiceError, RegistryError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_INPUT
+    for s in doc["scenes"]:
+        print(f"  {s['sceneId']}: {s['scene_duration_s']:6.2f}s (target {s['target_duration_s']:.0f}s)  speech "
+              f"{s['speech_s']:5.1f}s ({s['speech_coverage']:.0%})")
+    print(f"total {doc['totalDurationSeconds']:.1f}s, speech {doc['totalSpeechSeconds']:.1f}s "
+          f"({doc['speechCoverage']:.0%}); provider {doc['provider']}")
+    rep = QaReport(spec["episodeId"], "voice", str(args.out))
+    check_dialogue(rep, args.out)
+    for c in rep.failures + rep.warnings:
+        print(f"  {c.status.upper()} {c.id}: {c.message}")
+    (args.out / "voice_qa.json").write_text(json.dumps(rep.to_dict(), indent=2, ensure_ascii=False) + "\n",
+                                            encoding="utf-8")
+    print(f"dialogue QA {rep.status}; wrote {args.out / 'timing.json'}, {args.out / 'captions.srt'}, "
+          f"{args.out / 'voice'}/")
+    return EXIT_QA_FAILED if rep.failures else EXIT_OK
+
+
+def _cmd_voices(args: argparse.Namespace) -> int:
+    from robotics101.characters import load_registry
+    from robotics101.voice import ElevenLabsBackend, VoiceCache, VoiceError
+    from robotics101.voice.backends import KEY_ENV, decode_to_wav
+
+    el = ElevenLabsBackend()
+    if not el.available()[0]:
+        print(f"error: {KEY_ENV} is not set; no ElevenLabs call was made", file=sys.stderr)
+        return EXIT_INPUT
+    try:
+        if args.voices_cmd == "list":
+            for v in el.list_voices():
+                labels = ", ".join(f"{k}={x}" for k, x in sorted(v["labels"].items()))
+                print(f"{v['voiceId']}  {v['name']}  [{v['category']}]  {labels}")
+            return EXIT_OK
+        ch = load_registry().get(args.character)
+        if ch is None or not ch.voice:
+            print(f"error: {args.character!r} is not a speaking character", file=sys.stderr)
+            return EXIT_INPUT
+        voice = json.loads(json.dumps(ch.voice))
+        if args.voice_id:
+            voice["elevenlabs"]["voiceId"] = args.voice_id
+        text = args.text or AUDITION_LINES.get(ch.id, "Hi! Welcome to Robotics 101.")
+        if len(text) > 200:
+            print("error: audition text is limited to 200 characters", file=sys.stderr)
+            return EXIT_INPUT
+        req = el.request(voice, text)
+        raw, cached = VoiceCache().get_or_render(el, req)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        decode_to_wav(raw, args.out, el.fx(voice))
+        print(f"{'cached' if cached else 'synthesized'} {len(text)} chars with voice {voice['elevenlabs']['voiceId']}"
+              f" -> {args.out}")
+        return EXIT_OK
+    except VoiceError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_INPUT
+
+
+AUDITION_LINES = {
+    "bolt": "Ow! Who put a wall there? Sense, think, act. Like a tiny dance, but with math!",
+    "maya": "Bolt, that's not a wall. It's a pile of boxes! Today, you're going to learn how robots notice things.",
+}
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="robotics101", description="Robotics 101 episode pipeline")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -266,6 +357,26 @@ def build_parser() -> argparse.ArgumentParser:
     pb.add_argument("--dry-run", action="store_true",
                     help="build publish_plan.json (metadata, file refs, chapters, blockers). Without it: refused.")
     pb.set_defaults(func=_cmd_publish)
+
+    vo = sub.add_parser("voice", help="cartoon (schema 1.1): synthesize character lines -> timing.json, captions.srt, "
+                                      "voice/ stems (ElevenLabs -> Kokoro -> espeak; cached by content hash)")
+    vo.add_argument("episode", type=Path)
+    vo.add_argument("--out", type=Path, required=True)
+    vo.add_argument("--tts", choices=["auto", "elevenlabs", "kokoro", "espeak", "fixture"], default="auto",
+                    help="auto (default) = ElevenLabs if ELEVENLABS_API_KEY is set, else Kokoro, else espeak")
+    vo.add_argument("--plan-only", action="store_true",
+                    help="print line/char counts and billable characters; synthesize nothing")
+    vo.set_defaults(func=_cmd_voice)
+
+    vs = sub.add_parser("voices", help="ElevenLabs voice tools (need ELEVENLABS_API_KEY)")
+    vsub = vs.add_subparsers(dest="voices_cmd", required=True)
+    vsub.add_parser("list", help="list voices available to the account (free; no credits)")
+    au = vsub.add_parser("audition", help="synthesize one short test line for a character (<=200 chars, cached)")
+    au.add_argument("character")
+    au.add_argument("--voice-id", help="try a different ElevenLabs voice id (registry unchanged)")
+    au.add_argument("--text")
+    au.add_argument("--out", type=Path, required=True, help="output .wav")
+    vs.set_defaults(func=_cmd_voices)
     return parser
 
 

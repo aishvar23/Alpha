@@ -33,7 +33,7 @@
       "educationalObjective": "Hook: robots need to notice the world around them",
       "engine": "cartoon",
       "template": "cartoon_cold_open",
-      "durationTargetSeconds": 25,
+      "durationTargetSeconds": 30,
       "parameters": {
         "obstacle": "boxes"
       },
@@ -239,7 +239,7 @@
       "educationalObjective": "The five main parts of a robot: structure, sensors, actuators, power, controller",
       "engine": "cartoon",
       "template": "cartoon_robot_checkup",
-      "durationTargetSeconds": 45,
+      "durationTargetSeconds": 40,
       "parameters": {
         "parts": [
           "structure",
@@ -352,7 +352,7 @@
       "educationalObjective": "A distance sensor sends a sound and times the echo; it has a range",
       "engine": "cartoon",
       "template": "cartoon_sensor_ping",
-      "durationTargetSeconds": 50,
+      "durationTargetSeconds": 45,
       "parameters": {
         "rangeMeters": 3.0,
         "obstacleDistanceMeters": 1.2
@@ -730,7 +730,7 @@
       "educationalObjective": "Applying sense-think-act: stop and turn before the obstacle, then keep going",
       "engine": "cartoon",
       "template": "cartoon_obstacle_rematch",
-      "durationTargetSeconds": 35,
+      "durationTargetSeconds": 30,
       "parameters": {
         "thresholdMeters": 0.5,
         "obstacle": "boxes"
@@ -851,7 +851,7 @@
       "educationalObjective": "Recap sense-think-act and ask a question",
       "engine": "cartoon",
       "template": "cartoon_recap_chant",
-      "durationTargetSeconds": 20,
+      "durationTargetSeconds": 30,
       "parameters": {
         "question": "Which part of a robot measures distance?"
       },

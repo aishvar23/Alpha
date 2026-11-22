@@ -16,6 +16,9 @@ dependencies = [
 dev = ["pytest>=8"]
 # 2D scene rendering (M01.3). Also needs cairo/pango system libs + ffmpeg; LaTeX is not required.
 render = ["manim==0.22.1"]
+# Offline cartoon-voice fallback (M02.2). Model files (Apache-2.0) go in models/kokoro/ — see README.
+# Note: kokoro-onnx pulls phonemizer (GPL-3.0) as a runtime dependency; used locally, not redistributed.
+kokoro = ["kokoro-onnx>=0.4", "soundfile>=0.12"]
 
 [project.scripts]
 robotics101 = "robotics101.cli:main"
