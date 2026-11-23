@@ -107,6 +107,75 @@ def check_concepts(rep, out_dir: Path, spec: dict, by: dict, timing: dict) -> No
 
 
 STATIC_MAX_S = 1.0
+HOLD_MAX_S = 2.0            # M03.4: no illustration / whole frame may sit still longer than this
+HOLD_W, HOLD_H = 384, 216
+HOLD_PIX_DELTA, HOLD_PIX_COUNT = 10, 30      # full frame: "moving" = ≥ 30 px changed by > 10 grey levels
+REGION_MIN_DIFF = 1.0                        # illustration region: mean |grey| change vs the run's first frame
+
+
+def hold_runs(video: Path, timing: dict, by: dict, half_s: float = 0.4) -> dict:
+    """Stream ``video`` once (small grey frames) and measure the longest near-zero-motion run of the whole frame and
+    of every registered illustration region (scenes.json ``illustrations``)."""
+    import numpy as np
+
+    from robotics101.cartoon.vision import stream_gray
+    regions, off = [], 0
+    for s in timing["scenes"]:
+        n = round(s["scene_duration_s"] * FPS)
+        for il in (by.get(s["sceneId"]) or {}).get("illustrations", []):
+            x0, y0, x1, y1 = il["box"]
+            a = off + round(il["start"] * FPS)
+            b = min(off + round(il["end"] * FPS), off + n - round(half_s * FPS))   # out-transition covers the end
+            regions.append({"id": f"{s['sceneId']}/{il['id']}", "a": a, "b": b,
+                            "sl": (slice(max(0, int(y0 * HOLD_H)), int(y1 * HOLD_H)),
+                                   slice(max(0, int(x0 * HOLD_W)), int(x1 * HOLD_W))),
+                            "anchor": None, "start": a, "best": 0, "at": a})
+        off += n
+    full = {"anchor": None, "start": 0, "best": 0, "at": 0}
+    i = -1
+    for i, f in enumerate(stream_gray(video, HOLD_W, HOLD_H)):
+        f16 = f.astype(np.int16)
+        if full["anchor"] is None or int((np.abs(f16 - full["anchor"]) > HOLD_PIX_DELTA).sum()) >= HOLD_PIX_COUNT:
+            if i - full["start"] > full["best"]:
+                full["best"], full["at"] = i - full["start"], full["start"]
+            full["anchor"], full["start"] = f16, i
+        for r in regions:
+            if not r["a"] <= i < r["b"]:
+                continue
+            crop = f16[r["sl"]]
+            if r["anchor"] is None or float(np.abs(crop - r["anchor"]).mean()) >= REGION_MIN_DIFF:
+                if r["anchor"] is not None and i - r["start"] > r["best"]:
+                    r["best"], r["at"] = i - r["start"], r["start"]
+                r["anchor"], r["start"] = crop, i
+    end = i + 1
+    if end - full["start"] > full["best"]:
+        full["best"], full["at"] = end - full["start"], full["start"]
+    for r in regions:
+        stop = min(r["b"], end)
+        if r["anchor"] is not None and stop - r["start"] > r["best"]:
+            r["best"], r["at"] = stop - r["start"], r["start"]
+    return {"frames": end, "fullFrame": {"longestHoldS": round(full["best"] / FPS, 3), "at": round(full["at"] / FPS, 2)},
+            "regions": {r["id"]: {"longestHoldS": round(r["best"] / FPS, 3), "at": round(r["at"] / FPS, 2),
+                                  "seconds": round((r["b"] - r["a"]) / FPS, 2)} for r in regions}}
+
+
+def check_static_holds(rep, out_dir: Path, spec: dict, timing: dict, by: dict, half_s: float) -> None:
+    """M03.4: every registered illustration (animated robot families) keeps moving and the picture never freezes:
+    hard ``illustrations.animated`` and ``video.no_long_holds`` (≤ 2 s near-zero motion)."""
+    res = hold_runs(out_dir / "final.mp4", timing, by, half_s)
+    (out_dir / "qa").mkdir(exist_ok=True)
+    (out_dir / "qa" / "static_holds.json").write_text(json.dumps(res, indent=2) + "\n", encoding="utf-8")
+    ff = res["fullFrame"]
+    rep.hard("video.no_long_holds", ff["longestHoldS"] <= HOLD_MAX_S,
+             f"longest near-still stretch of the whole picture {ff['longestHoldS']:.2f} s at {ff['at']} s "
+             f"(≤ {HOLD_MAX_S} s)", ff["longestHoldS"])
+    regs = res["regions"]
+    fam = any(s["template"] == "cartoon_robot_family" for s in spec["scenes"])
+    bad = {k: v for k, v in regs.items() if v["longestHoldS"] > HOLD_MAX_S}
+    rep.hard("illustrations.animated", (bool(regs) or not fam) and not bad,
+             f"{len(regs)} animated illustration region(s); longest still "
+             f"{max((v['longestHoldS'] for v in regs.values()), default=0):.2f} s (≤ {HOLD_MAX_S} s); "
+             f"static: {bad or 'none'}", {k: v["longestHoldS"] for k, v in regs.items()})
 
 
 def check_liveliness(rep, by: dict) -> None:
@@ -230,6 +299,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     if video_s:
         check_transitions(rep, out_dir, spec, timing, float(sj.get("transitionHalfSeconds", 0.4)))
         check_concepts(rep, out_dir, spec, by, timing)
+        check_static_holds(rep, out_dir, spec, timing, by, float(sj.get("transitionHalfSeconds", 0.4)))
 
     # teaching facts (what is drawn on screen vs the spec)
     sp = {s["template"]: s.get("parameters", {}) for s in spec["scenes"]}

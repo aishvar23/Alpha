@@ -125,8 +125,10 @@ def icon(kind: str) -> VGroup:
     return VGroup(_o(Square(0.9, fill_color="#FFD166", fill_opacity=1)), txt("?", 40))
 
 
-def album(examples: list[str], reveal: list[float], open_u: float = 1.0) -> VGroup:
-    """'Robot family album': a card with one tile per example; each tile pops in with its reveal progress."""
+def album(examples: list[str], reveal: list[float], open_u: float = 1.0, t: float | None = None) -> VGroup:
+    """'Robot family album': a card with one tile per example; each tile pops in with its reveal progress. With ``t``
+    (M03.4) each known robot family plays its looping animated vignette instead of a still icon."""
+    from robotics101.cartoon.vignettes import KINDS, vignette
     n = len(examples)
     w = 2.1 * n + 0.6
     card = _o(RoundedRectangle(width=w, height=2.9, corner_radius=0.25, fill_color="#FFFFFF", fill_opacity=1))
@@ -137,7 +139,9 @@ def album(examples: list[str], reveal: list[float], open_u: float = 1.0) -> VGro
             continue
         cx = -w / 2 + 0.3 + 2.1 * (i + 0.5)
         frame = _o(RoundedRectangle(width=1.8, height=1.7, corner_radius=0.15, fill_color="#E0FBFC", fill_opacity=1), 4)
-        tile = VGroup(frame.move_to(P(cx, 0.05)), icon(name).scale(0.95).move_to(P(cx, 0.1)),
+        art = vignette(name, t).move_to(P(cx, 0.1)) if t is not None and name in KINDS else \
+            icon(name).scale(0.95).move_to(P(cx, 0.1))
+        tile = VGroup(frame.move_to(P(cx, 0.05)), art,
                       txt(name, 20).move_to(P(cx, -1.05)))
         g.add(tile.scale(pop(r), about_point=P(cx, 0.0)))
     return g.scale(max(0.001, ease_out(open_u)))

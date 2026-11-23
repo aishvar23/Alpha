@@ -54,6 +54,7 @@ class Scene:
     cutaways: list[dict] = field(default_factory=list)     # {"start","end","clip","clip_offset"}
     lipsync_methods: dict = field(default_factory=dict)
     facts: dict = field(default_factory=dict)              # teaching values shown on screen (for QA)
+    illustrations: list = field(default_factory=list)       # M03.4 animated illustration regions (static-hold QA)
     enter_at: dict = field(default_factory=dict)           # cid -> time the character is on stage (presence QA)
     trans_in: str | None = None                            # M03.2 transition into this scene (None/cut = none)
     trans_out: str | None = None                           # transition into the NEXT scene (drawn at our end)
@@ -166,6 +167,15 @@ def stage_cold_open(sc: Scene) -> None:
                      if t >= title["start_s"] else [])
 
 
+ALBUM_AT, ALBUM_SCALE = (0.6, 1.75), 0.85
+
+
+def world_box(x: float, y: float, w: float, h: float) -> list[float]:
+    """World-space box (centre, size) -> normalised frame box [x0, y0, x1, y1] (0..1, y down)."""
+    return [round((x - w / 2 + FRAME_X) / (2 * FRAME_X), 4), round((FRAME_Y - y - h / 2) / (2 * FRAME_Y), 4),
+            round((x + w / 2 + FRAME_X) / (2 * FRAME_X), 4), round((FRAME_Y - y + h / 2) / (2 * FRAME_Y), 4)]
+
+
 def stage_robot_family(sc: Scene) -> None:
     bolt = Performer("bolt", x=0.6, facing=-1, scale=SCALES["bolt"], expression="worried")
     maya = Performer("maya", x=-4.6, facing=1, scale=SCALES["maya"])
@@ -186,9 +196,18 @@ def stage_robot_family(sc: Scene) -> None:
     def album(t, m):
         if t < flip["start_s"]:
             return []
-        g = PR.album(examples, [_u(t, r, r + 0.5) if r else 0 for r in reveal], _u(t, flip["start_s"], flip["start_s"] + 0.5))
-        return [g.scale(0.85).move_to(PR.P(0.6, 1.75))]
+        g = PR.album(examples, [_u(t, r, r + 0.5) if r else 0 for r in reveal], _u(t, flip["start_s"], flip["start_s"] + 0.5),
+                     t=t)
+        return [g.scale(ALBUM_SCALE).move_to(PR.P(*ALBUM_AT))]
     sc.front.append(album)
+    n = len(examples)
+    for i, (name, r) in enumerate(zip(examples, reveal)):     # M03.4: animated robot-family tiles (static-hold QA)
+        if r:
+            cx = -(2.1 * n + 0.6) / 2 + 0.3 + 2.1 * (i + 0.5)
+            x, y = ALBUM_AT[0] + ALBUM_SCALE * cx, ALBUM_AT[1] + ALBUM_SCALE * 0.1
+            sc.illustrations.append({"id": f"family-{name}", "kind": name, "start": round(r + 0.5, 3),
+                                     "end": round(sc.duration, 3),
+                                     "box": world_box(x, y, ALBUM_SCALE * 1.5, ALBUM_SCALE * 1.2)})
     generic_sfx_lettering(sc, {"toaster_pop": PR.P(4.9, 1.6)})
 
 
@@ -741,7 +760,8 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
         report["scenes"].append({"sceneId": sid, "template": sc.template, "frames": sc.n_frames,
                                  "duration_s": sc.duration, "video": str(final.relative_to(out_dir)),
                                  "minPresence": pres, "enterAt": sc.enter_at, "lipsync": sc.lipsync_methods,
-                                 "lipsyncAgreement": agree, "liveliness": live, "facts": facts,
+                                 "lipsyncAgreement": agree, "liveliness": live,
+                                 "illustrations": sc.illustrations, "facts": facts,
                                  "cutaways": [{**c, "clip": str(Path(c["clip"]).relative_to(out_dir))}
                                               for c in sc.cutaways],
                                  "render_s": round(time.monotonic() - t0, 1)})
