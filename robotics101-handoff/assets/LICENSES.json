@@ -8,9 +8,9 @@
   ],
   "generated": {
     "license": "project (generated in code by robotics101.cartoon.audio; no samples)",
-    "music": ["theme_intro", "title_sting", "idea_sting", "chant_beat", "victory_sting", "outro", "bed"],
+    "music": ["theme_intro", "title_sting", "idea_sting", "chant_beat", "victory_sting", "outro", "concept_sting", "bed"],
     "sfx": ["zoom", "bonk", "boing", "pop", "ping", "echo", "charge", "skid", "whoosh", "clap", "motor", "nib_beep",
-            "nib_whistle", "ding", "chalk", "sparkle", "page_flip", "stars", "toaster_pop"]
+            "nib_whistle", "ding", "chalk", "sparkle", "page_flip", "stars", "toaster_pop", "swish"]
   },
   "voices": [
     {"provider": "kokoro", "model": "Kokoro-82M (kokoro-onnx)", "license": "Apache-2.0", "note": "offline fallback voice"},

@@ -152,6 +152,15 @@
           "space rover"
         ]
       },
+      "concepts": [
+        {
+          "id": "what_is_a_robot",
+          "title": "What is a robot?",
+          "subtitle": "It can sense, think and act",
+          "icon": "robot",
+          "beforeBeat": 1
+        }
+      ],
       "beats": [
         {
           "type": "line",
@@ -249,6 +258,15 @@
           "controller"
         ]
       },
+      "concepts": [
+        {
+          "id": "robot_parts",
+          "title": "Robot parts",
+          "subtitle": "Five parts every robot needs",
+          "icon": "parts",
+          "beforeBeat": 0
+        }
+      ],
       "beats": [
         {
           "type": "line",
@@ -357,6 +375,15 @@
         "rangeMeters": 3.0,
         "obstacleDistanceMeters": 1.2
       },
+      "concepts": [
+        {
+          "id": "distance_sensor",
+          "title": "Distance sensors",
+          "subtitle": "Ping! How far away is it?",
+          "icon": "sensor",
+          "beforeBeat": 0
+        }
+      ],
       "beats": [
         {
           "type": "line",
@@ -495,6 +522,15 @@
           0.4
         ]
       },
+      "concepts": [
+        {
+          "id": "stop_rule",
+          "title": "The stop rule",
+          "subtitle": "Too close? Stop and turn!",
+          "icon": "rule",
+          "beforeBeat": 0
+        }
+      ],
       "beats": [
         {
           "type": "line",
@@ -632,6 +668,15 @@
         "endAngleDegrees": 60,
         "missAngleDegrees": 30
       },
+      "concepts": [
+        {
+          "id": "servo_motor",
+          "title": "Servo motors",
+          "subtitle": "Turning to an exact angle",
+          "icon": "servo",
+          "beforeBeat": 0
+        }
+      ],
       "beats": [
         {
           "type": "line",

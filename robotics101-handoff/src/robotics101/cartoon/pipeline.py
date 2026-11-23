@@ -196,7 +196,7 @@ def render_cartoon_episode(episode: Path, out_dir: Path, tts: str = "auto", size
     log(f"[3/7] scenes rendered [{stages['render_scenes']}s]")
 
     t0 = time.monotonic()
-    mix_episode(timing, out_dir, out_dir, log=log)
+    mix_episode(timing, out_dir, out_dir, log=log, spec=spec)
     shutil.copyfile(LICENSES, out_dir / "licenses.json")
     stages["mix"] = round(time.monotonic() - t0, 2)
     log(f"[4/7] mix [{stages['mix']}s]")

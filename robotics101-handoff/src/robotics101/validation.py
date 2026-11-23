@@ -128,6 +128,7 @@ def _check_cartoon(spec: dict, report: ValidationReport) -> None:
         report.error("$.music.theme", f"unknown music cue '{theme}'")
     in_cast = {c for c in cast if reg.get(c)}
 
+    concept_ids: set[str] = set()
     for i, scene in enumerate(spec["scenes"]):
         words = 0
         lines = 0
@@ -167,6 +168,12 @@ def _check_cartoon(spec: dict, report: ValidationReport) -> None:
                 report.error(path + ".cue", f"unknown music cue '{b['cue']}'")
         if lines == 0:
             report.error(f"$.scenes[{i}].beats", "a cartoon scene needs at least one dialogue line")
+        for k, c in enumerate(scene.get("concepts") or []):              # M03.2 concept markers
+            if c.get("beforeBeat", 0) > len(scene["beats"]):
+                report.error(f"$.scenes[{i}].concepts[{k}].beforeBeat", f"beyond the scene's {len(scene['beats'])} beats")
+            if c["id"] in concept_ids:
+                report.error(f"$.scenes[{i}].concepts[{k}].id", f"concept '{c['id']}' is introduced twice")
+            concept_ids.add(c["id"])
         est = words / DIALOGUE_WPS
         if est < MIN_DIALOGUE_COVERAGE * scene["durationTargetSeconds"]:
             report.warn(f"$.scenes[{i}].beats",

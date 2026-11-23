@@ -25,6 +25,87 @@ def _load(p: Path):
         return None
 
 
+CUT_MAX_DIFF = 4.0          # mean |grey| change across a scene boundary (both frames fully covered)
+COVER_MIN_DIFF = 10.0       # the cover must actually appear (vs the frame one half-transition earlier)
+CARD_MIN_S = 2.0
+
+
+def boundaries(timing: dict) -> list[tuple[str, int]]:
+    out, n = [], 0
+    for s in timing["scenes"]:
+        if n:
+            out.append((s["sceneId"], n))
+        n += round(s["scene_duration_s"] * FPS)
+    return out
+
+
+def check_transitions(rep, out_dir: Path, spec: dict, timing: dict, half_s: float) -> None:
+    """M03.2: no hard cuts — every scene boundary is covered by a transition (identical fully-covered frames on both
+    sides, and the cover visibly arrives), unless the spec asks for an explicit ``cut`` (warning)."""
+    from robotics101.cartoon import vision
+    video = Path(out_dir) / "final.mp4"
+    style = {s["sceneId"]: s.get("transitionIn") for s in spec["scenes"]}
+    k = max(1, round(half_s * FPS))
+    bad, cuts, rows = [], [], []
+    for sid, b in boundaries(timing):
+        if style.get(sid) == "cut":
+            cuts.append(sid)
+            continue
+        if not style.get(sid):
+            bad.append(f"{sid}: no transition")
+            continue
+        f = vision.frames_at(video, [b - 1 - k, b - 1, b, b + k + 2])
+        across, arrive = vision.diff(f[b - 1], f[b]), vision.diff(f[b - 1 - k], f[b - 1])
+        reveal = vision.diff(f[b], f[b + k + 2])
+        rows.append({"scene": sid, "style": style[sid], "frame": b, "across": round(across, 2),
+                     "arrive": round(arrive, 2), "reveal": round(reveal, 2)})
+        if across > CUT_MAX_DIFF or arrive < COVER_MIN_DIFF or reveal < COVER_MIN_DIFF:
+            bad.append(f"{sid} ({style[sid]}) at frame {b}: across {across:.1f}, cover {arrive:.1f}, reveal {reveal:.1f}")
+    rep.hard("transitions.no_hard_cuts", not bad,
+             f"{len(rows)} scene boundaries covered by transitions ({', '.join(sorted({r['style'] for r in rows}))})"
+             if not bad else "; ".join(bad), rows)
+    if cuts:
+        rep.soft("transitions.explicit_cuts", False, f"hard cuts requested by the spec into {cuts}")
+
+
+def check_concepts(rep, out_dir: Path, spec: dict, by: dict, timing: dict) -> None:
+    """M03.2: every concept marker has an animated title card that plays (>= 2 s) before the concept is taught."""
+    from robotics101.cartoon import vision
+    video = Path(out_dir) / "final.mp4"
+    starts, n = {}, 0
+    for s in timing["scenes"]:
+        starts[s["sceneId"]] = n
+        n += round(s["scene_duration_s"] * FPS)
+    want = [(s["sceneId"], c) for s in spec["scenes"] for c in (s.get("concepts") or [])]
+    if not want:
+        rep.soft("concepts.cards", False, "the episode declares no concept markers (scene `concepts`)")
+        return
+    bad, rows = [], []
+    for sid, c in want:
+        card = next((x for x in ((by.get(sid) or {}).get("facts") or {}).get("conceptCards", []) if x["id"] == c["id"]),
+                    None)
+        if card is None:
+            bad.append(f"{c['id']}: no card in {sid}")
+            continue
+        dur = card["end"] - card["start"]
+        f0 = starts[sid]
+        mid, after = f0 + round((card["start"] + card["end"]) / 2 * FPS), f0 + round((card["end"] + 0.4) * FPS)
+        fr = vision.frames_at(video, [mid, after])
+        shown = vision.diff(fr[mid], fr[after])
+        rows.append({"concept": c["id"], "scene": sid, "start": card["start"], "end": card["end"],
+                     "teachStart": card["teachStart"], "visibleDiff": round(shown, 1)})
+        if card["title"] != c["title"]:
+            bad.append(f"{c['id']}: card title {card['title']!r} != {c['title']!r}")
+        if dur < CARD_MIN_S:
+            bad.append(f"{c['id']}: card only {dur:.1f}s")
+        if card["end"] > card["teachStart"] + 0.05:
+            bad.append(f"{c['id']}: card still up when teaching starts ({card['end']} > {card['teachStart']})")
+        if shown < COVER_MIN_DIFF:
+            bad.append(f"{c['id']}: card not visible in final.mp4 (diff {shown:.1f})")
+    rep.hard("concepts.cards", not bad, f"{len(rows)} concept title cards before teaching: "
+             + (", ".join(r["concept"] for r in rows) if not bad else "; ".join(bad)), rows)
+
+
 def check_intro(rep, spec: dict, by: dict) -> None:
     """M03.1: the generated cast intro is present (unless the spec turns it off) and introduces every main registry
     character of the episode cast: on stage (presence), nameplate with the registry display name, and a voiced line
@@ -120,6 +201,9 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
                  f"{low or 'none'}", round(mean, 3))
 
     check_intro(rep, spec, by)
+    if video_s:
+        check_transitions(rep, out_dir, spec, timing, float(sj.get("transitionHalfSeconds", 0.4)))
+        check_concepts(rep, out_dir, spec, by, timing)
 
     # teaching facts (what is drawn on screen vs the spec)
     sp = {s["template"]: s.get("parameters", {}) for s in spec["scenes"]}

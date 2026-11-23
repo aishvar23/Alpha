@@ -184,13 +184,14 @@ Rules unchanged: push only feature/pipeline-impl; Kokoro voices (ElevenLabs appr
 Each step: tests for the rule + a QA check enforcing it, verify real output, PROGRESS + ADR, commit, push.
 | Step | Scope | Status |
 |---|---|---|
-| M03.1 | Character intro scene generated from the registry (`intro` fields; default-on `intro` in schema) + QA intro/cast | **done** (ADR-020) |
-| M03.2 | Scene transitions (wipe/iris/slide/character) + concept title cards (scene `concepts` markers) + QA no hard cuts / every concept carded | todo |
+| M03.1 | Character intro scene generated from the registry (`intro` fields; default-on `intro` in schema) + QA intro/cast | **done** (ADR-020, 0a34a54) |
+| M03.2 | Scene transitions (wipe/iris/slide/character) + concept title cards (scene `concepts` markers) + QA no hard cuts / every concept carded | **done** (ADR-021) |
 | M03.3 | Character life: idle bob/breath/glances, speech gestures, listener reactions, follow-through; QA pose-track static > 1 s | todo |
 | M03.4 | Animated robot families (vacuum/rover/arm vignettes) + QA static illustration / long-hold detector | todo |
 | M03.5 | Burned-in kid subtitles (bundled OFL font, speaker colours, safe area, ≤ 2 lines, keep-out aware) + captions.srt; QA | todo |
 | M03.6 | New 1080p ep-001 cut, full QA + suite; samples /workspace/robotics101-samples/m03.6-* | todo |
 - M03.1 notes: registry `main` + `intro` {tagline, entrance, action, emotion, sfx, line{speaker,text}}; schema 1.1 gained optional `intro`, `transitions`, `subtitles` (top level) and scene `generated`, `transitionIn`, `concepts` (M03.2/M03.5 use them). Scratch voice/render dir: out/m03/v (Kokoro). Bundle tests use the newest local out/m03.6 or out/m02.8 and skip when it is stale.
+- M03.2 notes: `cartoon/vision.py` (ffmpeg grey frames) for pixel QA; preview bundle out/m03/p (854x480, 318.9 s with intro + 5 concept cards) PASS_WITH_WARNINGS; `robotics101 mix --episode` adds swishes.
 Design: `cartoon/episode.py::expand_episode(spec, registry)` (idempotent) adds generated parts (intro scene, transitions, concept stings) to the spec; the pipeline writes the expanded spec to `<out>/episode.json` and every later stage reads that.
 
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)

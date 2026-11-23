@@ -410,7 +410,12 @@ def _cmd_mix(args: argparse.Namespace) -> int:
         print(f"error: {tp} missing — run `robotics101 voice` first", file=sys.stderr)
         return EXIT_INPUT
     timing = json.loads(tp.read_text(encoding="utf-8"))
-    mix_episode(timing, args.voice_dir, args.out)
+    spec = None
+    if getattr(args, "episode", None):
+        from robotics101.cartoon.episode import expand_episode
+        from robotics101.characters import load_registry
+        spec = expand_episode(json.loads(args.episode.read_text(encoding="utf-8")), load_registry())
+    mix_episode(timing, args.voice_dir, args.out, spec=spec)
     rep = QaReport(timing.get("episodeId"), "mix", str(args.out))
     lic = Path(__file__).resolve().parents[2] / "assets" / "LICENSES.json"
     res = check_mix(rep, args.out, timing, json.loads(lic.read_text(encoding="utf-8")) if lic.is_file() else None)
@@ -526,6 +531,7 @@ def build_parser() -> argparse.ArgumentParser:
     mx = sub.add_parser("mix", help="cartoon: generate music + SFX and mix with the dialogue -> <out>/audio (+ mix QA)")
     mx.add_argument("--voice-dir", type=Path, required=True)
     mx.add_argument("--out", type=Path, required=True)
+    mx.add_argument("--episode", type=Path, default=None, help="episode spec (adds the M03.2 transition swishes)")
     mx.set_defaults(func=_cmd_mix)
     return parser
 

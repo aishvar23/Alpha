@@ -49,7 +49,7 @@ ACTION_SECONDS = {"zoom": 1.2, "bonk": 0.7, "dizzy": 1.4, "fall": 1.0, "land": 0
                   "drive": 1.5, "stop": 0.5, "turn": 1.0, "resume": 1.0, "spin": 1.2, "enter": 1.0, "exit": 1.0,
                   "beep_dance": 1.6, "highfive": 0.8, "flinch": 0.5, "ping": 0.8, "hop": 0.6, "yawn": 1.2}
 MUSIC_ADVANCE_S = {"theme_intro": 2.0, "title_sting": 2.5, "idea_sting": 1.2, "chant_beat": 0.0,
-                   "victory_sting": 2.0, "outro": 3.0}
+                   "victory_sting": 2.0, "outro": 3.0, "concept_sting": 2.8}
 BUDGET_ENV = "ROBOTICS101_ELEVENLABS_MAX_CHARS"
 DEFAULT_BUDGET_CHARS = 8000          # per run, uncached characters only (one episode ~ 3.5-6k)
 

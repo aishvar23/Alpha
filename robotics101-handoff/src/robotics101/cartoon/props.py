@@ -10,8 +10,8 @@ import math
 from functools import lru_cache
 
 import numpy as np
-from manim import (DOWN, LEFT, PI, RIGHT, UP, Arc, Circle, CubicBezier, Dot, Ellipse, Line, Polygon, Rectangle,
-                   RoundedRectangle, Square, Star, Text, Triangle, VGroup, VMobject)
+from manim import (DOWN, LEFT, PI, RIGHT, UP, Annulus, Arc, Circle, CubicBezier, Dot, Ellipse, Line, Polygon,
+                   Rectangle, RegularPolygon, RoundedRectangle, Square, Star, Text, Triangle, VGroup, VMobject)
 
 from robotics101.cartoon.motion import bump, clamp01, ease_out, ease_out_back
 from robotics101.cartoon.sets import FLOOR_Y, GROUND, METER, ink
@@ -471,3 +471,151 @@ def nameplate(name: str, tagline: str, color: str, u: float, at: np.ndarray, t: 
     if u > 0.85:
         k *= max(0.001, 1 - (u - 0.85) / 0.15)
     return g.rotate(0.04 * math.sin(2 * math.pi * 0.7 * t)).scale(k, about_point=at)
+
+
+
+# ------------------------------------------------------------------------------------------ transitions (M03.2)
+
+FW, FH = 14.3, 8.1                                   # a little more than the 16:9 frame (14.22 x 8)
+TRANSITION_COLORS = {"wipe": "#2EC4B6", "slide": "#FFD166", "character": "#FF9FC0", "iris": "#2B2140"}
+
+
+def _dots(color: str, k: int = 18) -> VGroup:
+    """A fixed (screen-anchored) confetti pattern so the fully covered frame is identical on both sides of a cut."""
+    g = VGroup()
+    for i in range(k):
+        x = -6.6 + (i * 3.7) % 13.2
+        y = -3.6 + (i * 2.3) % 7.2
+        g.add(Star(5, outer_radius=0.22 + 0.06 * (i % 3), inner_radius=0.1, fill_color=color, fill_opacity=0.9,
+                   stroke_width=0).move_to(P(x, y)).rotate(i * 0.7))
+    return g
+
+
+def transition(style: str, cover: float, entering: bool) -> VGroup:
+    """Scene transition overlay. ``cover`` 0..1: how far the transition has progressed *toward full cover* at the end
+    of a scene (``entering=False``), or how far it has progressed *uncovering* at the start of the next
+    (``entering=True``; 0 = still fully covered). Full cover is the same image for both halves (no hard cut)."""
+    c = clamp01(cover)
+    col = TRANSITION_COLORS.get(style, "#2EC4B6")
+    if (not entering and c <= 0) or (entering and c >= 1):
+        return VGroup()
+    if style == "iris":
+        r = 8.6 * (1 - c) ** 1.6 if not entering else 8.6 * c ** 1.6
+        ring = Annulus(inner_radius=max(0.001, r), outer_radius=r + 9.0, fill_color=col, fill_opacity=1,
+                       stroke_width=0)
+        g = VGroup(ring)
+        if r > 0.05:
+            g.add(Circle(radius=r, stroke_color="#FFD166", stroke_width=10))
+        return g
+    if style == "slide":                              # logo panel slides in from the right, out to the left
+        x = FW * (1 - ease_out(c)) if not entering else -FW * ease_in_out_(c)
+        panel = Rectangle(width=FW, height=FH, fill_color=col, fill_opacity=1, stroke_width=0)
+        logo = txt("ROBOTICS 101", 120, color="#FF6B9A", font="Luckiest Guy", weight="NORMAL", stroke=6)
+        edge = Rectangle(width=0.25, height=FH, fill_color="#2B2140", fill_opacity=1, stroke_width=0) \
+            .next_to(panel, LEFT, buff=0)
+        return VGroup(panel, _dots("#FFFFFF"), logo, edge).shift(RIGHT * x)
+    if style == "character":                          # Nib flies across pulling a pink curtain
+        from robotics101.cartoon.rigs import Pose, build
+        lead = FW / 2 - FW * ease_in_out_(c) if not entering else -FW / 2 - FW * ease_in_out_(c)
+        curtain = Rectangle(width=FW, height=FH, fill_color=col, fill_opacity=1, stroke_width=0)
+        curtain.move_to(P(lead + FW / 2, 0))
+        scallops = VGroup(*[Circle(radius=0.42, fill_color=col, fill_opacity=1, stroke_width=0)
+                            .move_to(P(lead, -3.6 + 0.8 * i)) for i in range(10)])
+        trim = VGroup(*[Circle(radius=0.42, stroke_color="#2B2140", stroke_width=6).move_to(P(lead, -3.6 + 0.8 * i))
+                        for i in range(10)])
+        g = VGroup(trim, curtain, scallops, _dots("#FFFFFF").shift(RIGHT * 0))
+        if not entering:
+            nib = build("nib", Pose(expression="happy", facing=-1, prop=c * 40, lean=0.2, arm_l=60)).scale(1.4)
+            g.add(nib.move_to(P(lead - 0.9, 0.6 + 0.4 * math.sin(c * 9))))
+        return g
+    # wipe: a slanted band sweeps left -> right
+    k = 3.0                                            # slant
+    x = -FW / 2 - k + (FW + 2 * k) * ease_in_out_(c)
+    if not entering:
+        pts = [P(-FW, -FH / 2), P(x - k / 2, -FH / 2), P(x + k / 2, FH / 2), P(-FW, FH / 2)]
+    else:
+        pts = [P(x - k / 2, -FH / 2), P(FW, -FH / 2), P(FW, FH / 2), P(x + k / 2, FH / 2)]
+    band = Polygon(*pts, fill_color=col, fill_opacity=1, stroke_color="#2B2140", stroke_width=10)
+    return VGroup(band)
+
+
+def ease_in_out_(u: float) -> float:
+    u = clamp01(u)
+    return u * u * (3 - 2 * u)
+
+
+# ------------------------------------------------------------------------------------------ concept cards (M03.2)
+
+def concept_icon(kind: str, t: float) -> VGroup:
+    """Small animated illustration for a concept card (always moving: ``t`` in seconds)."""
+    k = (kind or "").lower()
+    if k == "robot":                                  # sense -> think -> act loop, the active step pulses
+        names = [("SENSE", "#4CC9F0"), ("THINK", "#FFD166"), ("ACT", "#06D6A0")]
+        active = int(t / 0.6) % 3
+        g = VGroup()
+        for i, (n, col) in enumerate(names):
+            a = PI / 2 - i * 2 * PI / 3
+            c = _o(Circle(0.62, fill_color=col if i == active else "#FFFFFF", fill_opacity=1), 5)
+            lab = txt(n, 22)
+            chip = VGroup(c, lab.move_to(c)).move_to(P(1.15 * math.cos(a), 1.15 * math.sin(a) - 0.1))
+            if i == active:
+                chip.scale(1.0 + 0.15 * abs(math.sin(math.pi * t / 0.6)))
+            g.add(chip)
+        g.add(Arc(radius=1.15, start_angle=0, angle=2 * PI * 0.92, stroke_width=5, color=ink())
+              .rotate(-t * 2.0, about_point=P(0, -0.1)).shift(P(0, -0.1)))
+        return g
+    if k == "parts":                                  # spinning gear + filling battery
+        gear = VGroup(_o(Circle(0.6, fill_color="#8D99AE", fill_opacity=1), 5),
+                      *[_o(Rectangle(width=0.3, height=0.35, fill_color="#8D99AE", fill_opacity=1), 4)
+                        .move_to(P(0.72 * math.cos(i * PI / 4), 0.72 * math.sin(i * PI / 4))).rotate(i * PI / 4)
+                        for i in range(8)],
+                      _o(Circle(0.2, fill_color="#FFFFFF", fill_opacity=1), 4)).rotate(t * 1.6).move_to(P(-0.9, 0))
+        lvl = 0.2 + 0.8 * ((t / 1.6) % 1.0)
+        return VGroup(gear, battery(lvl, True).scale(1.1).move_to(P(1.0, 0)))
+    if k == "sensor":                                 # ping waves from a sensor to a block and back
+        sensor = _o(RoundedRectangle(width=0.7, height=0.5, corner_radius=0.1, fill_color="#2EC4B6", fill_opacity=1), 5) \
+            .move_to(P(-1.5, 0))
+        block = _o(Rectangle(width=0.5, height=1.2, fill_color="#E76F51", fill_opacity=1), 5).move_to(P(1.6, 0))
+        u = (t / 1.2) % 1.0
+        waves = ping_waves(P(-1.15, 0), min(1.0, u * 2), 2.5) if u < 0.5 else \
+            ping_waves(P(-1.15, 0), (u - 0.5) * 2, 2.5, back=True)
+        return VGroup(waves, sensor, block)
+    if k == "rule":                                   # bouncing stop sign
+        octa = RegularPolygon(8, fill_color=ALERT, fill_opacity=1).set_stroke("#FFFFFF", 8).scale(1.0).rotate(PI / 8)
+        word = txt("STOP", 40, color="#FFFFFF")
+        hop = 0.25 * abs(math.sin(math.pi * t / 0.7))
+        return VGroup(_o(octa.copy().scale(1.05), 6), octa, word).shift(UP * hop).rotate(0.08 * math.sin(4 * t))
+    if k == "servo":                                  # arm sweeping 0 -> 60 deg and back
+        ang = 60 * (0.5 - 0.5 * math.cos(2 * math.pi * t / 1.6))
+        return protractor(P(-0.6, -0.6), ang, facing=1, radius=1.3, target=60).scale(0.8)
+    star = Star(5, outer_radius=1.0, inner_radius=0.45, fill_color="#FFD166", fill_opacity=1)
+    return VGroup(_o(star, 5)).rotate(t * 1.5)
+
+
+def concept_card(title: str, subtitle: str, icon_kind: str, u: float, t: float) -> VGroup:
+    """Full-screen animated concept title card. ``u`` 0..1 over the card's life (pop in, live icon, zoom out)."""
+    if u <= 0 or u >= 1:
+        return VGroup()
+    back_k = ease_out(u / 0.12) * (1 - ease_out((u - 0.9) / 0.1)) if u > 0.9 else ease_out(u / 0.12)
+    burst = Star(20, outer_radius=9.0, inner_radius=6.5, fill_color="#6C4AB6", fill_opacity=0.94, stroke_width=0) \
+        .rotate(t * 0.25)
+    bg = VGroup(Rectangle(width=FW, height=FH, fill_color="#4CC9F0", fill_opacity=0.92, stroke_width=0), burst)
+    bg.set_opacity(max(0.0, back_k))
+    tag_ = txt("NEW IDEA!", 34, color="#FFFFFF", font="Luckiest Guy", weight="NORMAL", stroke=5)
+    head = txt(title, 92, color="#FFD166", font="Luckiest Guy", weight="NORMAL", stroke=8)
+    if head.width > 11.5:
+        head.scale(11.5 / head.width)
+    sub = txt(subtitle, 40, color="#FFFFFF", stroke=4) if subtitle else VGroup()
+    if subtitle and sub.width > 11.5:
+        sub.scale(11.5 / sub.width)
+    icon_ = concept_icon(icon_kind, t)
+    icon_.scale(min(3.1 / max(icon_.width, 0.01), 2.7 / max(icon_.height, 0.01)))
+    panel = RoundedRectangle(width=3.6, height=3.3, corner_radius=0.4, fill_color="#FFFFFF", fill_opacity=1) \
+        .set_stroke(ink(), 8)
+    icon_g = VGroup(panel, icon_.move_to(panel))
+    col = VGroup(tag_, head, sub).arrange(DOWN, buff=0.22)
+    card_g = VGroup(icon_g, col).arrange(DOWN, buff=0.35).move_to(P(0, 0.1))
+    k = pop(u / 0.16) * (1 + 0.03 * math.sin(2 * math.pi * 1.3 * t))
+    if u > 0.88:
+        k *= max(0.001, 1 - (u - 0.88) / 0.12)
+    return VGroup(bg, card_g.scale(k, about_point=P(0, 0.1)))

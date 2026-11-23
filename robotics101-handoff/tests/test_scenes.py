@@ -71,7 +71,8 @@ def test_teaching_facts_match_spec(voiced):
     assert rem["thresholdMeters"] == 0.5 and rem["stopReading"] == pytest.approx(0.49) and rem["stopDistance"] < 0.5
     ping = sc["cartoon_sensor_ping"].facts
     assert ping["rangeMeters"] == 3.0 and ping["nibMeters"] == 1.2
-    assert sc["cartoon_servo_highfive"].facts == {"missAngle": 30.0, "endAngle": 60.0}
+    sv = sc["cartoon_servo_highfive"].facts
+    assert (sv["missAngle"], sv["endAngle"]) == (30.0, 60.0)
     assert "measures distance" in sc["cartoon_recap_chant"].facts["question"]
 
 
@@ -126,3 +127,22 @@ def test_generated_intro_stages_every_main_character(voiced):
         assert S.presence(sc, max(0.0, sc.enter_at[cid] - 1.2))[cid] < 0.8      # enters from off-stage
         assert S.presence(sc, sc.enter_at[cid] + 0.1)[cid] >= 0.8
     assert len(S.frame_fn(sc)(intro[0]["plate"][0] + 1.0)) > 3
+
+
+def test_concept_cards_and_transitions_are_staged(voiced):
+    spec, timing, d = voiced
+    by = {s["sceneId"]: s for s in spec["scenes"]}
+    order = [t["sceneId"] for t in timing["scenes"]]
+    cards = 0
+    for i, t in enumerate(timing["scenes"]):
+        nxt = by[order[i + 1]].get("transitionIn") if i + 1 < len(order) else None
+        sc = S.build_scene(by[t["sceneId"]], t, d, None, trans_out=nxt)
+        assert sc.trans_in == by[t["sceneId"]].get("transitionIn")
+        assert bool(S.transition_overlay(sc, (sc.n_frames - 1) / 30)) == bool(nxt)       # last frame covered
+        if sc.trans_in:
+            assert S.transition_overlay(sc, 0.0)                                       # first frame covered
+            assert not S.transition_overlay(sc, 1.0)
+        for c in sc.concepts:
+            cards += 1
+            assert c["end"] - c["start"] >= 2.0 and c["end"] <= c["teachStart"] + 0.05
+    assert cards == sum(len(s.get("concepts") or []) for s in spec["scenes"]) == 5

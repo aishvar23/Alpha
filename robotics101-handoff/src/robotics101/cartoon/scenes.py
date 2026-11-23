@@ -55,6 +55,10 @@ class Scene:
     lipsync_methods: dict = field(default_factory=dict)
     facts: dict = field(default_factory=dict)              # teaching values shown on screen (for QA)
     enter_at: dict = field(default_factory=dict)           # cid -> time the character is on stage (presence QA)
+    trans_in: str | None = None                            # M03.2 transition into this scene (None/cut = none)
+    trans_out: str | None = None                           # transition into the NEXT scene (drawn at our end)
+    trans_half: float = 0.4
+    concepts: list = field(default_factory=list)           # [{id,title,subtitle,icon,start,end}]
 
     @property
     def n_frames(self) -> int:
@@ -562,18 +566,43 @@ STAGING = {"cartoon_cold_open": stage_cold_open, "cartoon_robot_family": stage_r
 
 # ------------------------------------------------------------------------------------------ build + render
 
-def build_scene(spec_scene: dict, timing_scene: dict, voice_dir: Path, robotcam: dict | None = None) -> Scene:
+def build_scene(spec_scene: dict, timing_scene: dict, voice_dir: Path, robotcam: dict | None = None,
+                trans_out: str | None = None, trans_half: float = 0.4) -> Scene:
     sc = Scene(timing_scene["sceneId"], spec_scene["template"], spec_scene.get("parameters", {}),
                timing_scene["beats"], timing_scene["scene_duration_s"], Path(voice_dir))
+    tin = spec_scene.get("transitionIn")
+    sc.trans_in = tin if tin not in (None, "cut") else None
+    sc.trans_out = trans_out if trans_out not in (None, "cut") else None
+    sc.trans_half = trans_half
     stage = STAGING[sc.template]
     if sc.template == "cartoon_obstacle_rematch":
         stage(sc, robotcam)
     else:
         stage(sc)
+    stage_concept_cards(sc, spec_scene.get("concepts") or [])
     perform_dialogue(sc)
     for p in sc.perf.values():
         p.finalize(sc.duration)
+    sc.facts["transitions"] = {"in": sc.trans_in, "out": sc.trans_out, "half": trans_half}
     return sc
+
+
+def stage_concept_cards(sc: Scene, concepts: list[dict]) -> None:
+    """M03.2: an animated title card plays during each ``concept_sting`` music beat (one per concept marker, in
+    ``beforeBeat`` order), i.e. right before the beats that teach the concept."""
+    stings = [b for b in sc.beats if b["type"] == "music" and b.get("cue") == "concept_sting"]
+    cards = []
+    for c, b in zip(sorted(concepts, key=lambda c: c.get("beforeBeat", 0)), stings):
+        t0, t1 = b["start_s"], b["end_s"]
+        nxt = next((x["start_s"] for x in sc.lines() if x["start_s"] >= t0), sc.duration)
+        card = {"id": c["id"], "title": c["title"], "subtitle": c.get("subtitle", ""), "icon": c.get("icon", ""),
+                "start": round(t0, 3), "end": round(t1, 3), "teachStart": round(nxt, 3)}
+        cards.append(card)
+        sc.screen.append(lambda t, m, c=card: [PR.concept_card(c["title"], c["subtitle"], c["icon"],
+                                                                _u(t, c["start"], c["end"]), t)]
+                         if c["start"] <= t < c["end"] else [])
+    sc.concepts = cards
+    sc.facts["conceptCards"] = cards
 
 
 def frame_fn(sc: Scene):
@@ -595,8 +624,24 @@ def frame_fn(sc: Scene):
         out += list(mobs.values())
         for f in sc.front + sc.screen:
             out += f(t, mobs)
+        out += transition_overlay(sc, t)
         return out
     return frame
+
+
+def transition_frames(sc: Scene) -> int:
+    return max(1, round(sc.trans_half * FPS))
+
+
+def transition_overlay(sc: Scene, t: float) -> list:
+    """M03.2: in-half over the first frames (uncovering), out-half over the last frames (covering; the final frame is
+    fully covered, identical to the next scene's first frame)."""
+    n, k, total = round(t * FPS), transition_frames(sc), sc.n_frames
+    if sc.trans_in and n < k:
+        return [PR.transition(sc.trans_in, n / k, entering=True)]
+    if sc.trans_out and n >= total - k:
+        return [PR.transition(sc.trans_out, (n - (total - k) + 1) / k, entering=False)]
+    return []
 
 
 def presence(sc: Scene, t: float) -> dict[str, float]:
@@ -650,7 +695,10 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
     out_dir = Path(out_dir)
     (out_dir / "scenes").mkdir(parents=True, exist_ok=True)
     by_id = {s["sceneId"]: s for s in spec["scenes"]}
-    report = {"width": width, "height": height, "fps": FPS, "scenes": []}
+    order = [t["sceneId"] for t in timing["scenes"]]
+    from robotics101.cartoon.episode import transition_settings
+    half = transition_settings(spec)["seconds"] / 2
+    report = {"width": width, "height": height, "fps": FPS, "transitionHalfSeconds": half, "scenes": []}
     for ts in timing["scenes"]:
         sid = ts["sceneId"]
         if only and sid not in only:
@@ -668,7 +716,9 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
             stop_s, stop_m = robotcam_stop(job)
             cam = {"clip": clip, "stop_s": stop_s, "stop_reading": stop_m}
         t0 = time.monotonic()
-        sc = build_scene(ss, ts, Path(voice_dir), cam)
+        i = order.index(sid)
+        nxt = by_id[order[i + 1]].get("transitionIn") if i + 1 < len(order) else None
+        sc = build_scene(ss, ts, Path(voice_dir), cam, trans_out=nxt, trans_half=half)
         raw = out_dir / "scenes" / (f"{sid}.2d.mp4" if sc.cutaways else f"{sid}.mp4")
         render_clip(frame_fn(sc), sc.n_frames, raw, fps=FPS, width=width, height=height, background="#FFE8C2")
         final = out_dir / "scenes" / f"{sid}.mp4"

@@ -35,7 +35,7 @@ LIMIT_DBFS = -1.5
 STING_GAIN_DB = 6.0          # stings sit above the bed (they play in dialogue gaps)
 SFX_PEAK_DBFS = -12.0
 SFX_GAIN_DB = {"motor": -6, "charge": -4, "chalk": -6, "page_flip": -4, "sparkle": -5, "stars": -6, "echo": -5,
-               "nib_whistle": -3, "zoom": -2, "whoosh": -3}
+               "nib_whistle": -3, "zoom": -2, "whoosh": -3, "swish": -4}
 
 # C major scale degrees -> MIDI; chords for I-V-vi-IV
 CHORDS = [[60, 64, 67], [55, 59, 62], [57, 60, 64], [53, 57, 60]]
@@ -174,6 +174,17 @@ def sting(cue: str) -> np.ndarray:
             _add(buf, bell(m, 2.0, 0.45), 0.9)
         _add(buf, kick(1.0), 0.9)
         _add(buf, clap_hit(1.0), 0.9)
+    elif cue == "concept_sting":                                # M03.2 concept title card
+        buf = np.zeros(int(2.8 * RATE))
+        _add(buf, noise_burst("concept", 0.35, 10.0, hp=1.0, vel=0.3) * np.linspace(0, 1, int(0.35 * RATE)) ** 2, 0)
+        for i, m in enumerate([67, 72, 76, 79]):
+            _add(buf, marimba(m, 0.5, 0.9), 0.35 + i * 0.11)
+        for m in (60, 67, 72, 76):
+            _add(buf, bell(m, 1.8, 0.4), 0.8)
+        _add(buf, kick(0.9), 0.8)
+        _add(buf, clap_hit(0.8), 0.8)
+        for i, m in enumerate([84, 88, 91]):
+            _add(buf, bell(m, 0.6, 0.3), 2.0 + i * 0.08)
     elif cue == "idea_sting":
         buf = np.zeros(int(1.6 * RATE))
         for i, m in enumerate([72, 76, 79, 84, 88]):
@@ -220,7 +231,11 @@ def sfx(sid: str) -> np.ndarray:
     """Synthesised sound effect (mono, peak-normalised)."""
     if sid not in SFX_IDS:
         raise ValueError(f"unknown sfx {sid!r}")
-    if sid == "zoom":
+    if sid == "swish":                                          # M03.2 scene transition
+        n = int(0.5 * RATE)
+        x = noise_burst("swish", 0.5, 10, hp=1, vel=0.8) * np.sin(np.linspace(0, np.pi, n)) ** 2 \
+            + 0.25 * _sweep(500, 1800, 0.5) * np.sin(np.linspace(0, np.pi, n)) ** 3
+    elif sid == "zoom":
         n = int(1.0 * RATE)
         x = _sweep(300, 1400, 1.0) * np.sin(np.linspace(0, np.pi, n)) + noise_burst("zoom", 1.0, 10, hp=1, vel=0.3) * \
             np.sin(np.linspace(0, np.pi, n))
@@ -373,7 +388,22 @@ def _limit(in_wav: Path, out_wav: Path, gain_db: float) -> None:
                     "-c:a", "pcm_s16le", "-ar", str(RATE), "-ac", "2", "-bitexact", str(out_wav)], check=True)
 
 
-def mix_episode(timing: dict, voice_dir: Path, out_dir: Path, log=print) -> dict:
+def transition_swishes(timing: dict, spec: dict | None, half: float | None = None) -> list[float]:
+    """Episode times of the M03.2 transition swish (centred on each non-cut scene boundary)."""
+    if not spec:
+        return []
+    from robotics101.cartoon.episode import transition_settings
+    half = half if half is not None else transition_settings(spec)["seconds"] / 2
+    style = {s["sceneId"]: s.get("transitionIn") for s in spec.get("scenes", [])}
+    out, t = [], 0.0
+    for s in timing["scenes"]:
+        if t > 0 and style.get(s["sceneId"]) not in (None, "cut"):
+            out.append(round(t - half, 4))
+        t += round(s["scene_duration_s"] * FPS) / FPS
+    return out
+
+
+def mix_episode(timing: dict, voice_dir: Path, out_dir: Path, log=print, spec: dict | None = None) -> dict:
     voice_dir, out_dir = Path(voice_dir), Path(out_dir)
     scenes = timing["scenes"]
     total_frames = sum(round(s["scene_duration_s"] * FPS) for s in scenes)
@@ -422,6 +452,9 @@ def mix_episode(timing: dict, voice_dir: Path, out_dir: Path, log=print) -> dict
             bed_gain[: int((first + 2.0) * RATE)] = np.minimum(bed_gain[: int((first + 2.0) * RATE)], 0)
         _add(mus, bed * bed_gain * 0.55, t_scene)
         t_scene += dur
+    for ts in transition_swishes(timing, spec):                 # M03.2 transitions
+        _add(fx, sfx("swish") * db(SFX_PEAK_DBFS + SFX_GAIN_DB["swish"]), ts)
+        events.append({"type": "sfx", "id": "swish", "t": ts, "anchor": "transition"})
     # levels
     d_l = lufs(dia)
     g_dia = DIALOGUE_LUFS - d_l
