@@ -111,6 +111,7 @@ def perform_dialogue(sc: Scene) -> None:
                 sx = p.position_at(b["start_s"])[0]
                 ox = other.position_at(b["start_s"])[0]
                 other.look(b["start_s"], (0.8 if sx > ox else -0.8, 0.1 if cid == "nib" else 0.0))
+                other.listen(b["start_s"], b["end_s"], sx)
             else:
                 p.look(b["start_s"], (0.0, 0.0))
     for b in sc.beats:
@@ -730,6 +731,8 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
                           if (t >= 6.0 or sc.template != "cartoon_cold_open") and t >= sc.enter_at.get(cid, 0.0)),
                          default=0.0)
                 for cid in sc.perf}
+        from robotics101.cartoon.liveliness import scene_liveliness
+        live = scene_liveliness(sc, presence, HEIGHT, SCALES)
         facts = {k: v for k, v in sc.facts.items() if k != "approach"}
         from robotics101.cartoon.lipsync import lipsync_agreement
         agree = {f"{sid}#{b['index']}": round(lipsync_agreement(sc.perf[b["speaker"]].mouth, Path(voice_dir) / b["wav"],
@@ -738,7 +741,7 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
         report["scenes"].append({"sceneId": sid, "template": sc.template, "frames": sc.n_frames,
                                  "duration_s": sc.duration, "video": str(final.relative_to(out_dir)),
                                  "minPresence": pres, "enterAt": sc.enter_at, "lipsync": sc.lipsync_methods,
-                                 "lipsyncAgreement": agree, "facts": facts,
+                                 "lipsyncAgreement": agree, "liveliness": live, "facts": facts,
                                  "cutaways": [{**c, "clip": str(Path(c["clip"]).relative_to(out_dir))}
                                               for c in sc.cutaways],
                                  "render_s": round(time.monotonic() - t0, 1)})

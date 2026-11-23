@@ -106,6 +106,31 @@ def check_concepts(rep, out_dir: Path, spec: dict, by: dict, timing: dict) -> No
              + (", ".join(r["concept"] for r in rows) if not bad else "; ".join(bad)), rows)
 
 
+STATIC_MAX_S = 1.0
+
+
+def check_liveliness(rep, by: dict) -> None:
+    """M03.3: nobody is ever static — per character, the longest pose-track run with no key point moving more than
+    6 px (1080p) must stay ≤ 1 s (frames under transitions/cards/cutaways or off stage excluded)."""
+    measured = {sid: r["liveliness"] for sid, r in by.items() if "liveliness" in r}
+    if not measured:
+        rep.soft("characters.alive", False, "no pose-track liveliness data in scenes.json (pre-M03.3 render)")
+        return
+    worst, bad = {}, []
+    for sid, d in measured.items():
+        for cid, v in d.items():
+            s = v.get("longestStaticS", 0.0)
+            if s > worst.get(cid, (-1, ""))[0]:
+                worst[cid] = (s, f"{sid}@{v.get('at')}s")
+            if s > STATIC_MAX_S:
+                bad.append(f"{cid} {s:.2f}s in {sid} at {v.get('at')}s")
+    missing = sorted(set(by) - set(measured))
+    rep.hard("characters.alive", not bad and not missing,
+             f"longest static run per character {({c: f'{w[0]:.2f}s ({w[1]})' for c, w in worst.items()})} "
+             f"(≤ {STATIC_MAX_S} s); static: {bad or 'none'}; unmeasured scenes: {missing or 'none'}",
+             {c: w[0] for c, w in worst.items()})
+
+
 def check_intro(rep, spec: dict, by: dict) -> None:
     """M03.1: the generated cast intro is present (unless the spec turns it off) and introduces every main registry
     character of the episode cast: on stage (presence), nameplate with the registry display name, and a voiced line
@@ -201,6 +226,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
                  f"{low or 'none'}", round(mean, 3))
 
     check_intro(rep, spec, by)
+    check_liveliness(rep, by)
     if video_s:
         check_transitions(rep, out_dir, spec, timing, float(sj.get("transitionHalfSeconds", 0.4)))
         check_concepts(rep, out_dir, spec, by, timing)

@@ -163,6 +163,17 @@ def blink_schedule(cid: str, duration: float, start: float = 0.0) -> list[float]
     return out
 
 
+def glance_schedule(cid: str, duration: float) -> list[tuple[float, float, float, float]]:
+    """M03.3: seeded little eye glances (start, end, dx, dy) every ~1.5-3 s."""
+    rng = random.Random(_seed(cid + ":glance"))
+    t, out = rng.uniform(0.5, 1.5), []
+    while t < duration:
+        d = rng.uniform(0.45, 0.9)
+        out.append((round(t, 3), round(t + d, 3), rng.choice((-0.45, -0.3, 0.3, 0.45)), rng.choice((0.0, 0.15, -0.1))))
+        t += d + rng.uniform(1.0, 2.4)
+    return out
+
+
 @dataclass
 class Performer:
     cid: str
@@ -180,6 +191,11 @@ class Performer:
     mouth: MouthTrack = field(default_factory=MouthTrack)
     blinks: list[float] = field(default_factory=list)
     airs: list[tuple[float, bool]] = field(default_factory=list)
+    listens: list[tuple[float, float, int]] = field(default_factory=list)   # (start, end, side of the speaker)
+    glances: list[tuple[float, float, float, float]] = field(default_factory=list)  # (start, end, dx, dy)
+    stops: list[tuple[float, int]] = field(default_factory=list)            # (time a move settles, direction)
+    starts: list[tuple[float, int]] = field(default_factory=list)           # (time a move begins, direction)
+    life: bool = True                                                        # M03.3 idle/secondary motion
 
     # -- authoring helpers
     def move(self, start: float, end: float, x: float | None = None, y: float | None = None, arc: float = 0.0,
@@ -219,9 +235,66 @@ class Performer:
     def airborne_at(self, t: float) -> bool:
         return bool(self._held(self.airs, t, self.airborne))
 
+    def listen(self, start: float, end: float, speaker_x: float) -> "Performer":
+        """M03.3: react while someone else talks (nods, lean toward them, a little bounce when they finish)."""
+        self.listens.append((start, end, 1 if speaker_x > self.position_at(start)[0] else -1))
+        self.listens.sort()
+        return self
+
     def finalize(self, duration: float) -> "Performer":
         self.blinks = blink_schedule(self.cid, duration)
+        self.glances = glance_schedule(self.cid, duration)
+        moves = [m for m in self.moves if abs(m.x1 - m.x0) > 0.05 or abs(m.y1 - m.y0) > 0.05]
+        self.stops = [(m.end, 1 if m.x1 >= m.x0 else -1) for m in moves
+                      if not any(abs(o.start - m.end) < 0.1 and o is not m for o in moves)]
+        self.starts = [(m.start, 1 if m.x1 >= m.x0 else -1) for m in moves
+                       if not any(abs(o.end - m.start) < 0.1 and o is not m for o in moves)]
         return self
+
+    def glance_at(self, t: float) -> tuple[float, float]:
+        for a, b, dx, dy in self.glances:
+            if a <= t < b:
+                k = min(1.0, (t - a) / 0.12, (b - t) / 0.12)
+                return dx * k, dy * k
+            if a > t:
+                break
+        return 0.0, 0.0
+
+    def life_offsets(self, t: float, facing: int, airborne: bool, talking: bool) -> dict:
+        """M03.3 always-on life: breathing bob, weight-shift sway, arm drift, talk emphasis, listener nods/reactions,
+        anticipation before and follow-through after moves (damped overshoot). Pure function of t."""
+        o = {"dy": 0.0, "lean": 0.0, "squash": 1.0, "arm_l": 0.0, "arm_r": 0.0}
+        if not self.life:
+            return o
+        ph = (_seed(self.cid) % 1000) / 1000 * 2 * math.pi
+        if not airborne:
+            k = 2.2 if self.cid == "nib" else 1.0                 # tiny Nib needs a bigger wiggle to read on screen
+            o["dy"] += 0.03 * k * (0.5 + 0.5 * math.sin(2 * math.pi * t / 1.7 + ph))
+            o["lean"] += 0.035 * k * math.sin(2 * math.pi * t / 3.1 + 1.3 * ph)
+        o["arm_l"] += 6 * math.sin(2 * math.pi * t / 2.3 + ph)
+        o["arm_r"] += 6 * math.sin(2 * math.pi * t / 2.7 + ph + 2.0)
+        if talking:
+            o["lean"] += 0.045 * math.sin(2 * math.pi * 1.4 * t + ph)
+        for a, b, side in self.listens:
+            if a <= t < b + 0.6:
+                if t < b:
+                    o["squash"] *= 1 - 0.035 * max(0.0, math.sin(2 * math.pi * 1.1 * (t - a)))   # nods
+                    o["lean"] += 0.06 * side * facing * min(1.0, (t - a) / 0.4)
+                else:
+                    o["squash"] *= 1 - 0.07 * bump((t - b) / 0.6)                            # reaction bounce
+                break
+            if a > t:
+                break
+        for ts, d in self.starts:                                                           # anticipation
+            if ts - 0.25 <= t < ts:
+                o["lean"] -= 0.1 * d * facing * bump((t - (ts - 0.25)) / 0.25)
+                o["squash"] *= 1 - 0.05 * bump((t - (ts - 0.25)) / 0.25)
+        for te, d in self.stops:                                                            # follow-through
+            dt = t - te
+            if 0 <= dt < 1.2:
+                o["lean"] += 0.16 * d * facing * math.exp(-dt / 0.3) * math.sin(2 * math.pi * dt / 0.55)
+                o["squash"] *= 1 - 0.06 * math.exp(-dt / 0.2) * math.sin(math.pi * min(1.0, dt / 0.3))
+        return o
 
     # -- evaluation
     def position_at(self, t: float) -> tuple[float, float]:
@@ -269,6 +342,15 @@ class Performer:
         else:
             p["squash"] *= 1 + 0.018 * math.sin(2 * math.pi * t / 1.7 + phase)
         talking = self.mouth.talking_at(t)
+        lo = self.life_offsets(t, facing, airborne, talking)
+        p["dy"] += lo["dy"]
+        p["lean"] += lo["lean"]
+        p["squash"] *= lo["squash"]
+        p["arm_l"] += lo["arm_l"]
+        p["arm_r"] += lo["arm_r"]
+        if self.life:
+            gx, gy = self.glance_at(t)
+            gaze = (max(-1.0, min(1.0, gaze[0] + gx)), max(-1.0, min(1.0, gaze[1] + gy)))
         if talking:
             p["dy"] += 0.025 * abs(math.sin(2 * math.pi * 2.2 * t))
             p["arm_l"] += 10 * (1 + math.sin(2 * math.pi * 0.8 * t + phase))

@@ -146,3 +146,13 @@ def test_concept_cards_and_transitions_are_staged(voiced):
             cards += 1
             assert c["end"] - c["start"] >= 2.0 and c["end"] <= c["teachStart"] + 0.05
     assert cards == sum(len(s.get("concepts") or []) for s in spec["scenes"]) == 5
+
+
+def test_nobody_is_ever_static(voiced):
+    """M03.3: every on-stage character keeps moving (pose-track static run ≤ 1 s) in every scene."""
+    from robotics101.cartoon.liveliness import MAX_STATIC_S, scene_liveliness
+    for sc in _scenes(voiced, {"clip": Path("x.mp4"), "stop_s": 5.0, "stop_reading": 0.49}):
+        live = scene_liveliness(sc, S.presence, S.HEIGHT, S.SCALES)
+        assert set(live) == {c for c in sc.perf if c in sc.cast}
+        for cid, v in live.items():
+            assert v["frames"] > 0 and v["longestStaticS"] <= MAX_STATIC_S, (sc.sid, cid, v)
