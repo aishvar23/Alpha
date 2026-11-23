@@ -273,6 +273,8 @@ def _cmd_voice(args: argparse.Namespace) -> int:
         return EXIT_INPUT
     try:
         registry = load_registry()
+        from robotics101.cartoon.episode import expand_episode
+        spec = expand_episode(spec, registry)          # M03 defaults (intro, ...) for every episode
         backend, skipped = select_backend(args.tts)
         cache = VoiceCache()
         for why in skipped:

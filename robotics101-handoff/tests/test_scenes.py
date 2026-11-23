@@ -21,7 +21,8 @@ CARTOON = ROOT / "examples" / "episode-001-cartoon.json"
 @pytest.fixture(scope="module")
 def voiced(tmp_path_factory):
     d = tmp_path_factory.mktemp("voice")
-    spec = json.loads(CARTOON.read_text(encoding="utf-8"))
+    from robotics101.cartoon.episode import expand_episode
+    spec = expand_episode(json.loads(CARTOON.read_text(encoding="utf-8")), load_registry())   # M03 defaults
     timing = voice_episode(spec, load_registry(), d, B.FixtureBackend(), VoiceCache(d / "cache"), log=lambda m: None)
     return spec, timing, d
 
@@ -49,8 +50,8 @@ def test_cast_stays_on_screen(voiced):
             t = k * 0.5
             if sc.template == "cartoon_cold_open" and t < 3.6:        # Bolt zooms in from off-screen
                 continue
-            pres = S.presence(sc, t)
-            assert min(pres.values()) >= 0.8, (sc.sid, t, pres)
+            pres = {c: v for c, v in S.presence(sc, t).items() if t >= sc.enter_at.get(c, 0.0)}
+            assert not pres or min(pres.values()) >= 0.8, (sc.sid, t, pres)
 
 
 def test_lipsync_covers_every_line(voiced):
@@ -113,3 +114,15 @@ def test_frames_render_for_every_scene(voiced):
         for t in (0.0, sc.duration / 2, sc.duration - 0.05):
             img = frame_rgb(S.frame_fn(sc)(t), 192, 108, "#FFE8C2")
             assert img.shape == (108, 192, 3) and img.std() > 5
+
+
+def test_generated_intro_stages_every_main_character(voiced):
+    sc = next(s for s in _scenes(voiced) if s.template == "cartoon_character_intro")
+    intro = sc.facts["introduced"]
+    assert [x["name"] for x in intro] == ["Bolt", "Maya", "Nib"]
+    for x in intro:
+        cid = x["id"]
+        assert x["plate"][1] - x["plate"][0] >= 1.5 and x["name"] in x["line"]
+        assert S.presence(sc, max(0.0, sc.enter_at[cid] - 1.2))[cid] < 0.8      # enters from off-stage
+        assert S.presence(sc, sc.enter_at[cid] + 0.1)[cid] >= 0.8
+    assert len(S.frame_fn(sc)(intro[0]["plate"][0] + 1.0)) > 3

@@ -25,6 +25,46 @@ def _load(p: Path):
         return None
 
 
+def check_intro(rep, spec: dict, by: dict) -> None:
+    """M03.1: the generated cast intro is present (unless the spec turns it off) and introduces every main registry
+    character of the episode cast: on stage (presence), nameplate with the registry display name, and a voiced line
+    that says the name while the plate is up."""
+    from robotics101.cartoon.episode import INTRO_TEMPLATE, intro_settings, main_characters
+    from robotics101.characters import load_registry
+    cfg = intro_settings(spec)
+    scenes = [s for s in spec["scenes"] if s["template"] == INTRO_TEMPLATE]
+    if not cfg["enabled"]:
+        rep.soft("intro.present", not scenes, "character intro disabled by the spec (intro.enabled = false)")
+        return
+    want_at = 1 if (cfg["position"] == "after_cold_open" and spec["scenes"][0]["template"] == "cartoon_cold_open") else 0
+    ok = len(scenes) == 1 and spec["scenes"][want_at]["template"] == INTRO_TEMPLATE and scenes[0]["sceneId"] in by
+    if not rep.hard("intro.present", ok, f"cast intro scene at position {want_at + 1} ({cfg['position']}), rendered"):
+        return
+    reg = load_registry()
+    r = by[scenes[0]["sceneId"]]
+    got = {x["id"]: x for x in (r.get("facts") or {}).get("introduced", [])}
+    pres = r.get("minPresence") or {}
+    bad = []
+    for cid in main_characters(reg, spec["characters"]):
+        ch, x = reg.get(cid), got.get(cid)
+        if x is None:
+            bad.append(f"{cid}: not introduced")
+            continue
+        if x.get("name") != ch.displayName:
+            bad.append(f"{cid}: nameplate {x.get('name')!r} != registry {ch.displayName!r}")
+        p0, p1 = x.get("plate") or (0, 0)
+        if p1 - p0 < 1.5:
+            bad.append(f"{cid}: nameplate only {p1 - p0:.1f}s")
+        if not x.get("line") or ch.displayName.lower() not in x["line"].lower():
+            bad.append(f"{cid}: intro line does not say the name")
+        elif not (p0 - 0.5 <= (x.get("lineStart") or -1) <= p1):
+            bad.append(f"{cid}: name line not spoken while the plate is up")
+        if pres.get(cid, 0) < PRESENCE_MIN:
+            bad.append(f"{cid}: on screen {pres.get(cid, 0):.2f} < {PRESENCE_MIN}")
+    rep.hard("intro.cast", not bad, "every main character on stage, nameplate (registry name) + named in a line: "
+             + ("; ".join(bad) if bad else ", ".join(f"{k}={v['name']}" for k, v in got.items())))
+
+
 def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     from robotics101.cartoon.audio import check_mix
     from robotics101.cartoon.rigs import RIG_VERSION
@@ -78,6 +118,8 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
         rep.soft("lipsync.agreement", mean >= LIPSYNC_MEAN_MIN and not low,
                  f"mean mouth-open-while-voiced {mean:.3f} (≥ {LIPSYNC_MEAN_MIN}); lines < {LIPSYNC_LINE_MIN}: "
                  f"{low or 'none'}", round(mean, 3))
+
+    check_intro(rep, spec, by)
 
     # teaching facts (what is drawn on screen vs the spec)
     sp = {s["template"]: s.get("parameters", {}) for s in spec["scenes"]}

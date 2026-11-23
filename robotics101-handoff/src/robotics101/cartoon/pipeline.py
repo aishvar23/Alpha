@@ -63,7 +63,7 @@ def compose_final(out_dir: Path, timing: dict, title: str, log=print) -> dict:
 
 
 def collect_artifacts(out_dir: Path, timing: dict) -> list[tuple[str, str, str | None]]:
-    items = [("episode.json", "spec", None), ("timing.json", "timing", None), ("captions.srt", "captions", None)]
+    items = [("episode.json", "spec", None), ("episode.source.json", "spec_source", None), ("timing.json", "timing", None), ("captions.srt", "captions", None)]
     for s in timing["scenes"]:
         items.append((s["dialogue_wav"], "dialogue_stem", s["sceneId"]))
         for b in s["beats"]:
@@ -161,14 +161,22 @@ def render_cartoon_episode(episode: Path, out_dir: Path, tts: str = "auto", size
     if not rep.ok:
         raise CartoonPipelineError(f"{episode} is invalid ({len(rep.errors)} error(s))", 1)
     spec_bytes = episode.read_bytes()
-    spec = json.loads(spec_bytes)
     check_ffmpeg()
     out_dir.mkdir(parents=True, exist_ok=True)
     for name in STALE:
         (out_dir / name).unlink(missing_ok=True)
-    (out_dir / "episode.json").write_bytes(spec_bytes)
     run_id = new_run_id()
     registry = load_registry()
+    # M03: pipeline defaults (generated intro, ...) -> the bundle's episode.json is the expanded spec
+    from robotics101.cartoon.episode import expand_episode
+    from robotics101.validation import validate_episode
+    spec = expand_episode(json.loads(spec_bytes), registry)
+    xrep = validate_episode(spec)
+    if not xrep.ok:
+        raise CartoonPipelineError("expanded spec is invalid: " + "; ".join(str(i) for i in xrep.errors[:5]), 1)
+    (out_dir / "episode.source.json").write_bytes(spec_bytes)
+    (out_dir / "episode.json").write_text(json.dumps(spec, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    episode = out_dir / "episode.json"
     stages["validate"] = round(time.monotonic() - t0, 2)
     log(f"[1/7] validate: {spec['episodeId']} ok; run {run_id}")
 

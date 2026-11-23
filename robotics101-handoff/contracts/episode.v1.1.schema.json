@@ -132,6 +132,68 @@
           "maxLength": 300
         }
       }
+    },
+    "intro": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "M03.1 character intro segment generated from the registry (default: enabled, after the cold open).",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "position": {
+          "enum": [
+            "start",
+            "after_cold_open"
+          ]
+        },
+        "characters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$"
+          },
+          "uniqueItems": true,
+          "maxItems": 6
+        }
+      }
+    },
+    "transitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "M03.2 scene-to-scene transitions (default: auto = rotating cartoon styles; 'cut' must be explicit per scene).",
+      "properties": {
+        "default": {
+          "enum": [
+            "auto",
+            "wipe",
+            "iris",
+            "slide",
+            "character",
+            "cut"
+          ]
+        },
+        "seconds": {
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 1.0
+        }
+      }
+    },
+    "subtitles": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "M03.5 burned-in kid subtitles (default on).",
+      "properties": {
+        "burnIn": {
+          "type": "boolean"
+        },
+        "fontSizePx": {
+          "type": "integer",
+          "minimum": 40,
+          "maximum": 80
+        }
+      }
     }
   },
   "$defs": {
@@ -215,6 +277,58 @@
           "maxItems": 80,
           "items": {
             "$ref": "#/$defs/beat"
+          }
+        },
+        "generated": {
+          "enum": [
+            "intro"
+          ],
+          "description": "set by the pipeline for generated scenes"
+        },
+        "transitionIn": {
+          "enum": [
+            "auto",
+            "wipe",
+            "iris",
+            "slide",
+            "character",
+            "cut"
+          ]
+        },
+        "concepts": {
+          "type": "array",
+          "maxItems": 4,
+          "description": "M03.2 concept markers: a title card plays before beat `beforeBeat`",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 40
+              },
+              "subtitle": {
+                "type": "string",
+                "maxLength": 60
+              },
+              "icon": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "beforeBeat": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
           }
         }
       }

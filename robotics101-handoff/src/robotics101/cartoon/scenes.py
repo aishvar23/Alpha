@@ -54,6 +54,7 @@ class Scene:
     cutaways: list[dict] = field(default_factory=list)     # {"start","end","clip","clip_offset"}
     lipsync_methods: dict = field(default_factory=dict)
     facts: dict = field(default_factory=dict)              # teaching values shown on screen (for QA)
+    enter_at: dict = field(default_factory=dict)           # cid -> time the character is on stage (presence QA)
 
     @property
     def n_frames(self) -> int:
@@ -501,10 +502,62 @@ def stage_recap_chant(sc: Scene) -> None:
                                                  subtitle="See you next time!")] if t >= outro["start_s"] else [])
 
 
+def stage_character_intro(sc: Scene) -> None:
+    """M03.1 generated cast intro: each character enters (registry entrance), gets a spotlight and a nameplate
+    (display name in its caption colour + personality tagline) while its intro line plays; all stay in a lineup."""
+    cards = sc.params.get("characters", [])
+    n = len(cards)
+    slots = [(-4.6 + 9.2 * i / max(1, n - 1)) if n > 1 else 0.0 for i in range(n)]
+    segs = []
+    for i, (c, x) in enumerate(zip(cards, slots)):
+        cid = c["id"]
+        ent = next((b for b in sc.beats if b["type"] == "action" and b["who"] == cid), None)
+        t0 = ent["start_s"] if ent else 0.0
+        t1 = ent["end_s"] if ent else 0.6
+        fly = c.get("entrance") == "fly_to"
+        side = -1 if x < 0 else 1
+        y = 2.6 if fly else 0.0
+        start_x = x + side * 9.0 if not fly else 9.5
+        p = Performer(cid, x=start_x, y=(5.0 if fly else 0.0), facing=-side if not fly else -1,
+                      scale=SCALES.get(cid, 0.8) * (1.3 if fly else 1.0), airborne=fly)
+        if c.get("entrance") == "zoom":
+            p.move(t0, t1, x=x, ease="out").act(t0, t1, "zoom").act(t1, t1 + 0.6, "skid")
+        elif fly:
+            p.move(t0, t1, x=x, y=y, arc=0.8).act(t0, t1, "fly_to")
+        else:
+            p.move(t0, t1, x=x).act(t0, t1, "enter")
+        p.face(t1 + 0.3, 1 if x < 0 else -1 if x > 0 else 1)
+        sc.perf[cid] = p
+        sc.enter_at[cid] = round(t1, 3)
+        segs.append((cid, c, x, t0, t1))
+    sc.cast = tuple(c["id"] for c in cards)
+    intro_facts = []
+    for i, (cid, c, x, t0, t1) in enumerate(segs):
+        end = segs[i + 1][3] if i + 1 < len(segs) else sc.duration - 0.2
+        line = next((b for b in sc.lines() if b.get("target") == cid), None)
+        at = PR.P(max(-3.4, min(3.4, x)), 2.75)
+
+        def plate(t, m, c=c, t1=t1, end=end, at=at):
+            return [PR.nameplate(c["name"], c["tagline"], c.get("color", "#FFFFFF"), _u(t, t1 - 0.1, end), at, t)] \
+                if t1 - 0.1 <= t < end else []
+
+        def light(t, m, x=x, t0=t0, end=end, cy=(3.2 if c.get("entrance") == "fly_to" else 1.7)):
+            if not (t0 <= t < end + 0.4):
+                return []
+            u = _u(t, t0, t0 + 0.5) * (1 - _u(t, end, end + 0.4))
+            return [PR.spotlight(x, u, t, cy=cy)]
+        sc.back.append(light)
+        sc.screen.append(plate)
+        intro_facts.append({"id": cid, "name": c["name"], "tagline": c["tagline"], "plate": [round(t1 - 0.1, 3), round(end, 3)],
+                            "line": line["text"] if line else None, "lineStart": line["start_s"] if line else None})
+    sc.facts["introduced"] = intro_facts
+
+
 STAGING = {"cartoon_cold_open": stage_cold_open, "cartoon_robot_family": stage_robot_family,
            "cartoon_robot_checkup": stage_checkup, "cartoon_sensor_ping": stage_sensor_ping,
            "cartoon_rule_board": stage_rule_board, "cartoon_servo_highfive": stage_servo_highfive,
-           "cartoon_obstacle_rematch": stage_obstacle_rematch, "cartoon_recap_chant": stage_recap_chant}
+           "cartoon_obstacle_rematch": stage_obstacle_rematch, "cartoon_recap_chant": stage_recap_chant,
+           "cartoon_character_intro": stage_character_intro}
 
 
 # ------------------------------------------------------------------------------------------ build + render
@@ -578,7 +631,9 @@ def splice_cutaways(sc: Scene, video: Path, out: Path, width: int, height: int) 
 
 
 def load_inputs(spec_path: Path, voice_dir: Path) -> tuple[dict, dict]:
-    spec = json.loads(Path(spec_path).read_text(encoding="utf-8"))
+    from robotics101.cartoon.episode import expand_episode
+    from robotics101.characters import load_registry
+    spec = expand_episode(json.loads(Path(spec_path).read_text(encoding="utf-8")), load_registry())
     timing = json.loads((Path(voice_dir) / "timing.json").read_text(encoding="utf-8"))
     return spec, timing
 
@@ -621,7 +676,9 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
             splice_cutaways(sc, raw, final, width, height)
             raw.unlink()
         samples = [round(k * 0.5, 2) for k in range(int(sc.duration * 2) + 1)]
-        pres = {cid: min(presence(sc, t)[cid] for t in samples if t >= 6.0 or sc.template != "cartoon_cold_open")
+        pres = {cid: min((presence(sc, t)[cid] for t in samples
+                          if (t >= 6.0 or sc.template != "cartoon_cold_open") and t >= sc.enter_at.get(cid, 0.0)),
+                         default=0.0)
                 for cid in sc.perf}
         facts = {k: v for k, v in sc.facts.items() if k != "approach"}
         from robotics101.cartoon.lipsync import lipsync_agreement
@@ -630,7 +687,7 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
                  for b in sc.lines() if b["speaker"] in sc.perf}
         report["scenes"].append({"sceneId": sid, "template": sc.template, "frames": sc.n_frames,
                                  "duration_s": sc.duration, "video": str(final.relative_to(out_dir)),
-                                 "minPresence": pres, "lipsync": sc.lipsync_methods,
+                                 "minPresence": pres, "enterAt": sc.enter_at, "lipsync": sc.lipsync_methods,
                                  "lipsyncAgreement": agree, "facts": facts,
                                  "cutaways": [{**c, "clip": str(Path(c["clip"]).relative_to(out_dir))}
                                               for c in sc.cutaways],

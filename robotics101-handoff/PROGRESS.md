@@ -179,6 +179,20 @@ Read this first in each new session. Spec: `tasks/M01_LOCAL_VERTICAL_SLICE.md`; 
 - Review fix: scene-005 SENSE/THINK/ACT chips overlapped the rule board's "THE RULE" header → board 1.7 high at y 2.45, chips at y 3.68 (`chalkboard(height=)`); scene-005 re-rendered and final recomposed (final sha256 5dfad1e8…). QA 101 checks, 0 hard, 1 warning; publish dry-run madeForKids true, wouldUpload false.
 - Next: owner approves ElevenLabs sample lines for Bolt/Maya (needs `ELEVENLABS_API_KEY`) → set `voice.elevenlabs.approved` → re-render with `--tts auto`.
 
+## M03 — owner feedback on the M02.8 cut (defaults for EVERY episode, not ep1 only)
+Rules unchanged: push only feature/pipeline-impl; Kokoro voices (ElevenLabs approval gate stays); keep render/encode settings.
+Each step: tests for the rule + a QA check enforcing it, verify real output, PROGRESS + ADR, commit, push.
+| Step | Scope | Status |
+|---|---|---|
+| M03.1 | Character intro scene generated from the registry (`intro` fields; default-on `intro` in schema) + QA intro/cast | **done** (ADR-020) |
+| M03.2 | Scene transitions (wipe/iris/slide/character) + concept title cards (scene `concepts` markers) + QA no hard cuts / every concept carded | todo |
+| M03.3 | Character life: idle bob/breath/glances, speech gestures, listener reactions, follow-through; QA pose-track static > 1 s | todo |
+| M03.4 | Animated robot families (vacuum/rover/arm vignettes) + QA static illustration / long-hold detector | todo |
+| M03.5 | Burned-in kid subtitles (bundled OFL font, speaker colours, safe area, ≤ 2 lines, keep-out aware) + captions.srt; QA | todo |
+| M03.6 | New 1080p ep-001 cut, full QA + suite; samples /workspace/robotics101-samples/m03.6-* | todo |
+- M03.1 notes: registry `main` + `intro` {tagline, entrance, action, emotion, sfx, line{speaker,text}}; schema 1.1 gained optional `intro`, `transitions`, `subtitles` (top level) and scene `generated`, `transitionIn`, `concepts` (M03.2/M03.5 use them). Scratch voice/render dir: out/m03/v (Kokoro). Bundle tests use the newest local out/m03.6 or out/m02.8 and skip when it is stale.
+Design: `cartoon/episode.py::expand_episode(spec, registry)` (idempotent) adds generated parts (intro scene, transitions, concept stings) to the spec; the pipeline writes the expanded spec to `<out>/episode.json` and every later stage reads that.
+
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.
 - Not met by design / owner decisions pending: the sample narration is a short stub (66 s of speech in 300 s) so QA flags every scene for voice coverage and each scene animates ~10–20 s then holds; espeak is a robotic placeholder voice. Fuller narration + production voice (and then pacing animations to the narration window) are pending the owner's decision.

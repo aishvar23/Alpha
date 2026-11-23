@@ -107,6 +107,37 @@ def registry_problems(doc: dict) -> list[str]:
                     p.append(f"{where}.voice: must not contain credentials")
         elif voice is not None:
             p.append(f"{where}.voice: must be null for a non-speaking character")
+        if "main" in c and not isinstance(c["main"], bool):
+            p.append(f"{where}.main: must be boolean")
+        if c.get("main"):
+            p += _intro_problems(where, c, chars)
+    return p
+
+
+def _intro_problems(where: str, c: dict, chars: dict) -> list[str]:
+    """M03.1: a main character needs an ``intro`` block (tagline, entrance + action from its own action list, and a
+    line spoken by a speaking character that says the character's display name)."""
+    it = c.get("intro")
+    if not isinstance(it, dict):
+        return [f"{where}.intro: required for a main character (tagline, entrance, line)"]
+    p = []
+    if not isinstance(it.get("tagline"), str) or not 3 <= len(it.get("tagline", "")) <= 48:
+        p.append(f"{where}.intro.tagline: required string of 3..48 characters")
+    acts = c.get("actions") or []
+    for k in ("entrance", "action"):
+        if k in it and it[k] not in acts:
+            p.append(f"{where}.intro.{k}: '{it[k]}' is not one of the character's actions")
+    if "emotion" in it and it["emotion"] not in (c.get("expressions") or []):
+        p.append(f"{where}.intro.emotion: not one of the character's expressions")
+    line = it.get("line")
+    if not isinstance(line, dict) or not isinstance(line.get("text"), str) or not line.get("text"):
+        p.append(f"{where}.intro.line: required {{speaker, text}}")
+    else:
+        spk = chars.get(line.get("speaker"))
+        if not isinstance(spk, dict) or not spk.get("speaks"):
+            p.append(f"{where}.intro.line.speaker: must be a speaking character")
+        if str(c.get("displayName", "")).lower() not in line["text"].lower():
+            p.append(f"{where}.intro.line.text: must say the name '{c.get('displayName')}'")
     return p
 
 

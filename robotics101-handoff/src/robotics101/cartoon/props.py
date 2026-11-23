@@ -433,3 +433,41 @@ def top_down_inset(robot_xy: tuple[float, float], heading_deg: float, threshold_
     if status:
         g.add(txt(status, 18, color=ALERT if "STOP" in status else ink()).move_to(panel.get_bottom() + UP * 0.2))
     return g
+
+
+# ------------------------------------------------------------------------------------------ cast intro (M03.1)
+
+def spotlight(x: float, u: float, t: float = 0.0, color: str = "#FFF3B0", cy: float = 1.7) -> VGroup:
+    """Soft rotating sunburst + floor pool behind a character being introduced (u = fade/scale in 0..1)."""
+    if u <= 0:
+        return VGroup()
+    k = max(0.001, ease_out_back(clamp01(u)))
+    rays = VGroup()
+    for i in range(12):
+        a = t * 0.35 + i * 2 * PI / 12
+        d1, d2 = np.array([math.cos(a), math.sin(a), 0]), np.array([math.cos(a + 0.16), math.sin(a + 0.16), 0])
+        rays.add(Polygon(np.zeros(3), d1 * 4.2, d2 * 4.2, fill_color=color, fill_opacity=0.55, stroke_width=0))
+    center = P(x, GROUND + cy)
+    pool = Ellipse(width=3.6, height=0.6, fill_color="#FFFFFF", fill_opacity=0.45, stroke_width=0) \
+        .move_to(P(x, GROUND + 0.02))
+    return VGroup(rays.shift(center), pool).scale(k, about_point=P(x, GROUND))
+
+
+def nameplate(name: str, tagline: str, color: str, u: float, at: np.ndarray, t: float = 0.0) -> VGroup:
+    """Big character name (registry caption colour) + personality tagline on a ribbon; pops in, wobbles, flies out.
+    ``u`` is 0..1 over the plate's life (0-0.15 pop in, 0.85-1 shrink out)."""
+    if u <= 0 or u >= 1:
+        return VGroup()
+    title = txt(name.upper(), 110, color=color, font="Luckiest Guy", weight="NORMAL", stroke=8)
+    tag_t = txt(tagline, 38)
+    ribbon = RoundedRectangle(width=tag_t.width + 0.8, height=tag_t.height + 0.4, corner_radius=0.22,
+                              fill_color="#FFFFFF", fill_opacity=1).set_stroke(ink(), 6)
+    tag_g = VGroup(ribbon, tag_t.move_to(ribbon))
+    g = VGroup(title, tag_g).arrange(DOWN, buff=0.12)
+    lim = 7.11 - 0.25 - g.width / 2                      # keep the whole plate inside the frame
+    at = P(max(-lim, min(lim, at[0])), at[1])
+    g.move_to(at)
+    k = pop(u / 0.15)
+    if u > 0.85:
+        k *= max(0.001, 1 - (u - 0.85) / 0.15)
+    return g.rotate(0.04 * math.sin(2 * math.pi * 0.7 * t)).scale(k, about_point=at)

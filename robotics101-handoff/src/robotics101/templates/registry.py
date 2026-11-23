@@ -188,6 +188,18 @@ def _cartoon_recap_chant(p: dict[str, Any]) -> list[str]:
     return _check_keys(p, {"question"}) + _non_empty_string(p, "question")
 
 
+def _cartoon_character_intro(p: dict[str, Any]) -> list[str]:
+    errors = _check_keys(p, {"characters"})
+    cs = p.get("characters")
+    if "characters" in p:
+        if not isinstance(cs, list) or not cs:
+            return errors + ["'characters' must be a non-empty list (generated from the registry)"]
+        for c in cs:
+            if not isinstance(c, dict) or not all(isinstance(c.get(k), str) and c.get(k) for k in ("id", "name", "tagline")):
+                errors.append("each intro character needs id, name and tagline")
+    return errors
+
+
 # ---------------------------------------------------------------- registry
 
 _TEMPLATES = [
@@ -204,6 +216,8 @@ _TEMPLATES = [
     TemplateSpec("cartoon", "cartoon_rule_board", "Chalkboard rule + readings crossing the threshold", _cartoon_rule_board),
     TemplateSpec("cartoon", "cartoon_servo_highfive", "Servo arm rotates to an angle for a high-five", _cartoon_servo_highfive),
     TemplateSpec("cartoon", "cartoon_obstacle_rematch", "Drive, sense, stop, turn, resume (2D)", _cartoon_obstacle_rematch),
+    TemplateSpec("cartoon", "cartoon_character_intro", "Generated cast intro: name + personality beat each",
+                 _cartoon_character_intro),
     TemplateSpec("cartoon", "cartoon_recap_chant", "Sense-think-act chant + closing question", _cartoon_recap_chant),
     TemplateSpec(
         "blender",

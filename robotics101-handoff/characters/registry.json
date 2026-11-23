@@ -104,6 +104,17 @@
           "-t"
         ],
         "intent": "playful, slightly robotic young male"
+      },
+      "main": true,
+      "intro": {
+        "tagline": "Super-fast robot. Still learning to stop!",
+        "entrance": "zoom",
+        "action": "flex",
+        "emotion": "proud",
+        "line": {
+          "speaker": "bolt",
+          "text": "Hi, I'm Bolt! I'm fast, I'm shiny, and I'm learning how to stop. Mostly."
+        }
       }
     },
     "maya": {
@@ -174,6 +185,17 @@
         },
         "fx": [],
         "intent": "bright, upbeat young girl"
+      },
+      "main": true,
+      "intro": {
+        "tagline": "Kid inventor and robot fixer",
+        "entrance": "enter",
+        "action": "wave",
+        "emotion": "laugh",
+        "line": {
+          "speaker": "maya",
+          "text": "And I'm Maya! I build robots, and I fix Bolt. A lot!"
+        }
       }
     },
     "nib": {
@@ -209,7 +231,19 @@
       ],
       "captionColor": "#FF9FC0",
       "speaks": false,
-      "voice": null
+      "voice": null,
+      "main": true,
+      "intro": {
+        "tagline": "Tiny drone. Big curiosity.",
+        "entrance": "fly_to",
+        "action": "beep_dance",
+        "emotion": "happy",
+        "sfx": "nib_beep",
+        "line": {
+          "speaker": "maya",
+          "text": "And this is Nib, our tiny drone. Nib only speaks beep!"
+        }
+      }
     }
   }
 }
