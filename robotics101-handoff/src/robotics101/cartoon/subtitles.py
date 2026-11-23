@@ -1,0 +1,268 @@
+"""M03.5 burned-in kid subtitles (default on): big rounded Baloo 2 Bold, speaker colour from the character registry,
+thick dark outline + soft shadow, inside the 5 % action-safe area, at most 2 lines per cue.
+
+Cues come from the dialogue lines in timing.json (one cue per line, or sentence/word chunks of ≤ 2 lines when a line
+is long, timed by character share). Wrapping is measured with the bundled font (PIL), using libass's size convention
+(ASS ``Fontsize`` = ascender + descender, i.e. ``ASS_PER_EM`` × the em size). Each cue is placed at the bottom unless
+a registered on-screen keep-out (rulers, readouts, chalkboard …) overlaps it, in which case it is raised just above
+the keep-out, or moved to the top. The result is written as ``subtitles.ass`` (burned by ffmpeg/libass at compose)
+plus ``subtitles.json`` (cue boxes for QA). captions.srt is still exported unchanged."""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+FONT_DIR = ROOT / "assets" / "fonts"
+FONT_FILE = FONT_DIR / "Baloo2-VariableFont_wght.ttf"
+FONT_NAME = "Baloo 2"
+FONT_LICENSE = FONT_DIR / "Baloo2-OFL.txt"
+W, H = 1920, 1080
+SAFE = 0.05                                  # action-safe margin (fraction of each dimension)
+DEFAULT_EM_PX = 58                           # em size at 1080p (≈ 40 px capital height)
+MIN_EM_PX = 48                               # legibility floor (QA)
+MAX_LINES = 2
+MAX_TEXT_W = round(W * 0.80)                 # wrap width (inside title-safe)
+OUTLINE_PX, SHADOW_PX = 6, 3
+BOTTOM_MARGIN = 64                           # px from the bottom edge to the text box (≥ 5 % = 54)
+DEFAULTS = {"burnIn": True, "fontSizePx": DEFAULT_EM_PX}
+
+
+def settings(spec: dict) -> dict:
+    return {**DEFAULTS, **(spec.get("subtitles") or {})}
+
+
+@lru_cache(maxsize=8)
+def _font(em: int):
+    from PIL import ImageFont
+    f = ImageFont.truetype(str(FONT_FILE), em)
+    try:
+        f.set_variation_by_name("Bold")
+    except (OSError, ValueError):
+        pass
+    return f
+
+
+@lru_cache(maxsize=1)
+def ass_per_em() -> float:
+    """libass Fontsize per em (ascender + descender over units-per-em of the bundled font)."""
+    a, d = _font(1000).getmetrics()
+    return (a + d) / 1000.0
+
+
+def text_width(text: str, em: int) -> float:
+    return float(_font(em).getlength(text))
+
+
+def wrap(text: str, em: int, max_w: int = MAX_TEXT_W) -> list[str]:
+    """Greedy wrap to ``max_w``; a 2-line result is re-balanced (shortest longest line, punctuation preferred)."""
+    lines = _greedy(text, em, max_w)
+    if len(lines) == 2:
+        words = text.split()
+        best = None
+        for i in range(1, len(words)):
+            a, b = " ".join(words[:i]), " ".join(words[i:])
+            wmax = max(text_width(a, em), text_width(b, em))
+            if wmax > max_w:
+                continue
+            score = wmax - (0.08 * max_w if a[-1] in ",.!?;:" else 0)
+            if best is None or score < best[0]:
+                best = (score, [a, b])
+        if best:
+            return best[1]
+    return lines
+
+
+def _greedy(text: str, em: int, max_w: int) -> list[str]:
+    lines, cur = [], ""
+    for w in text.split():
+        cand = f"{cur} {w}".strip()
+        if cur and text_width(cand, em) > max_w:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = cand
+    return lines + ([cur] if cur else [])
+
+
+def chunks(text: str, em: int) -> list[str]:
+    """Split a long line into pieces that each wrap to ≤ MAX_LINES (sentence, then clause, then word boundaries)."""
+    text = " ".join(text.split())
+    if len(wrap(text, em)) <= MAX_LINES:
+        return [text]
+    for pat in (r"(?<=[.!?])\s+", r"(?<=[,;:])\s+"):
+        parts = [p for p in re.split(pat, text) if p]
+        if len(parts) > 1:
+            out, cur = [], ""
+            for p in parts:
+                cand = f"{cur} {p}".strip()
+                if cur and len(wrap(cand, em)) > MAX_LINES:
+                    out.append(cur)
+                    cur = p
+                else:
+                    cur = cand
+            out.append(cur)
+            if all(len(wrap(x, em)) <= MAX_LINES for x in out):
+                return out
+            return [y for x in out for y in chunks(x, em)] if len(out) > 1 else _word_chunks(text, em)
+    return _word_chunks(text, em)
+
+
+def _word_chunks(text: str, em: int) -> list[str]:
+    out, cur = [], ""
+    for w in text.split():
+        cand = f"{cur} {w}".strip()
+        if cur and len(wrap(cand, em)) > MAX_LINES:
+            out.append(cur)
+            cur = w
+        else:
+            cur = cand
+    return out + ([cur] if cur else [])
+
+
+@dataclass
+class Cue:
+    start: float
+    end: float
+    speaker: str
+    color: str
+    lines: list[str]
+    box: list[int]           # px [x0, y0, x1, y1] of the text block incl. outline
+    placement: str           # bottom | raised | top
+    sceneId: str
+    lineIndex: int
+
+    def to_dict(self) -> dict:
+        return {"start": round(self.start, 3), "end": round(self.end, 3), "speaker": self.speaker,
+                "color": self.color, "lines": self.lines, "box": self.box, "placement": self.placement,
+                "sceneId": self.sceneId, "lineIndex": self.lineIndex}
+
+
+def block_size(lines: list[str], em: int) -> tuple[int, int]:
+    line_h = em * ass_per_em()
+    w = max(text_width(x, em) for x in lines) + 2 * OUTLINE_PX + SHADOW_PX
+    h = line_h * len(lines) + 2 * OUTLINE_PX + SHADOW_PX
+    return round(w), round(h)
+
+
+def _overlaps(a, b) -> bool:
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+
+
+def place(lines: list[str], em: int, keepouts: list[list[int]]) -> tuple[list[int], str]:
+    """Bottom (default) → raised above the keep-outs → top; all inside the action-safe area."""
+    bw, bh = block_size(lines, em)
+    x0 = (W - bw) // 2
+    lo, hi = round(H * SAFE), round(H * (1 - SAFE))
+    bottom = [x0, H - BOTTOM_MARGIN - bh, x0 + bw, H - BOTTOM_MARGIN]
+    hits = [k for k in keepouts if _overlaps(bottom, k)]
+    if not hits:
+        return bottom, "bottom"
+    y1 = min(k[1] for k in hits) - 12
+    raised = [x0, y1 - bh, x0 + bw, y1]
+    if raised[1] >= H * 0.45 and not any(_overlaps(raised, k) for k in keepouts):
+        return raised, "raised"
+    top = [x0, lo + 10, x0 + bw, lo + 10 + bh]
+    if not any(_overlaps(top, k) for k in keepouts):
+        return top, "top"
+    return (raised, "raised") if raised[1] >= lo else (bottom, "bottom")
+
+
+def _px_box(box: list[float]) -> list[int]:
+    return [round(box[0] * W), round(box[1] * H), round(box[2] * W), round(box[3] * H)]
+
+
+def build_cues(timing: dict, registry, keepouts: dict[str, list[dict]] | None = None,
+               em: int = DEFAULT_EM_PX) -> list[Cue]:
+    """``keepouts``: sceneId -> [{box: [x0,y0,x1,y1] normalised, start, end}] (scene-relative seconds)."""
+    colors = {cid: (c.captionColor or "#FFFFFF") for cid, c in registry.characters.items()}
+    cues = []
+    for s in timing["scenes"]:
+        t0 = float(s.get("scene_start_s", 0.0))
+        kos = (keepouts or {}).get(s["sceneId"], [])
+        for b in s["beats"]:
+            if b["type"] != "line":
+                continue
+            parts = chunks(b["text"], em)
+            total = sum(len(p) for p in parts)
+            a, z, acc, prev = t0 + b["start_s"], t0 + b["end_s"], 0, t0 + b["start_s"]
+            for p in parts:
+                acc += len(p)
+                edge = a + (z - a) * acc / total
+                ko = [_px_box(k["box"]) for k in kos
+                      if k["start"] < edge - t0 and prev - t0 < k["end"]]
+                lines = wrap(p, em)
+                box, where = place(lines, em, ko)
+                cues.append(Cue(round(prev, 3), round(edge, 3), b["speaker"], colors.get(b["speaker"], "#FFFFFF"),
+                                lines, box, where, s["sceneId"], int(b.get("index", 0))))
+                prev = edge
+    return cues
+
+
+def _ass_color(hex_: str, alpha: int = 0) -> str:
+    h = hex_.lstrip("#")
+    return f"&H{alpha:02X}{h[4:6]}{h[2:4]}{h[0:2]}".upper()
+
+
+def _ass_c(hex_: str) -> str:
+    h = hex_.lstrip("#").upper()
+    return f"&H{h[4:6]}{h[2:4]}{h[0:2]}&"
+
+
+def _ts(t: float) -> str:
+    cs = max(0, round(t * 100))
+    return f"{cs // 360000}:{cs // 6000 % 60:02d}:{cs // 100 % 60:02d}.{cs % 100:02d}"
+
+
+def _esc(s: str) -> str:
+    return s.replace("\\", "\\\\").replace("{", "(").replace("}", ")")
+
+
+def to_ass(cues: list[Cue], em: int = DEFAULT_EM_PX) -> str:
+    size = round(em * ass_per_em())
+    head = ["[Script Info]", "ScriptType: v4.00+", f"PlayResX: {W}", f"PlayResY: {H}", "WrapStyle: 2",
+            "ScaledBorderAndShadow: yes", "YCbCr Matrix: TV.709", "",
+            "[V4+ Styles]",
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, "
+            "Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
+            "MarginL, MarginR, MarginV, Encoding",
+            f"Style: Kid,{FONT_NAME},{size},&H00FFFFFF,&H00FFFFFF,&H00301A1A,&H64000000,-1,0,0,0,100,100,0,0,1,"
+            f"{OUTLINE_PX},{SHADOW_PX},8,0,0,0,1", "",
+            "[Events]", "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"]
+    ev = []
+    for c in cues:
+        x = (c.box[0] + c.box[2]) // 2
+        y = c.box[1] + OUTLINE_PX
+        txt = "\\N".join(_esc(x_) for x_ in c.lines)
+        ev.append(f"Dialogue: 0,{_ts(c.start)},{_ts(c.end)},Kid,{c.speaker},0,0,0,,"
+                  f"{{\\an8\\pos({x},{y})\\c{_ass_c(c.color)}}}{txt}")
+    return "\n".join(head + ev) + "\n"
+
+
+def write_subtitles(out_dir: Path, timing: dict, registry, spec: dict, scenes_report: dict | None = None) -> dict:
+    """Write ``subtitles.ass`` + ``subtitles.json``; returns the json document."""
+    st = settings(spec)
+    em = int(st["fontSizePx"])
+    kos = {}
+    for r in (scenes_report or {}).get("scenes", []):
+        kos[r["sceneId"]] = r.get("keepouts", [])
+    cues = build_cues(timing, registry, kos, em)
+    out_dir = Path(out_dir)
+    (out_dir / "subtitles.ass").write_text(to_ass(cues, em), encoding="utf-8")
+    doc = {"schemaVersion": "robotics101.subtitles/1", "burnIn": bool(st["burnIn"]), "font": FONT_NAME,
+           "fontFile": str(FONT_FILE.relative_to(ROOT)), "emPx": em, "assFontSize": round(em * ass_per_em()),
+           "outlinePx": OUTLINE_PX, "frame": [W, H], "safeMargin": SAFE, "maxLines": MAX_LINES,
+           "cues": [c.to_dict() for c in cues]}
+    (out_dir / "subtitles.json").write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    return doc
+
+
+def burn_filter(out_dir: Path) -> str:
+    """ffmpeg filter that burns ``<out>/subtitles.ass`` with the bundled font (scales to the output size)."""
+    p = str((Path(out_dir) / "subtitles.ass").resolve()).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+    f = str(FONT_DIR.resolve()).replace(":", "\\:").replace("'", "\\'")
+    return f"subtitles=filename='{p}':fontsdir='{f}'"

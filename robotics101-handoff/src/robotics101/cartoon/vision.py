@@ -26,6 +26,19 @@ def frame_at(video: Path, n: int, w: int = W, h: int = H, fps: int = FPS) -> np.
     return np.frombuffer(p.stdout[: w * h], np.uint8).reshape(h, w)
 
 
+def frame_rgb_at(video: Path, n: int, fps: int = FPS) -> np.ndarray:
+    """Full-resolution RGB frame ``n`` (h, w, 3)."""
+    t = max(0.0, (n - 0.25) / fps)
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                            "-of", "csv=p=0", str(video)], capture_output=True, text=True, check=True)
+    w, h = (int(x) for x in probe.stdout.strip().split(",")[:2])
+    p = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.4f}", "-i", str(video), "-frames:v", "1",
+                        "-pix_fmt", "rgb24", "-f", "rawvideo", "-"], capture_output=True, check=True)
+    if len(p.stdout) < w * h * 3:
+        raise ValueError(f"no frame {n} in {video}")
+    return np.frombuffer(p.stdout[: w * h * 3], np.uint8).reshape(h, w, 3)
+
+
 def frames_at(video: Path, indices, w: int = W, h: int = H) -> dict[int, np.ndarray]:
     return {int(n): frame_at(video, int(n), w, h) for n in sorted(set(indices))}
 
@@ -51,4 +64,4 @@ def stream_gray(video: Path, w: int = W, h: int = H, fps: int | None = None) -> 
         p.wait()
 
 
-__all__ = ["diff", "frame_at", "frames_at", "stream_gray"]
+__all__ = ["diff", "frame_at", "frame_rgb_at", "frames_at", "stream_gray"]

@@ -55,6 +55,7 @@ class Scene:
     lipsync_methods: dict = field(default_factory=dict)
     facts: dict = field(default_factory=dict)              # teaching values shown on screen (for QA)
     illustrations: list = field(default_factory=list)       # M03.4 animated illustration regions (static-hold QA)
+    keepouts: list = field(default_factory=list)            # M03.5 teaching visuals subtitles must not cover
     enter_at: dict = field(default_factory=dict)           # cid -> time the character is on stage (presence QA)
     trans_in: str | None = None                            # M03.2 transition into this scene (None/cut = none)
     trans_out: str | None = None                           # transition into the NEXT scene (drawn at our end)
@@ -172,8 +173,16 @@ ALBUM_AT, ALBUM_SCALE = (0.6, 1.75), 0.85
 
 def world_box(x: float, y: float, w: float, h: float) -> list[float]:
     """World-space box (centre, size) -> normalised frame box [x0, y0, x1, y1] (0..1, y down)."""
+    x, y, w, h = float(x), float(y), float(w), float(h)
     return [round((x - w / 2 + FRAME_X) / (2 * FRAME_X), 4), round((FRAME_Y - y - h / 2) / (2 * FRAME_Y), 4),
             round((x + w / 2 + FRAME_X) / (2 * FRAME_X), 4), round((FRAME_Y - y + h / 2) / (2 * FRAME_Y), 4)]
+
+
+def keep_out(sc: Scene, kid: str, mob, start: float = 0.0, end: float | None = None, pad: float = 0.15) -> None:
+    """M03.5: register an on-screen teaching visual (bounds of ``mob``) that burned-in subtitles must avoid."""
+    c = mob.get_center()
+    sc.keepouts.append({"id": kid, "box": world_box(float(c[0]), float(c[1]), mob.width + 2 * pad, mob.height + 2 * pad),
+                        "start": round(max(0.0, start), 3), "end": round(sc.duration if end is None else end, 3)})
 
 
 def stage_robot_family(sc: Scene) -> None:
@@ -272,6 +281,9 @@ def stage_sensor_ping(sc: Scene) -> None:
     sc.facts.update(rangeMeters=rng, nibMeters=d_nib)
     tape = PR.ruler(sensor_x, 4.0, step=0.5)
     sc.back.append(lambda t, m: [tape])
+    keep_out(sc, "ruler", tape)
+    keep_out(sc, "readout", PR.readout([("no echo...", "#EF476F"), (f"out of range (> {rng:g} m)", "#FFD166")],
+                                       PR.P(3.6, 2.9)))
     nib_y = sensor_y - GROUND - 0.35
     flies = [b for b in sc.beats if b["type"] == "action" and b["do"].startswith("fly_to")]
     for f in flies:
@@ -336,6 +348,9 @@ def stage_rule_board(sc: Scene) -> None:
     rule_line = sc.lines("maya")[1]
     words = ["IF", "distance", "<", f"{thr:g} m", "→", "STOP", "&", "TURN"]
     sc.back.append(lambda t, m: [pile, tape])
+    keep_out(sc, "ruler", tape)
+    keep_out(sc, "rule-board", PR.chalkboard(words, 1.0, at=PR.P(-1.2, 2.45), width=7.6, height=1.7),
+             rule_line["start_s"] - 1)
     sc.screen.append(lambda t, m: [PR.chalkboard(words, _u(t, rule_line["start_s"], rule_line["end_s"]),
                                                  at=PR.P(-1.2, 2.45), width=7.6, height=1.7)] if t >= rule_line["start_s"] - 1 else [])
     expl = sc.lines("maya")[2]
@@ -470,6 +485,7 @@ def stage_obstacle_rematch(sc: Scene, robotcam: dict | None = None) -> None:
     pile = PR.box_pile(box_x)
     tape = PR.ruler_rev(face, 3.0, danger=thr)
     sc.back.append(lambda t, m: [pile, tape])
+    keep_out(sc, "ruler", tape)
 
     def hud(t, m):
         if t < a.t0 - 0.3 or t > resume["end_s"] + 1.5:
@@ -761,7 +777,7 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
                                  "duration_s": sc.duration, "video": str(final.relative_to(out_dir)),
                                  "minPresence": pres, "enterAt": sc.enter_at, "lipsync": sc.lipsync_methods,
                                  "lipsyncAgreement": agree, "liveliness": live,
-                                 "illustrations": sc.illustrations, "facts": facts,
+                                 "illustrations": sc.illustrations, "keepouts": sc.keepouts, "facts": facts,
                                  "cutaways": [{**c, "clip": str(Path(c["clip"]).relative_to(out_dir))}
                                               for c in sc.cutaways],
                                  "render_s": round(time.monotonic() - t0, 1)})

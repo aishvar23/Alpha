@@ -200,6 +200,93 @@ def check_liveliness(rep, by: dict) -> None:
              {c: w[0] for c, w in worst.items()})
 
 
+SUB_COVER_TOL = 0.05
+SUB_COLOR_DIST = 70.0         # RGB distance to the speaker colour that counts as "subtitle text" pixels
+SUB_MIN_TEXT_FRAC = 0.04      # share of the cue box covered by speaker-coloured text in the final video
+SUB_SAMPLES = 16
+
+
+def check_subtitles(rep, out_dir: Path, spec: dict, timing: dict, video_s: float | None) -> None:
+    """M03.5: burned-in kid subtitles cover all dialogue, stay in the safe area, ≤ 2 lines, legible size, avoid the
+    registered teaching visuals, and are really in final.mp4 (speaker-coloured text inside each sampled cue box)."""
+    from robotics101.cartoon.subtitles import MAX_LINES, MIN_EM_PX, SAFE, settings
+    st = settings(spec)
+    doc = _load(out_dir / "subtitles.json")
+    comp = _load(out_dir / "compose.json") or {}
+    if not st["burnIn"]:
+        rep.soft("subtitles.burned", False, "burned-in subtitles disabled by the spec (subtitles.burnIn false)")
+        return
+    burned = bool(doc and doc.get("burnIn") and (comp.get("subtitles") or {}).get("burnedIn")
+                  and (out_dir / "subtitles.ass").is_file())
+    if not rep.hard("subtitles.burned", burned, "subtitles.ass written and burned in at compose "
+                    f"({(comp.get('subtitles') or {}).get('cues', 0)} cues)"):
+        return
+    cues = doc["cues"]
+    by_line: dict = {}
+    for c in cues:
+        by_line.setdefault((c["sceneId"], c["lineIndex"]), []).append(c)
+    missing = []
+    for s in timing["scenes"]:
+        t0 = float(s.get("scene_start_s", 0.0))
+        for b in s["beats"]:
+            if b["type"] != "line":
+                continue
+            cs = sorted(by_line.get((s["sceneId"], int(b.get("index", 0))), []), key=lambda c: c["start"])
+            a, z = t0 + b["start_s"], t0 + b["end_s"]
+            ok = bool(cs) and cs[0]["start"] <= a + SUB_COVER_TOL and cs[-1]["end"] >= z - SUB_COVER_TOL and all(
+                n["start"] - p["end"] <= SUB_COVER_TOL for p, n in zip(cs, cs[1:]))
+            if not ok:
+                missing.append(f"{s['sceneId']}#{b.get('index')}")
+    n_lines = sum(1 for s in timing["scenes"] for b in s["beats"] if b["type"] == "line")
+    rep.hard("subtitles.coverage", not missing and n_lines > 0,
+             f"{n_lines - len(missing)}/{n_lines} dialogue lines covered by {len(cues)} cues; missing: "
+             f"{missing or 'none'}", len(missing))
+    W, H = doc["frame"]
+    lo_x, lo_y, hi_x, hi_y = W * SAFE, H * SAFE, W * (1 - SAFE), H * (1 - SAFE)
+    out_safe = [f"{c['sceneId']}#{c['lineIndex']}" for c in cues
+                if not (c["box"][0] >= lo_x and c["box"][1] >= lo_y and c["box"][2] <= hi_x and c["box"][3] <= hi_y)]
+    too_long = [f"{c['sceneId']}#{c['lineIndex']}" for c in cues if len(c["lines"]) > MAX_LINES]
+    sj = _load(out_dir / "scenes.json") or {"scenes": []}
+    kos = {r["sceneId"]: r.get("keepouts", []) for r in sj["scenes"]}
+    starts = {s["sceneId"]: float(s.get("scene_start_s", 0.0)) for s in timing["scenes"]}
+    clash = []
+    for c in cues:
+        t0 = starts.get(c["sceneId"], 0.0)
+        for k in kos.get(c["sceneId"], []):
+            kb = [k["box"][0] * W, k["box"][1] * H, k["box"][2] * W, k["box"][3] * H]
+            if (k["start"] < c["end"] - t0 and c["start"] - t0 < k["end"] and c["box"][0] < kb[2]
+                    and kb[0] < c["box"][2] and c["box"][1] < kb[3] and kb[1] < c["box"][3]):
+                clash.append(f"{c['sceneId']}#{c['lineIndex']}~{k['id']}")
+    em = doc.get("emPx", 0) * (1080 / H)
+    rep.hard("subtitles.layout", not out_safe and not too_long and not clash and em >= MIN_EM_PX,
+             f"font {doc.get('font')} em {doc.get('emPx')} px @ {W}x{H} (≥ {MIN_EM_PX}); outside safe area: "
+             f"{out_safe or 'none'}; > {MAX_LINES} lines: {too_long or 'none'}; covering teaching visuals: "
+             f"{clash or 'none'}; placements "
+             f"{ {p: sum(1 for c in cues if c['placement'] == p) for p in ('bottom', 'raised', 'top')} }")
+    if not video_s:
+        return
+    from robotics101.cartoon.vision import frame_rgb_at
+    step = max(1, len(cues) // SUB_SAMPLES)
+    sample = cues[::step][:SUB_SAMPLES]
+    weak = []
+    fracs = []
+    for c in sample:
+        n = round((c["start"] + c["end"]) / 2 * FPS)
+        img = frame_rgb_at(out_dir / "final.mp4", n)
+        h, w = img.shape[:2]
+        x0, y0, x1, y1 = (round(c["box"][0] * w / W), round(c["box"][1] * h / H), round(c["box"][2] * w / W),
+                          round(c["box"][3] * h / H))
+        crop = img[y0:y1, x0:x1].astype(float)
+        col = [int(c["color"].lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)]
+        frac = float((((crop - col) ** 2).sum(axis=2) ** 0.5 < SUB_COLOR_DIST).mean()) if crop.size else 0.0
+        fracs.append(frac)
+        if frac < SUB_MIN_TEXT_FRAC:
+            weak.append(f"{c['sceneId']}#{c['lineIndex']}@{(c['start'] + c['end']) / 2:.1f}s ({frac:.3f})")
+    rep.hard("subtitles.visible", not weak,
+             f"{len(sample)} cues sampled in final.mp4; speaker-coloured text share in the cue box min "
+             f"{min(fracs, default=0):.3f} (≥ {SUB_MIN_TEXT_FRAC}); weak: {weak or 'none'}", round(min(fracs, default=0), 3))
+
+
 def check_intro(rep, spec: dict, by: dict) -> None:
     """M03.1: the generated cast intro is present (unless the spec turns it off) and introduces every main registry
     character of the episode cast: on stage (presence), nameplate with the registry display name, and a voiced line
@@ -300,6 +387,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
         check_transitions(rep, out_dir, spec, timing, float(sj.get("transitionHalfSeconds", 0.4)))
         check_concepts(rep, out_dir, spec, by, timing)
         check_static_holds(rep, out_dir, spec, timing, by, float(sj.get("transitionHalfSeconds", 0.4)))
+    check_subtitles(rep, out_dir, spec, timing, video_s)
 
     # teaching facts (what is drawn on screen vs the spec)
     sp = {s["template"]: s.get("parameters", {}) for s in spec["scenes"]}

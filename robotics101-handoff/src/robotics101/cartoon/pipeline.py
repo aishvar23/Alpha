@@ -21,13 +21,20 @@ LICENSES = ROOT / "assets" / "LICENSES.json"
 FPS = 30
 CRF, PRESET, AUDIO_BITRATE = 20, "medium", "192k"
 STALE = ("final.mp4", "compose.json", "manifest.json", "qa_report.json", "qa_report.md", "publish_plan.json",
-         "thumbnail.png", "licenses.json", "scenes.json")
+         "thumbnail.png", "licenses.json", "scenes.json", "subtitles.ass", "subtitles.json")
 
 
 class CartoonPipelineError(RuntimeError):
     def __init__(self, msg: str, code: int = 4):
         super().__init__(msg)
         self.code = code
+
+
+def _load_json(p: Path):
+    try:
+        return json.loads(Path(p).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
 
 
 def compose_final(out_dir: Path, timing: dict, title: str, log=print) -> dict:
@@ -42,7 +49,12 @@ def compose_final(out_dir: Path, timing: dict, title: str, log=print) -> dict:
     clips = [out_dir / "scenes" / f"{g['sceneId']}.mp4" for g in segs]
     k = len(clips)
     parts = [f"[{i}:v:0]setpts=PTS-STARTPTS[v{i}]" for i in range(k)]
-    parts.append("".join(f"[v{i}]" for i in range(k)) + f"concat=n={k}:v=1:a=0,fps={FPS},setsar=1,format=yuv420p[v]")
+    sub = _load_json(out_dir / "subtitles.json")
+    burn = bool(sub and sub.get("burnIn") and (out_dir / "subtitles.ass").is_file())
+    if burn:
+        from robotics101.cartoon.subtitles import burn_filter
+    parts.append("".join(f"[v{i}]" for i in range(k)) + f"concat=n={k}:v=1:a=0,fps={FPS},setsar=1,"
+                 + (f"{burn_filter(out_dir)}," if burn else "") + "format=yuv420p[v]")
     cmd = ["ffmpeg", "-y", "-hide_banner", "-v", "error"]
     for c in clips:
         cmd += ["-i", str(c)]
@@ -56,14 +68,17 @@ def compose_final(out_dir: Path, timing: dict, title: str, log=print) -> dict:
     run(cmd, timeout=3600, what="ffmpeg final encode")
     doc = {"schemaVersion": "robotics101.compose/cartoon-1", "fps": FPS, "total_frames": frames,
            "total_duration_s": round(frames / FPS, 6), "segments": segs, "video": {"codec": "h264", "crf": CRF},
-           "audio": {"source": "audio/mix.wav", "codec": "aac", "bitrate": AUDIO_BITRATE}}
+           "audio": {"source": "audio/mix.wav", "codec": "aac", "bitrate": AUDIO_BITRATE},
+           "subtitles": {"burnedIn": burn, "source": "subtitles.ass" if burn else None,
+                         "cues": len(sub["cues"]) if sub else 0}}
     (out_dir / "compose.json").write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     log(f"  final.mp4: {frames} frames = {frames / FPS:.3f}s")
     return doc
 
 
 def collect_artifacts(out_dir: Path, timing: dict) -> list[tuple[str, str, str | None]]:
-    items = [("episode.json", "spec", None), ("episode.source.json", "spec_source", None), ("timing.json", "timing", None), ("captions.srt", "captions", None)]
+    items = [("episode.json", "spec", None), ("episode.source.json", "spec_source", None), ("timing.json", "timing", None), ("captions.srt", "captions", None),
+             ("subtitles.ass", "subtitles", None), ("subtitles.json", "subtitles_layout", None)]
     for s in timing["scenes"]:
         items.append((s["dialogue_wav"], "dialogue_stem", s["sceneId"]))
         for b in s["beats"]:
@@ -202,6 +217,9 @@ def render_cartoon_episode(episode: Path, out_dir: Path, tts: str = "auto", size
     log(f"[4/7] mix [{stages['mix']}s]")
 
     t0 = time.monotonic()
+    from robotics101.cartoon.subtitles import write_subtitles
+    sdoc = write_subtitles(out_dir, timing, registry, spec, _load_json(out_dir / "scenes.json"))
+    log(f"  subtitles: {len(sdoc['cues'])} cues, burn-in {sdoc['burnIn']}")
     compose_final(out_dir, timing, spec.get("title", ""), log=log)
     make_cartoon_thumbnail(out_dir / "thumbnail.png", spec.get("title", ""))
     stages["compose"] = round(time.monotonic() - t0, 2)
