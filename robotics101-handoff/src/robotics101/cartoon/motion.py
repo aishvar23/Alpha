@@ -150,6 +150,11 @@ class FrameState:
     scale: float
 
 
+# M03.6: listener nods/sway are scaled like the idle wiggle, so a small character (Nib) still reads as alive while
+# listening (on the M03.6 cut a perched Nib moved < 6 px for 1.07 s during Bolt's "STOP!" line in scene-005).
+SMALL_CHARACTER_GAIN = {"nib": 2.2}
+
+
 def _seed(cid: str) -> int:
     return int(hashlib.sha256(cid.encode()).hexdigest()[:12], 16)
 
@@ -267,8 +272,8 @@ class Performer:
         if not self.life:
             return o
         ph = (_seed(self.cid) % 1000) / 1000 * 2 * math.pi
+        k = SMALL_CHARACTER_GAIN.get(self.cid, 1.0)              # tiny Nib needs a bigger wiggle to read on screen
         if not airborne:
-            k = 2.2 if self.cid == "nib" else 1.0                 # tiny Nib needs a bigger wiggle to read on screen
             o["dy"] += 0.03 * k * (0.5 + 0.5 * math.sin(2 * math.pi * t / 1.7 + ph))
             o["lean"] += 0.035 * k * math.sin(2 * math.pi * t / 3.1 + 1.3 * ph)
         o["arm_l"] += 6 * math.sin(2 * math.pi * t / 2.3 + ph)
@@ -278,8 +283,9 @@ class Performer:
         for a, b, side in self.listens:
             if a <= t < b + 0.6:
                 if t < b:
-                    o["squash"] *= 1 - 0.035 * max(0.0, math.sin(2 * math.pi * 1.1 * (t - a)))   # nods
+                    o["squash"] *= 1 - 0.035 * k * max(0.0, math.sin(2 * math.pi * 1.1 * (t - a)))   # nods
                     o["lean"] += 0.06 * side * facing * min(1.0, (t - a) / 0.4)
+                    o["dy"] += 0.012 * k * math.sin(2 * math.pi * 0.7 * (t - a))                 # attentive sway
                 else:
                     o["squash"] *= 1 - 0.07 * bump((t - b) / 0.6)                            # reaction bounce
                 break

@@ -124,3 +124,56 @@ def test_qa_flags_uncovered_lines_and_unsafe_boxes(tmp_path):
     rep = QaReport(None, "preview", str(tmp_path))
     check_subtitles(rep, tmp_path, {"subtitles": {"burnIn": False}}, timing, None)
     assert [c.status for c in rep.checks] == ["warn"]
+
+
+@needs_ffmpeg
+def test_lifted_cues_get_a_dark_rounded_panel_that_keeps_contrast_and_clears_the_keepout(tmp_path):
+    """M03.6: a cue raised over the artwork (yellow text over Maya's yellow shirt on the first M03.6 cut) is drawn on
+    a dark backing panel; bottom cues stay panel-free; the panel never touches the keep-out it was raised above."""
+    ruler = {"id": "ruler", "box": [0.1, 0.82, 0.9, 0.92], "start": 0.0, "end": 30.0}
+    timing = _timing([("maya", "Robots sense, think and act!", 0.0, 2.0)], start=0.0)
+    doc = S.write_subtitles(tmp_path, timing, load_registry(), {}, {"scenes": [{"sceneId": "scene-001",
+                                                                                 "keepouts": [ruler]}]})
+    c = doc["cues"][0]
+    assert c["placement"] in S.PANELED and c["panel"]
+    px0, py0, px1, py1 = c["panel"]
+    assert px0 < c["box"][0] and px1 > c["box"][2] and py0 < c["box"][1] and py1 > c["box"][3]
+    assert py1 < 0.82 * S.H
+    ass = (tmp_path / "subtitles.ass").read_text()
+    assert ass.count("\\p1") == 1 and "Dialogue: 1," in ass
+    yellow = "0xFFD23F"                                          # Maya's caption colour as the background
+    out = tmp_path / "f.png"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"color=c={yellow}:s=1920x1080:d=1",
+                    "-vf", S.burn_filter(tmp_path), "-ss", "0.5", "-frames:v", "1", "-update", "1", str(out)],
+                   check=True)
+    from PIL import Image
+    img = np.asarray(Image.open(out).convert("RGB")).astype(int)
+    inner = img[py0 + 4:py1 - 4, px0 + 30:px1 - 30]
+    dark = (inner.sum(axis=2) < 240).mean()                    # yellow background sums to 528
+    assert dark > 0.4                                           # mostly dark panel behind the text
+    maya = np.array([0xFF, 0xD2, 0x3F])
+    assert (np.abs(inner - maya).sum(axis=2) < 90).sum() > 2000   # the yellow text is still there, on the panel
+    assert (np.abs(img[: py0 - 10] - maya).sum(axis=2) < 30).mean() > 0.99   # outside the panel: untouched
+    bottom = S.write_subtitles(tmp_path, timing, load_registry(), {})
+    assert bottom["cues"][0]["placement"] == "bottom" and bottom["cues"][0]["panel"] is None
+    assert "\\p1" not in (tmp_path / "subtitles.ass").read_text()
+
+
+def test_qa_requires_a_panel_on_lifted_cues(tmp_path):
+    from robotics101.cartoon.qa import check_subtitles
+    from robotics101.qa import QaReport
+    timing = _timing([("maya", "Look at the ruler, Bolt!", 1.0, 3.0)])
+    ruler = {"id": "ruler", "box": [0.1, 0.82, 0.9, 0.92], "start": 0.0, "end": 30.0}
+    S.write_subtitles(tmp_path, timing, load_registry(), {}, {"scenes": [{"sceneId": "scene-001", "keepouts": [ruler]}]})
+    (tmp_path / "compose.json").write_text(json.dumps({"subtitles": {"burnedIn": True, "cues": 1}}))
+    (tmp_path / "scenes.json").write_text(json.dumps({"scenes": [{"sceneId": "scene-001", "keepouts": [ruler]}]}))
+    rep = QaReport(None, "preview", str(tmp_path))
+    check_subtitles(rep, tmp_path, {}, timing, None)
+    assert {c.id: c.status for c in rep.checks}["subtitles.layout"] == "pass"
+    doc = json.loads((tmp_path / "subtitles.json").read_text())
+    doc["cues"][0]["panel"] = None
+    (tmp_path / "subtitles.json").write_text(json.dumps(doc))
+    rep = QaReport(None, "preview", str(tmp_path))
+    check_subtitles(rep, tmp_path, {}, timing, None)
+    lay = {c.id: c for c in rep.checks}["subtitles.layout"]
+    assert lay.status == "fail" and "without a backing panel: ['scene-001#0']" in lay.message

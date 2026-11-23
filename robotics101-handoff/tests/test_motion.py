@@ -140,3 +140,19 @@ def test_render_clip_frames_audio_and_parallel_determinism(tmp_path):
     import numpy as np
     d = np.abs(np.frombuffer(fa, np.uint8).astype(int) - np.frombuffer(fb, np.uint8).astype(int))
     assert d.mean() < 1.0            # chunked parallel render == single-process render (codec noise only)
+
+
+def test_small_listener_stays_visibly_alive():
+    """M03.6 regression: a perched (not hovering) Nib listening to a long line must still move ≥ 6 px well within
+    1 s; on the first M03.6 cut its nods were too small to read (static 1.07 s in scene-005)."""
+    from robotics101.cartoon.liveliness import key_points, static_runs
+    from robotics101.cartoon.scenes import HEIGHT, SCALES
+    for cid in ("nib", "maya", "bolt"):
+        h = HEIGHT[cid]
+        worst = 0.0
+        for st in range(40):                         # sweep the listen start against the idle/glance phases
+            p = Performer(cid, x=4.0, facing=-1, scale=SCALES[cid]).listen(st, st + 6.0, speaker_x=-2.0)
+            p.finalize(st + 8.0)
+            tracks = [key_points(p.state(n / 30), h) for n in range(st * 30 + 30, st * 30 + 180)]
+            worst = max(worst, static_runs(tracks)[0])
+        assert worst <= 0.7, (cid, worst)

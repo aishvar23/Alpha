@@ -209,7 +209,7 @@ SUB_SAMPLES = 16
 def check_subtitles(rep, out_dir: Path, spec: dict, timing: dict, video_s: float | None) -> None:
     """M03.5: burned-in kid subtitles cover all dialogue, stay in the safe area, ≤ 2 lines, legible size, avoid the
     registered teaching visuals, and are really in final.mp4 (speaker-coloured text inside each sampled cue box)."""
-    from robotics101.cartoon.subtitles import MAX_LINES, MIN_EM_PX, SAFE, settings
+    from robotics101.cartoon.subtitles import MAX_LINES, MIN_EM_PX, PANELED, SAFE, settings
     st = settings(spec)
     doc = _load(out_dir / "subtitles.json")
     comp = _load(out_dir / "compose.json") or {}
@@ -254,14 +254,17 @@ def check_subtitles(rep, out_dir: Path, spec: dict, timing: dict, video_s: float
         t0 = starts.get(c["sceneId"], 0.0)
         for k in kos.get(c["sceneId"], []):
             kb = [k["box"][0] * W, k["box"][1] * H, k["box"][2] * W, k["box"][3] * H]
-            if (k["start"] < c["end"] - t0 and c["start"] - t0 < k["end"] and c["box"][0] < kb[2]
-                    and kb[0] < c["box"][2] and c["box"][1] < kb[3] and kb[1] < c["box"][3]):
-                clash.append(f"{c['sceneId']}#{c['lineIndex']}~{k['id']}")
+            for what, b in (("", c["box"]), ("panel", c.get("panel"))):
+                if b and (k["start"] < c["end"] - t0 and c["start"] - t0 < k["end"] and b[0] < kb[2]
+                          and kb[0] < b[2] and b[1] < kb[3] and kb[1] < b[3]):
+                    clash.append(f"{c['sceneId']}#{c['lineIndex']}{'(' + what + ')' if what else ''}~{k['id']}")
+    # M03.6: cues lifted over the artwork (raised/top) must carry a backing panel for contrast
+    bare = [f"{c['sceneId']}#{c['lineIndex']}" for c in cues if c["placement"] in PANELED and not c.get("panel")]
     em = doc.get("emPx", 0) * (1080 / H)
-    rep.hard("subtitles.layout", not out_safe and not too_long and not clash and em >= MIN_EM_PX,
+    rep.hard("subtitles.layout", not out_safe and not too_long and not clash and not bare and em >= MIN_EM_PX,
              f"font {doc.get('font')} em {doc.get('emPx')} px @ {W}x{H} (≥ {MIN_EM_PX}); outside safe area: "
              f"{out_safe or 'none'}; > {MAX_LINES} lines: {too_long or 'none'}; covering teaching visuals: "
-             f"{clash or 'none'}; placements "
+             f"{clash or 'none'}; raised/top cues without a backing panel: {bare or 'none'}; placements "
              f"{ {p: sum(1 for c in cues if c['placement'] == p) for p in ('bottom', 'raised', 'top')} }")
     if not video_s:
         return

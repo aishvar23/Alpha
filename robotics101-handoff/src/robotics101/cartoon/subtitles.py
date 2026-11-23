@@ -29,6 +29,11 @@ MAX_LINES = 2
 MAX_TEXT_W = round(W * 0.80)                 # wrap width (inside title-safe)
 OUTLINE_PX, SHADOW_PX = 6, 3
 BOTTOM_MARGIN = 64                           # px from the bottom edge to the text box (≥ 5 % = 54)
+# M03.6: a cue lifted off the plain floor (raised/top) sits over characters and props, so it gets a rounded dark
+# backing panel (≈ 81 % opaque) to keep the speaker-coloured text high-contrast (yellow text over Maya's shirt).
+PANEL_COLOR, PANEL_ALPHA = "#1E1633", 0x30   # ASS alpha: 0x00 opaque … 0xFF transparent
+PANEL_PAD_X, PANEL_PAD_Y, PANEL_RADIUS = 26, 8, 22
+PANELED = ("raised", "top")
 DEFAULTS = {"burnIn": True, "fontSizePx": DEFAULT_EM_PX}
 
 
@@ -136,10 +141,18 @@ class Cue:
     sceneId: str
     lineIndex: int
 
+    @property
+    def panel(self) -> list[int] | None:
+        """px box of the backing panel (raised/top cues only), else None."""
+        if self.placement not in PANELED:
+            return None
+        x0, y0, x1, y1 = self.box
+        return [x0 - PANEL_PAD_X, y0 - PANEL_PAD_Y, x1 + PANEL_PAD_X, y1 + PANEL_PAD_Y]
+
     def to_dict(self) -> dict:
         return {"start": round(self.start, 3), "end": round(self.end, 3), "speaker": self.speaker,
                 "color": self.color, "lines": self.lines, "box": self.box, "placement": self.placement,
-                "sceneId": self.sceneId, "lineIndex": self.lineIndex}
+                "panel": self.panel, "sceneId": self.sceneId, "lineIndex": self.lineIndex}
 
 
 def block_size(lines: list[str], em: int) -> tuple[int, int]:
@@ -218,6 +231,14 @@ def _ts(t: float) -> str:
     return f"{cs // 360000}:{cs // 6000 % 60:02d}:{cs // 100 % 60:02d}.{cs % 100:02d}"
 
 
+def rounded_rect_path(w: int, h: int, r: int) -> str:
+    """ASS vector drawing (\\p1) of a w×h rounded rectangle with corner radius r, origin top-left."""
+    r = max(0, min(r, w // 2, h // 2))
+    k = round(r * 0.448)                     # cubic control offset for a quarter circle (1 - 0.552)
+    return (f"m {r} 0 l {w - r} 0 b {w - k} 0 {w} {k} {w} {r} l {w} {h - r} b {w} {h - k} {w - k} {h} {w - r} {h} "
+            f"l {r} {h} b {k} {h} 0 {h - k} 0 {h - r} l 0 {r} b 0 {k} {k} 0 {r} 0")
+
+
 def _esc(s: str) -> str:
     return s.replace("\\", "\\\\").replace("{", "(").replace("}", ")")
 
@@ -238,7 +259,12 @@ def to_ass(cues: list[Cue], em: int = DEFAULT_EM_PX) -> str:
         x = (c.box[0] + c.box[2]) // 2
         y = c.box[1] + OUTLINE_PX
         txt = "\\N".join(_esc(x_) for x_ in c.lines)
-        ev.append(f"Dialogue: 0,{_ts(c.start)},{_ts(c.end)},Kid,{c.speaker},0,0,0,,"
+        if c.panel:
+            px0, py0, px1, py1 = c.panel
+            ev.append(f"Dialogue: 0,{_ts(c.start)},{_ts(c.end)},Kid,{c.speaker},0,0,0,,"
+                      f"{{\\an7\\pos({px0},{py0})\\bord0\\shad0\\1c{_ass_c(PANEL_COLOR)}"
+                      f"\\1a&H{PANEL_ALPHA:02X}&\\p1}}{rounded_rect_path(px1 - px0, py1 - py0, PANEL_RADIUS)}{{\\p0}}")
+        ev.append(f"Dialogue: 1,{_ts(c.start)},{_ts(c.end)},Kid,{c.speaker},0,0,0,,"
                   f"{{\\an8\\pos({x},{y})\\c{_ass_c(c.color)}}}{txt}")
     return "\n".join(head + ev) + "\n"
 
