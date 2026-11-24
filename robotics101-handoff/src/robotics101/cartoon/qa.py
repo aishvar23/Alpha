@@ -245,16 +245,36 @@ def check_shots(rep, spec: dict, timing: dict, by: dict) -> None:
              f"problems: {bad or 'none'}", rows)
 
 
+def check_caption_band(rep, by: dict) -> None:
+    """M05.2: the bottom caption band is reserved for subtitles — no character, teaching visual, readout or prop
+    geometry (measured at render time on sampled frames) reaches into it beyond a few anti-aliased pixels."""
+    from robotics101.cartoon.layout import BAND_OVERLAP_TOL, CAPTION_BAND
+    measured = {sid: r["captionBand"] for sid, r in by.items() if "captionBand" in r}
+    if not measured:
+        rep.soft("layout.caption_band", False, "no caption-band measurements in scenes.json (pre-M05.2 render)")
+        return
+    bad = [f"{sid}: {o['what']} {o['maxIntrusion'] * 1080:.0f}px@1080 from {o['first']}s ({o['n']} samples)"
+           for sid, r in measured.items() for o in r.get("offenders", []) if o["maxIntrusion"] > BAND_OVERLAP_TOL]
+    missing = sorted(set(by) - set(measured))
+    worst = max((r["maxIntrusion"] for r in measured.values()), default=0.0)
+    rep.hard("layout.caption_band", not bad and not missing,
+             f"bottom {CAPTION_BAND:.0%} reserved for captions; {sum(r['samples'] for r in measured.values())} "
+             f"sampled frames, worst content intrusion {worst * 1080:.1f}px@1080 (tolerance "
+             f"{BAND_OVERLAP_TOL * 1080:.0f}px); offenders: {bad or 'none'}; unmeasured scenes: {missing or 'none'}",
+             round(worst, 4))
+
+
 SUB_COVER_TOL = 0.05
 SUB_COLOR_DIST = 70.0         # RGB distance to the speaker colour that counts as "subtitle text" pixels
 SUB_MIN_TEXT_FRAC = 0.04      # share of the cue box covered by speaker-coloured text in the final video
 SUB_SAMPLES = 16
+SUB_ONE_LINE_MIN = 0.7        # M05.2: most cues should be a single line
 
 
 def check_subtitles(rep, out_dir: Path, spec: dict, timing: dict, video_s: float | None) -> None:
     """M03.5: burned-in kid subtitles cover all dialogue, stay in the safe area, ≤ 2 lines, legible size, avoid the
     registered teaching visuals, and are really in final.mp4 (speaker-coloured text inside each sampled cue box)."""
-    from robotics101.cartoon.subtitles import MAX_LINES, MIN_EM_PX, PANELED, SAFE, settings
+    from robotics101.cartoon.subtitles import MAX_LINES, MIN_EM_PX, SAFE, settings
     st = settings(spec)
     doc = _load(out_dir / "subtitles.json")
     comp = _load(out_dir / "compose.json") or {}
@@ -303,14 +323,24 @@ def check_subtitles(rep, out_dir: Path, spec: dict, timing: dict, video_s: float
                 if b and (k["start"] < c["end"] - t0 and c["start"] - t0 < k["end"] and b[0] < kb[2]
                           and kb[0] < b[2] and b[1] < kb[3] and kb[1] < b[3]):
                     clash.append(f"{c['sceneId']}#{c['lineIndex']}{'(' + what + ')' if what else ''}~{k['id']}")
-    # M03.6: cues lifted over the artwork (raised/top) must carry a backing panel for contrast
-    bare = [f"{c['sceneId']}#{c['lineIndex']}" for c in cues if c["placement"] in PANELED and not c.get("panel")]
+    # M05.2: every cue sits on its compact caption box inside the reserved caption band
+    bare = [f"{c['sceneId']}#{c['lineIndex']}" for c in cues if not c.get("panel")]
+    band = doc.get("captionBand")
+    off_band = [f"{c['sceneId']}#{c['lineIndex']}" for c in cues if band and (
+        c.get("placement") != "band" or (c.get("panel") or c["box"])[1] < band[1] or c["box"][3] > band[3])]
+    if not band:
+        off_band = ["subtitles.json has no captionBand (pre-M05.2 layout)"]
     em = doc.get("emPx", 0) * (1080 / H)
-    rep.hard("subtitles.layout", not out_safe and not too_long and not clash and not bare and em >= MIN_EM_PX,
+    one = sum(1 for c in cues if len(c["lines"]) == 1)
+    rep.hard("subtitles.layout", not out_safe and not too_long and not clash and not bare and not off_band
+             and em >= MIN_EM_PX,
              f"font {doc.get('font')} em {doc.get('emPx')} px @ {W}x{H} (≥ {MIN_EM_PX}); outside safe area: "
              f"{out_safe or 'none'}; > {MAX_LINES} lines: {too_long or 'none'}; covering teaching visuals: "
-             f"{clash or 'none'}; raised/top cues without a backing panel: {bare or 'none'}; placements "
-             f"{ {p: sum(1 for c in cues if c['placement'] == p) for p in ('bottom', 'raised', 'top')} }")
+             f"{clash or 'none'}; without caption box: {bare or 'none'}; outside the caption band "
+             f"{band}: {off_band or 'none'}; one-line cues {one}/{len(cues)}")
+    rep.soft("subtitles.compact", cues and one / len(cues) >= SUB_ONE_LINE_MIN,
+             f"{one}/{len(cues)} cues on one line (≥ {SUB_ONE_LINE_MIN:.0%} preferred; max {MAX_LINES})",
+             round(one / max(1, len(cues)), 3))
     if not video_s:
         return
     from robotics101.cartoon.vision import frame_rgb_at
@@ -432,6 +462,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     check_intro(rep, spec, by)
     check_liveliness(rep, by)
     check_shots(rep, spec, timing, by)
+    check_caption_band(rep, by)
     if video_s:
         check_transitions(rep, out_dir, spec, timing, float(sj.get("transitionHalfSeconds", 0.4)))
         check_concepts(rep, out_dir, spec, by, timing)

@@ -43,6 +43,7 @@ def backdrop(layout: str, t: float) -> VGroup:
     dots = VGroup(*[Circle(0.09, fill_color="#FFFFFF", fill_opacity=0.7, stroke_width=0)
                     .move_to(P(-7.4 + 1.1 * i + 0.25 * math.sin(0.6 * t + j), -4.3 + 1.1 * j + (0.18 * t) % 1.1))
                     for i in range(14) for j in range(9) if (i + j) % 2 == 0])
+    dots.decor = True                                  # decoration: may run under the caption band
     return VGroup(bg, dots)
 
 

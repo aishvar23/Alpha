@@ -223,9 +223,13 @@ def ping_waves(origin: np.ndarray, u: float, reach: float, back: bool = False, c
     return g
 
 
-def ruler(x0: float, meters: float, y: float = FLOOR_Y - 0.85, step: float = 0.5, danger: float | None = None,
+RULER_Y = GROUND + 0.25          # M05.2: on the floor just behind the characters' feet, clear of the caption band
+
+
+def ruler(x0: float, meters: float, y: float = RULER_Y, step: float = 0.5, danger: float | None = None,
           highlight: float | None = None) -> VGroup:
-    """Floor tape measure starting at ``x0`` (0 m) and running right, ticks every ``step`` m."""
+    """Floor tape measure starting at ``x0`` (0 m) and running right, ticks every ``step`` m; labels sit above the
+    tape (M05.2: nothing teaching-relevant below the ground line, which is the top of the caption band)."""
     length = meters * METER
     tape = _o(Rectangle(width=length, height=0.32, fill_color="#FFD166", fill_opacity=1), 3) \
         .move_to(P(x0 + length / 2, y))
@@ -240,11 +244,11 @@ def ruler(x0: float, meters: float, y: float = FLOOR_Y - 0.85, step: float = 0.5
         major = abs(m - round(m)) < 1e-6
         g.add(Line(P(x, y + 0.16), P(x, y + (-0.05 if major else 0.05)), stroke_width=3, color=ink()))
         if major or step >= 0.5:
-            g.add(txt(f"{m:g} m", 16).move_to(P(x, y - 0.3)))
+            g.add(txt(f"{m:g} m", 16).move_to(P(x, y + 0.31)))
     if highlight is not None:
         x = x0 + highlight * METER
         g.add(Triangle(fill_color=ALERT, fill_opacity=1, stroke_color=ink(), stroke_width=3).scale(0.13)
-              .rotate(PI).move_to(P(x, y + 0.32)))
+              .rotate(PI).move_to(P(x, y + 0.58)))
     return g
 
 
@@ -384,6 +388,7 @@ def title_card(u: float, subtitle: str = "with Bolt, Maya & Nib") -> VGroup:
         return VGroup()
     burst = Star(16, outer_radius=4.2, inner_radius=3.2, fill_color="#FFD166", fill_opacity=1, stroke_color=ink(),
                  stroke_width=6).rotate(u * 0.6)
+    burst.decor = True                                  # backdrop shape (may run under the caption band)
     title = txt("ROBOTICS 101", 120, color="#FF6B9A", font="Luckiest Guy", weight="NORMAL", stroke=6)
     sub = txt(subtitle, 40).next_to(title, DOWN, buff=0.2)
     g = VGroup(burst, title, sub)
@@ -454,7 +459,9 @@ def spotlight(x: float, u: float, t: float = 0.0, color: str = "#FFF3B0", cy: fl
     center = P(x, GROUND + cy)
     pool = Ellipse(width=3.6, height=0.6, fill_color="#FFFFFF", fill_opacity=0.45, stroke_width=0) \
         .move_to(P(x, GROUND + 0.02))
-    return VGroup(rays.shift(center), pool).scale(k, about_point=P(x, GROUND))
+    g = VGroup(rays.shift(center), pool).scale(k, about_point=P(x, GROUND))
+    g.decor = True                                      # lighting: may run under the caption band
+    return g
 
 
 def nameplate(name: str, tagline: str, color: str, u: float, at: np.ndarray, t: float = 0.0) -> VGroup:
@@ -618,8 +625,14 @@ def concept_card(title: str, subtitle: str, icon_kind: str, u: float, t: float) 
         .set_stroke(ink(), 8)
     icon_g = VGroup(panel, icon_.move_to(panel))
     col = VGroup(tag_, head, sub).arrange(DOWN, buff=0.22)
-    card_g = VGroup(icon_g, col).arrange(DOWN, buff=0.35).move_to(P(0, 0.1))
+    card_g = VGroup(icon_g, col).arrange(DOWN, buff=0.3)
+    if card_g.height > CARD_MAX_H:                      # M05.2: stay above the caption band even at the overshoot
+        card_g.scale(CARD_MAX_H / card_g.height)
+    card_g.move_to(P(0, CARD_CY))
     k = pop(u / 0.16) * (1 + 0.03 * math.sin(2 * math.pi * 1.3 * t))
     if u > 0.88:
         k *= max(0.001, 1 - (u - 0.88) / 0.12)
-    return VGroup(bg, card_g.scale(k, about_point=P(0, 0.1)))
+    return VGroup(bg, card_g.scale(k, about_point=P(0, CARD_CY)))
+
+
+CARD_CY, CARD_MAX_H = 0.75, 5.4

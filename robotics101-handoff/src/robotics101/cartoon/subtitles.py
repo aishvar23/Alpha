@@ -1,12 +1,15 @@
-"""M03.5 burned-in kid subtitles (default on): big rounded Baloo 2 Bold, speaker colour from the character registry,
-thick dark outline + soft shadow, inside the 5 % action-safe area, at most 2 lines per cue.
+"""Burned-in kid subtitles (M03.5, re-laid out in M05.2): rounded Baloo 2 Bold in the speaker colour from the
+character registry, on a compact, softly transparent dark caption box, always inside the reserved **caption band**
+at the bottom of the frame (``layout.CAPTION_BAND``; the layout engine keeps characters, teaching visuals and
+readouts out of it), inside the 5 % action-safe area.
 
-Cues come from the dialogue lines in timing.json (one cue per line, or sentence/word chunks of ≤ 2 lines when a line
-is long, timed by character share). Wrapping is measured with the bundled font (PIL), using libass's size convention
-(ASS ``Fontsize`` = ascender + descender, i.e. ``ASS_PER_EM`` × the em size). Each cue is placed at the bottom unless
-a registered on-screen keep-out (rulers, readouts, chalkboard …) overlaps it, in which case it is raised just above
-the keep-out, or moved to the top. The result is written as ``subtitles.ass`` (burned by ffmpeg/libass at compose)
-plus ``subtitles.json`` (cue boxes for QA). captions.srt is still exported unchanged."""
+Cues come from the dialogue lines in timing.json. One line per cue is preferred: a long line is split into
+one-line chunks (sentence, clause, then word boundaries, timed by character share) as long as every chunk stays on
+screen ≥ ``MIN_CUE_S``; otherwise chunks of ≤ 2 lines are used. Wrapping is measured with the bundled font (PIL).
+Each text line is its own ASS event placed at an explicit position (tight line pitch), and the cue box recorded for
+QA is the real ink box (cap top .. descender + outline), so the band holds two lines. The result is written as
+``subtitles.ass`` (burned by ffmpeg/libass at compose) plus ``subtitles.json`` (cue boxes for QA). captions.srt is
+still exported unchanged."""
 
 from __future__ import annotations
 
@@ -23,17 +26,20 @@ FONT_NAME = "Baloo 2"
 FONT_LICENSE = FONT_DIR / "Baloo2-OFL.txt"
 W, H = 1920, 1080
 SAFE = 0.05                                  # action-safe margin (fraction of each dimension)
-DEFAULT_EM_PX = 58                           # em size at 1080p (≈ 40 px capital height)
+DEFAULT_EM_PX = 52                           # em size at 1080p (≈ 36 px capital height; M03.5 used 58)
 MIN_EM_PX = 48                               # legibility floor (QA)
 MAX_LINES = 2
-MAX_TEXT_W = round(W * 0.80)                 # wrap width (inside title-safe)
-OUTLINE_PX, SHADOW_PX = 6, 3
-BOTTOM_MARGIN = 64                           # px from the bottom edge to the text box (≥ 5 % = 54)
-# M03.6: a cue lifted off the plain floor (raised/top) sits over characters and props, so it gets a rounded dark
-# backing panel (≈ 81 % opaque) to keep the speaker-coloured text high-contrast (yellow text over Maya's shirt).
-PANEL_COLOR, PANEL_ALPHA = "#1E1633", 0x30   # ASS alpha: 0x00 opaque … 0xFF transparent
-PANEL_PAD_X, PANEL_PAD_Y, PANEL_RADIUS = 26, 8, 22
-PANELED = ("raised", "top")
+PREFERRED_LINES = 1
+MIN_CUE_S = 1.2                              # a one-line chunk must stay on screen at least this long
+MAX_TEXT_W = round(W * 0.78)                 # wrap width (inside title-safe)
+OUTLINE_PX, SHADOW_PX = 3, 0                 # thin outline: the caption box carries the contrast
+LINE_PITCH = 1.2                             # baseline-to-baseline distance in em
+BOTTOM_MARGIN = 62                           # px from the bottom edge to the lowest ink (≥ 5 % = 54)
+# M05.2: every cue sits on a compact rounded caption box, dark but see-through (≈ 58 % opaque) — lower contrast
+# than the M03.6 panel (81 %) so it reads as part of the picture, yet the speaker colour stays legible on any art.
+PANEL_COLOR, PANEL_ALPHA = "#1E1633", 0x6A   # ASS alpha: 0x00 opaque … 0xFF transparent
+PANEL_PAD_X, PANEL_PAD_Y, PANEL_RADIUS = 22, 9, 18
+PLACEMENT = "band"
 DEFAULTS = {"burnIn": True, "fontSizePx": DEFAULT_EM_PX}
 
 
@@ -94,10 +100,11 @@ def _greedy(text: str, em: int, max_w: int) -> list[str]:
     return lines + ([cur] if cur else [])
 
 
-def chunks(text: str, em: int) -> list[str]:
-    """Split a long line into pieces that each wrap to ≤ MAX_LINES (sentence, then clause, then word boundaries)."""
+def chunks(text: str, em: int, max_lines: int = MAX_LINES) -> list[str]:
+    """Split a long line into pieces that each wrap to ≤ ``max_lines`` (sentence, then clause, then word
+    boundaries)."""
     text = " ".join(text.split())
-    if len(wrap(text, em)) <= MAX_LINES:
+    if len(wrap(text, em)) <= max_lines:
         return [text]
     for pat in (r"(?<=[.!?])\s+", r"(?<=[,;:])\s+"):
         parts = [p for p in re.split(pat, text) if p]
@@ -105,28 +112,41 @@ def chunks(text: str, em: int) -> list[str]:
             out, cur = [], ""
             for p in parts:
                 cand = f"{cur} {p}".strip()
-                if cur and len(wrap(cand, em)) > MAX_LINES:
+                if cur and len(wrap(cand, em)) > max_lines:
                     out.append(cur)
                     cur = p
                 else:
                     cur = cand
             out.append(cur)
-            if all(len(wrap(x, em)) <= MAX_LINES for x in out):
+            if all(len(wrap(x, em)) <= max_lines for x in out):
                 return out
-            return [y for x in out for y in chunks(x, em)] if len(out) > 1 else _word_chunks(text, em)
-    return _word_chunks(text, em)
+            return [y for x in out for y in chunks(x, em, max_lines)] if len(out) > 1 else \
+                _word_chunks(text, em, max_lines)
+    return _word_chunks(text, em, max_lines)
 
 
-def _word_chunks(text: str, em: int) -> list[str]:
+def _word_chunks(text: str, em: int, max_lines: int = MAX_LINES) -> list[str]:
     out, cur = [], ""
     for w in text.split():
         cand = f"{cur} {w}".strip()
-        if cur and len(wrap(cand, em)) > MAX_LINES:
+        if cur and len(wrap(cand, em)) > max_lines:
             out.append(cur)
             cur = w
         else:
             cur = cand
     return out + ([cur] if cur else [])
+
+
+def cue_chunks(text: str, em: int, seconds: float) -> list[str]:
+    """M05.2: prefer one-line cues; fall back to ≤ 2-line chunks when a one-line split would flash (any chunk
+    shorter than ``MIN_CUE_S`` at the line's reading speed)."""
+    text = " ".join(text.split())
+    one = chunks(text, em, PREFERRED_LINES)
+    total = sum(len(p) for p in one) or 1
+    if all(len(wrap(p, em)) <= PREFERRED_LINES and seconds * len(p) / total >= MIN_CUE_S for p in one) \
+            or len(one) == 1:
+        return one
+    return chunks(text, em, MAX_LINES)
 
 
 @dataclass
@@ -137,15 +157,13 @@ class Cue:
     color: str
     lines: list[str]
     box: list[int]           # px [x0, y0, x1, y1] of the text block incl. outline
-    placement: str           # bottom | raised | top
+    placement: str           # band (M05.2; M03.5 had bottom | raised | top)
     sceneId: str
     lineIndex: int
 
     @property
     def panel(self) -> list[int] | None:
-        """px box of the backing panel (raised/top cues only), else None."""
-        if self.placement not in PANELED:
-            return None
+        """px box of the compact caption box behind the text."""
         x0, y0, x1, y1 = self.box
         return [x0 - PANEL_PAD_X, y0 - PANEL_PAD_Y, x1 + PANEL_PAD_X, y1 + PANEL_PAD_Y]
 
@@ -155,10 +173,24 @@ class Cue:
                 "panel": self.panel, "sceneId": self.sceneId, "lineIndex": self.lineIndex}
 
 
+@lru_cache(maxsize=8)
+def ink_extent(em: int) -> tuple[int, int]:
+    """(top, bottom) of the ink relative to the top of a libass line box (ascender top): cap/ascender top to the
+    descender bottom, measured on the bundled font."""
+    b = _font(em).getbbox("ÅHdlgjpqy'!?")
+    top = _font(em).getbbox("Hdl")[1]
+    return int(top), int(b[3])
+
+
+def pitch_px(em: int) -> int:
+    return round(em * LINE_PITCH)
+
+
 def block_size(lines: list[str], em: int) -> tuple[int, int]:
-    line_h = em * ass_per_em()
+    """Ink box size (incl. outline) of a cue's lines."""
+    top, bot = ink_extent(em)
     w = max(text_width(x, em) for x in lines) + 2 * OUTLINE_PX + SHADOW_PX
-    h = line_h * len(lines) + 2 * OUTLINE_PX + SHADOW_PX
+    h = (len(lines) - 1) * pitch_px(em) + (bot - top) + 2 * OUTLINE_PX + SHADOW_PX
     return round(w), round(h)
 
 
@@ -166,23 +198,25 @@ def _overlaps(a, b) -> bool:
     return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
 
-def place(lines: list[str], em: int, keepouts: list[list[int]]) -> tuple[list[int], str]:
-    """Bottom (default) → raised above the keep-outs → top; all inside the action-safe area."""
+def band_top_px() -> int:
+    from robotics101.cartoon.layout import CAPTION_BAND
+    return round(H * (1 - CAPTION_BAND))
+
+
+def place(lines: list[str], em: int, keepouts: list[list[int]] | None = None) -> tuple[list[int], str]:
+    """M05.2: always in the caption band, bottom-anchored (lowest ink ``BOTTOM_MARGIN`` above the frame edge), centred.
+    Keep-outs no longer move captions: the layout engine keeps content out of the band and QA enforces it."""
     bw, bh = block_size(lines, em)
     x0 = (W - bw) // 2
-    lo, hi = round(H * SAFE), round(H * (1 - SAFE))
-    bottom = [x0, H - BOTTOM_MARGIN - bh, x0 + bw, H - BOTTOM_MARGIN]
-    hits = [k for k in keepouts if _overlaps(bottom, k)]
-    if not hits:
-        return bottom, "bottom"
-    y1 = min(k[1] for k in hits) - 12
-    raised = [x0, y1 - bh, x0 + bw, y1]
-    if raised[1] >= H * 0.45 and not any(_overlaps(raised, k) for k in keepouts):
-        return raised, "raised"
-    top = [x0, lo + 10, x0 + bw, lo + 10 + bh]
-    if not any(_overlaps(top, k) for k in keepouts):
-        return top, "top"
-    return (raised, "raised") if raised[1] >= lo else (bottom, "bottom")
+    y1 = H - BOTTOM_MARGIN
+    return [x0, y1 - bh, x0 + bw, y1], PLACEMENT
+
+
+def line_tops(c: "Cue", em: int) -> list[int]:
+    """libass ``\\an8`` y position (line-box top) of each text line of a placed cue."""
+    top, _ = ink_extent(em)
+    y = c.box[1] + OUTLINE_PX - top
+    return [y + i * pitch_px(em) for i in range(len(c.lines))]
 
 
 def _px_box(box: list[float]) -> list[int]:
@@ -200,7 +234,7 @@ def build_cues(timing: dict, registry, keepouts: dict[str, list[dict]] | None = 
         for b in s["beats"]:
             if b["type"] != "line":
                 continue
-            parts = chunks(b["text"], em)
+            parts = cue_chunks(b["text"], em, float(b["end_s"]) - float(b["start_s"]))
             total = sum(len(p) for p in parts)
             a, z, acc, prev = t0 + b["start_s"], t0 + b["end_s"], 0, t0 + b["start_s"]
             for p in parts:
@@ -257,15 +291,14 @@ def to_ass(cues: list[Cue], em: int = DEFAULT_EM_PX) -> str:
     ev = []
     for c in cues:
         x = (c.box[0] + c.box[2]) // 2
-        y = c.box[1] + OUTLINE_PX
-        txt = "\\N".join(_esc(x_) for x_ in c.lines)
         if c.panel:
             px0, py0, px1, py1 = c.panel
             ev.append(f"Dialogue: 0,{_ts(c.start)},{_ts(c.end)},Kid,{c.speaker},0,0,0,,"
                       f"{{\\an7\\pos({px0},{py0})\\bord0\\shad0\\1c{_ass_c(PANEL_COLOR)}"
                       f"\\1a&H{PANEL_ALPHA:02X}&\\p1}}{rounded_rect_path(px1 - px0, py1 - py0, PANEL_RADIUS)}{{\\p0}}")
-        ev.append(f"Dialogue: 1,{_ts(c.start)},{_ts(c.end)},Kid,{c.speaker},0,0,0,,"
-                  f"{{\\an8\\pos({x},{y})\\c{_ass_c(c.color)}}}{txt}")
+        for line, y in zip(c.lines, line_tops(c, em)):          # one event per line: tight, exact line pitch
+            ev.append(f"Dialogue: 1,{_ts(c.start)},{_ts(c.end)},Kid,{c.speaker},0,0,0,,"
+                      f"{{\\an8\\pos({x},{y})\\c{_ass_c(c.color)}}}{_esc(line)}")
     return "\n".join(head + ev) + "\n"
 
 
@@ -282,6 +315,7 @@ def write_subtitles(out_dir: Path, timing: dict, registry, spec: dict, scenes_re
     doc = {"schemaVersion": "robotics101.subtitles/1", "burnIn": bool(st["burnIn"]), "font": FONT_NAME,
            "fontFile": str(FONT_FILE.relative_to(ROOT)), "emPx": em, "assFontSize": round(em * ass_per_em()),
            "outlinePx": OUTLINE_PX, "frame": [W, H], "safeMargin": SAFE, "maxLines": MAX_LINES,
+           "preferredLines": PREFERRED_LINES, "captionBand": [0, band_top_px(), W, H],
            "cues": [c.to_dict() for c in cues]}
     (out_dir / "subtitles.json").write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     return doc

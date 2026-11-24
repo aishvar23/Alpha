@@ -1,5 +1,6 @@
-"""M03.5: burned-in kid subtitles — bundled OFL font, ≤ 2 lines, safe area, speaker colours, keep-out aware placement,
-coverage of every dialogue line, the ffmpeg/libass burn and the QA checks."""
+"""M03.5 / M05.2: burned-in kid subtitles — bundled OFL font, compact caption box in the reserved bottom caption band,
+1 line preferred (≤ 2), safe area, speaker colours, coverage of every dialogue line, the ffmpeg/libass burn and the
+QA checks."""
 
 import json
 import shutil
@@ -59,18 +60,28 @@ def test_speaker_colours_come_from_the_registry_and_boxes_sit_in_the_safe_area()
     for c in cues:
         x0, y0, x1, y1 = c.box
         assert x0 >= S.W * S.SAFE and x1 <= S.W * (1 - S.SAFE) and y0 >= S.H * S.SAFE and y1 <= S.H * (1 - S.SAFE)
-        assert c.placement == "bottom" and abs((x0 + x1) / 2 - S.W / 2) <= 1
+        assert c.placement == "band" and abs((x0 + x1) / 2 - S.W / 2) <= 1
+        assert c.panel[1] >= S.band_top_px() and c.box[3] <= S.H * (1 - S.SAFE)          # inside the caption band
 
 
-def test_cues_move_off_registered_teaching_visuals():
+def test_cues_stay_in_the_band_even_with_keepouts():
+    """M05.2: captions no longer jump above teaching visuals (the old raised/top placement); the layout engine keeps
+    content out of the band instead and QA flags anything that intrudes."""
     ruler = {"box": [0.1, 0.82, 0.9, 0.92], "start": 0.0, "end": 30.0}
     cues = S.build_cues(_timing([("maya", "Look at the ruler, Bolt!", 1.0, 3.0)]), load_registry(),
                         {"scene-001": [ruler]})
-    c = cues[0]
-    assert c.placement in ("raised", "top") and c.box[3] <= 0.82 * S.H
-    later = S.build_cues(_timing([("maya", "Look at the ruler, Bolt!", 1.0, 3.0)]), load_registry(),
-                         {"scene-001": [{**ruler, "start": 5.0}]})
-    assert later[0].placement == "bottom"                  # keep-out not on screen during the cue
+    assert cues[0].placement == "band" and cues[0].panel[1] >= S.band_top_px()
+
+
+def test_one_line_cues_are_preferred_two_lines_only_when_one_line_would_flash():
+    two_sent = "The sound bounces off things and comes back. The faster the echo, the closer it is."
+    slow = S.build_cues(_timing([("maya", two_sent, 1.0, 7.0)]), load_registry())
+    assert len(slow) == 2 and all(len(c.lines) == 1 for c in slow)
+    assert all(c.end - c.start >= S.MIN_CUE_S for c in slow)
+    fast = S.build_cues(_timing([("maya", LONG, 1.0, 4.0)]), load_registry())        # one-line chunks would flash
+    assert any(len(c.lines) == 2 for c in fast) and all(len(c.lines) <= S.MAX_LINES for c in fast)
+    two = S.place(["a line", "another line"], S.DEFAULT_EM_PX)[0]
+    assert two[1] - S.PANEL_PAD_Y >= S.band_top_px()                                   # two lines fit the band
 
 
 def test_ass_document_uses_the_font_colours_and_positions(tmp_path):
@@ -98,6 +109,7 @@ def test_libass_burns_the_text_inside_the_predicted_box(tmp_path):
     x0, y0, x1, y1 = doc["cues"][0]["box"]
     assert xs.min() >= x0 - 4 and xs.max() <= x1 + 4 and ys.min() >= y0 - 4 and ys.max() <= y1 + 4
     assert (xs.max() - xs.min()) > 0.6 * (x1 - x0)                    # the box is tight, not a loose guess
+    assert (ys.max() - ys.min()) > 0.6 * (y1 - y0)
     maya = np.array([0xFF, 0xD2, 0x3F])
     assert (np.abs(img - maya).sum(axis=2) < 90).sum() > 2000          # speaker-coloured text pixels
 
@@ -111,7 +123,7 @@ def test_qa_flags_uncovered_lines_and_unsafe_boxes(tmp_path):
     rep = QaReport(None, "preview", str(tmp_path))
     check_subtitles(rep, tmp_path, {}, timing, None)
     assert {c.id: c.status for c in rep.checks} == {"subtitles.burned": "pass", "subtitles.coverage": "pass",
-                                                    "subtitles.layout": "pass"}
+                                                    "subtitles.layout": "pass", "subtitles.compact": "pass"}
     doc = json.loads((tmp_path / "subtitles.json").read_text())
     doc["cues"] = doc["cues"][:1]
     doc["cues"][0]["box"][3] = 1075
@@ -127,18 +139,16 @@ def test_qa_flags_uncovered_lines_and_unsafe_boxes(tmp_path):
 
 
 @needs_ffmpeg
-def test_lifted_cues_get_a_dark_rounded_panel_that_keeps_contrast_and_clears_the_keepout(tmp_path):
-    """M03.6: a cue raised over the artwork (yellow text over Maya's yellow shirt on the first M03.6 cut) is drawn on
-    a dark backing panel; bottom cues stay panel-free; the panel never touches the keep-out it was raised above."""
-    ruler = {"id": "ruler", "box": [0.1, 0.82, 0.9, 0.92], "start": 0.0, "end": 30.0}
+def test_every_cue_has_a_compact_see_through_caption_box(tmp_path):
+    """M05.2: a compact rounded caption box (dark, ≈ 58 % opaque: lower contrast than the M03.6 81 % panel) behind
+    every cue, hugging the text, two-line cues drawn one event per line at a tight pitch."""
     timing = _timing([("maya", "Robots sense, think and act!", 0.0, 2.0)], start=0.0)
-    doc = S.write_subtitles(tmp_path, timing, load_registry(), {}, {"scenes": [{"sceneId": "scene-001",
-                                                                                 "keepouts": [ruler]}]})
+    doc = S.write_subtitles(tmp_path, timing, load_registry(), {})
     c = doc["cues"][0]
-    assert c["placement"] in S.PANELED and c["panel"]
+    assert c["placement"] == "band" and c["panel"] and doc["captionBand"][1] == S.band_top_px()
     px0, py0, px1, py1 = c["panel"]
     assert px0 < c["box"][0] and px1 > c["box"][2] and py0 < c["box"][1] and py1 > c["box"][3]
-    assert py1 < 0.82 * S.H
+    assert py1 - py0 <= 90                                       # compact: one line ≈ 70 px tall at 1080p
     ass = (tmp_path / "subtitles.ass").read_text()
     assert ass.count("\\p1") == 1 and "Dialogue: 1," in ass
     yellow = "0xFFD23F"                                          # Maya's caption colour as the background
@@ -148,32 +158,38 @@ def test_lifted_cues_get_a_dark_rounded_panel_that_keeps_contrast_and_clears_the
                    check=True)
     from PIL import Image
     img = np.asarray(Image.open(out).convert("RGB")).astype(int)
-    inner = img[py0 + 4:py1 - 4, px0 + 30:px1 - 30]
-    dark = (inner.sum(axis=2) < 240).mean()                    # yellow background sums to 528
-    assert dark > 0.4                                           # mostly dark panel behind the text
+    inner = img[py0 + 3:py1 - 3, px0 + 8:px0 + 18]               # caption box margin, left of the text
+    lum = inner.sum(axis=2).mean()                               # yellow background sums to 528
+    assert 180 < lum < 400                                       # darker than the art, but see-through
     maya = np.array([0xFF, 0xD2, 0x3F])
-    assert (np.abs(inner - maya).sum(axis=2) < 90).sum() > 2000   # the yellow text is still there, on the panel
-    assert (np.abs(img[: py0 - 10] - maya).sum(axis=2) < 30).mean() > 0.99   # outside the panel: untouched
-    bottom = S.write_subtitles(tmp_path, timing, load_registry(), {})
-    assert bottom["cues"][0]["placement"] == "bottom" and bottom["cues"][0]["panel"] is None
-    assert "\\p1" not in (tmp_path / "subtitles.ass").read_text()
+    box = img[py0:py1, px0:px1]
+    assert (np.abs(box - maya).sum(axis=2) < 90).sum() > 1500    # the yellow text is still there, on the box
+    assert (np.abs(img[: py0 - 10] - maya).sum(axis=2) < 30).mean() > 0.99   # above the band: untouched
+    two = S.write_subtitles(tmp_path, _timing([("maya", LONG, 0.0, 3.0)], start=0.0), load_registry(), {})
+    c2 = next(c for c in two["cues"] if len(c["lines"]) == 2)
+    ass = (tmp_path / "subtitles.ass").read_text()
+    assert sum(1 for ln in ass.splitlines() if ln.startswith("Dialogue: 1,")) == sum(len(c["lines"]) for c in two["cues"])
+    assert c2["panel"][1] >= S.band_top_px()
 
 
-def test_qa_requires_a_panel_on_lifted_cues(tmp_path):
+def test_qa_requires_caption_box_inside_the_band(tmp_path):
     from robotics101.cartoon.qa import check_subtitles
     from robotics101.qa import QaReport
     timing = _timing([("maya", "Look at the ruler, Bolt!", 1.0, 3.0)])
-    ruler = {"id": "ruler", "box": [0.1, 0.82, 0.9, 0.92], "start": 0.0, "end": 30.0}
-    S.write_subtitles(tmp_path, timing, load_registry(), {}, {"scenes": [{"sceneId": "scene-001", "keepouts": [ruler]}]})
+    S.write_subtitles(tmp_path, timing, load_registry(), {})
     (tmp_path / "compose.json").write_text(json.dumps({"subtitles": {"burnedIn": True, "cues": 1}}))
-    (tmp_path / "scenes.json").write_text(json.dumps({"scenes": [{"sceneId": "scene-001", "keepouts": [ruler]}]}))
     rep = QaReport(None, "preview", str(tmp_path))
     check_subtitles(rep, tmp_path, {}, timing, None)
-    assert {c.id: c.status for c in rep.checks}["subtitles.layout"] == "pass"
-    doc = json.loads((tmp_path / "subtitles.json").read_text())
-    doc["cues"][0]["panel"] = None
-    (tmp_path / "subtitles.json").write_text(json.dumps(doc))
-    rep = QaReport(None, "preview", str(tmp_path))
-    check_subtitles(rep, tmp_path, {}, timing, None)
-    lay = {c.id: c for c in rep.checks}["subtitles.layout"]
-    assert lay.status == "fail" and "without a backing panel: ['scene-001#0']" in lay.message
+    st = {c.id: c for c in rep.checks}
+    assert st["subtitles.layout"].status == "pass" and st["subtitles.compact"].status == "pass"
+    good = json.loads((tmp_path / "subtitles.json").read_text())
+    for patch, needle in (({"panel": None}, "without caption box: ['scene-001#0']"),
+                          ({"placement": "raised"}, "outside the caption band"),
+                          ({"box": [700, 600, 1200, 660], "panel": [680, 590, 1220, 670]}, "outside the caption band")):
+        doc = json.loads(json.dumps(good))
+        doc["cues"][0].update(patch)
+        (tmp_path / "subtitles.json").write_text(json.dumps(doc))
+        rep = QaReport(None, "preview", str(tmp_path))
+        check_subtitles(rep, tmp_path, {}, timing, None)
+        lay = {c.id: c for c in rep.checks}["subtitles.layout"]
+        assert lay.status == "fail" and needle in lay.message

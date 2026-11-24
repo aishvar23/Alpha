@@ -94,6 +94,9 @@ def _finish(g: VGroup, parts: dict, pose: Pose) -> VGroup:
         g.stretch(1 / s, 0, about_point=ORIGIN).stretch(s, 1, about_point=ORIGIN)
     if pose.lean:
         g.rotate(-pose.lean, about_point=ORIGIN)
+        low = g.get_bottom()[1]
+        if low < 0:                                    # M05.2: rock on the foot/tread edge, never sink below ground
+            g.shift(UP * -low)
     if pose.facing < 0:
         g.stretch(-1, 0, about_point=ORIGIN)
     g.parts = parts

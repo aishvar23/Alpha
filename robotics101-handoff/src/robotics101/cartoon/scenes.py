@@ -761,28 +761,111 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
     sc.facts["shots"] = sc.shots
 
 
+def frame_layers(sc: Scene, t: float) -> tuple[dict, list, list]:
+    """Characters (cid -> mob), world overlays (back + front) and HUD overlays (screen + shot layer) at ``t``."""
+    mobs = {}
+    for cid in sc.cast:
+        p = sc.perf.get(cid)
+        if p is None:
+            continue
+        st = p.state(t)
+        g = build(cid, st.pose).scale(st.scale, about_point=np.zeros(3))
+        g.shift(np.array([st.x, GROUND + st.y, 0]))
+        mobs[cid] = g
+    back = [m for f in sc.back for m in f(t, mobs)]
+    over = [m for f in sc.front + sc.screen + sc.top for m in f(t, mobs)]
+    return mobs, back, over
+
+
+def _layer_name(f) -> str:
+    code = getattr(f, "__code__", None)
+    return f"{getattr(f, '__name__', 'overlay')}@{code.co_firstlineno if code else 0}"
+
+
+def named_layers(sc: Scene, t: float, mobs: dict) -> tuple[list, list]:
+    """Like ``frame_layers`` but each overlay mob is paired with the staging function that drew it (QA labels)."""
+    back = [(f"{sc.template}:{_layer_name(f)}", m) for f in sc.back for m in f(t, mobs)]
+    over = [(f"{sc.template}:{_layer_name(f)}", m) for f in sc.front + sc.screen + sc.top for m in f(t, mobs)]
+    return back, over
+
+
 def frame_fn(sc: Scene):
     bg = garage(sc.set_variant)
 
     def frame(t: float):
-        mobs = {}
-        for cid in sc.cast:
-            p = sc.perf.get(cid)
-            if p is None:
-                continue
-            st = p.state(t)
-            g = build(cid, st.pose).scale(st.scale, about_point=np.zeros(3))
-            g.shift(np.array([st.x, GROUND + st.y, 0]))
-            mobs[cid] = g
-        out = [bg]
-        for f in sc.back:
-            out += f(t, mobs)
-        out += list(mobs.values())
-        for f in sc.front + sc.screen + sc.top:
-            out += f(t, mobs)
-        out += transition_overlay(sc, t)
-        return out
+        mobs, back, over = frame_layers(sc, t)
+        return [bg] + back + list(mobs.values()) + over + transition_overlay(sc, t)
     return frame
+
+
+# ------------------------------------------------------------------------------------------ M05.2 caption band
+
+BAND_SAMPLE_S = 0.25
+
+
+def _content_boxes(mob, out: list, name: str) -> None:
+    """Normalised boxes of the visible content in ``mob``; full-frame backdrops are skipped (their children are
+    measured instead), so a card / shot backdrop doesn't count but what is drawn on it does."""
+    from robotics101.cartoon.layout import FRAME_H, FRAME_W, norm_box
+    if getattr(mob, "decor", False) or (not mob.has_points() and not mob.submobjects):
+        return
+    w, h = mob.width, mob.height
+    if (w >= 0.92 * FRAME_W and h >= 0.92 * FRAME_H) or any(getattr(c, "decor", False) for c in mob.submobjects):
+        for m in mob.submobjects:
+            _content_boxes(m, out, name)
+        return
+    if w < 1e-3 or h < 1e-3:
+        return
+    if getattr(mob, "fill_opacity", 1) == 0 and getattr(mob, "stroke_opacity", 1) == 0:
+        return
+    x0, y0 = mob.get_corner(np.array([-1, -1, 0]))[:2]
+    x1, y1 = mob.get_corner(np.array([1, 1, 0]))[:2]
+    out.append((name, norm_box(x0, y0, x1, y1)))
+
+
+def band_report(sc: Scene, step: float = BAND_SAMPLE_S) -> dict:
+    """M05.2: sample the scene and measure how far characters / teaching visuals / props reach into the caption band
+    (actual geometry of every drawn overlay and rig; transitions, robot-cam cutaways and shot pop animations are
+    skipped). Returns the worst intrusion and the offenders (normalised height, 0 = clear)."""
+    from robotics101.cartoon.layout import BAND_OVERLAP_TOL, band_overlap
+    k = transition_frames(sc) / FPS
+    worst, offenders, n = 0.0, {}, 0
+    t = 0.0
+    while t < sc.duration:
+        skip = ((sc.trans_in and t < k) or (sc.trans_out and t >= sc.duration - k)
+                or any(c["start"] <= t < c["end"] for c in sc.cutaways)
+                or any(sh["start"] <= t < sh["start"] + SHOT_IN or sh["end"] - SHOT_OUT <= t < sh["end"]
+                       for sh in sc.shots))
+        if not skip:
+            n += 1
+            mobs, _, _ = frame_layers(sc, t)
+            back, over = named_layers(sc, t, mobs)
+            shot = shot_at(sc, t)
+            card = any(c["start"] <= t < c["end"] for c in sc.concepts)
+            boxes: list = []
+            if not shot and not card:
+                for cid, m in mobs.items():
+                    boxes.append((cid, _bbox(m)))
+                for name, m in back:
+                    _content_boxes(m, boxes, name)
+            for name, m in over:
+                _content_boxes(m, boxes, name)
+            for name, b in boxes:
+                d = band_overlap(b)
+                if d > BAND_OVERLAP_TOL:
+                    o = offenders.setdefault(name, {"what": name, "maxIntrusion": 0.0, "first": round(t, 2), "n": 0})
+                    o["n"] += 1
+                    o["maxIntrusion"] = max(o["maxIntrusion"], round(d, 4))
+                worst = max(worst, d)
+        t += step
+    return {"samples": n, "maxIntrusion": round(worst, 4), "offenders": list(offenders.values())}
+
+
+def _bbox(m) -> list[float]:
+    from robotics101.cartoon.layout import norm_box
+    x0, y0 = m.get_corner(np.array([-1, -1, 0]))[:2]
+    x1, y1 = m.get_corner(np.array([1, 1, 0]))[:2]
+    return norm_box(x0, y0, x1, y1)
 
 
 def transition_frames(sc: Scene) -> int:
@@ -888,6 +971,7 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
                 for cid in sc.perf}
         from robotics101.cartoon.liveliness import scene_liveliness
         live = scene_liveliness(sc, presence, HEIGHT, SCALES)
+        band = band_report(sc)
         facts = {k: v for k, v in sc.facts.items() if k != "approach"}
         from robotics101.cartoon.lipsync import lipsync_agreement
         agree = {f"{sid}#{b['index']}": round(lipsync_agreement(sc.perf[b["speaker"]].mouth, Path(voice_dir) / b["wav"],
@@ -896,7 +980,7 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
         report["scenes"].append({"sceneId": sid, "template": sc.template, "frames": sc.n_frames,
                                  "duration_s": sc.duration, "video": str(final.relative_to(out_dir)),
                                  "minPresence": pres, "enterAt": sc.enter_at, "lipsync": sc.lipsync_methods,
-                                 "lipsyncAgreement": agree, "liveliness": live,
+                                 "lipsyncAgreement": agree, "liveliness": live, "captionBand": band,
                                  "illustrations": sc.illustrations, "keepouts": sc.keepouts, "facts": facts,
                                  "cutaways": [{**c, "clip": str(Path(c["clip"]).relative_to(out_dir))}
                                               for c in sc.cutaways],
