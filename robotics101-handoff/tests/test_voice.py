@@ -184,11 +184,18 @@ def approved_registry():
     return reg
 
 
+def unapproved_registry():
+    reg = load_registry()
+    for cid in ("bolt", "maya"):
+        reg.get(cid).voice["elevenlabs"]["approved"] = False
+    return reg
+
+
 def test_unapproved_elevenlabs_voices_block_full_episode(small, tmp_path, monkeypatch, mp3_bytes):
     monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
     fake = FakeClient(mp3_bytes)
     with pytest.raises(VoiceError, match="not owner-approved"):
-        voice_episode(small, load_registry(), tmp_path / "o", ElevenLabsBackend(client_factory=lambda: fake),
+        voice_episode(small, unapproved_registry(), tmp_path / "o", ElevenLabsBackend(client_factory=lambda: fake),
                       VoiceCache(tmp_path / "c"), log=lambda m: None)
     assert fake.calls == []
 
@@ -247,9 +254,10 @@ def test_v4_request_uses_only_supported_settings_and_default_model():
     assert ElevenLabsBackend().request(v2, "Hi!").params["settings"]["style"] == 0.5
     nomodel = {"elevenlabs": {"voiceId": "abc", "settings": {}}}
     assert ElevenLabsBackend().request(nomodel, "Hi!").params["modelId"] == B.EL_DEFAULT_MODEL == "eleven_v4"
-    for cid in ("bolt", "maya"):                                   # registry: v4 candidates, still unapproved
+    want = {"bolt": "qXpMhyvQqiRxWQs4qSSB", "maya": "WtA85syCrJwasGeHGH2p"}    # Horatius / Ember
+    for cid in ("bolt", "maya"):                                   # registry: v4, owner-approved (M05.4)
         el = load_registry().get(cid).voice["elevenlabs"]
-        assert el["modelId"] == "eleven_v4" and el["voiceId"] and el["approved"] is False
+        assert el["modelId"] == "eleven_v4" and el["voiceId"] == want[cid] and el["approved"] is True
 
 
 def test_words_from_alignment_skips_audio_tags():

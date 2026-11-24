@@ -21,8 +21,16 @@ needs_ffmpeg = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg req
 needs_bundle = pytest.mark.skipif(not (BUNDLE / "manifest.json").is_file(), reason="needs a rendered out/m02.8")
 
 
-def test_elevenlabs_voices_are_not_approved_yet():
-    assert P.unapproved_elevenlabs(load_registry()) == ["bolt", "maya"]
+def test_elevenlabs_voices_are_owner_approved():
+    assert P.unapproved_elevenlabs(load_registry()) == []          # owner approved Horatius / Ember (M05.4)
+    assert P.unapproved_elevenlabs(_unapproved()) == ["bolt", "maya"]
+
+
+def _unapproved():
+    reg = load_registry()
+    for cid in ("bolt", "maya"):
+        reg.get(cid).voice["elevenlabs"]["approved"] = False
+    return reg
 
 
 def _fake_select(monkeypatch):
@@ -36,14 +44,20 @@ def _fake_select(monkeypatch):
 
 def test_auto_falls_back_from_unapproved_elevenlabs(monkeypatch):
     _fake_select(monkeypatch)
-    b, skipped = P.pick_backend("auto", load_registry())
+    b, skipped = P.pick_backend("auto", _unapproved())
     assert b.name == "kokoro" and any("not approved" in s for s in skipped)
 
 
 def test_explicit_elevenlabs_refused_until_approved(monkeypatch):
     _fake_select(monkeypatch)
     with pytest.raises(P.CartoonPipelineError, match="not approved"):
-        P.pick_backend("elevenlabs", load_registry())
+        P.pick_backend("elevenlabs", _unapproved())
+
+
+def test_auto_uses_elevenlabs_once_approved(monkeypatch):
+    _fake_select(monkeypatch)
+    b, skipped = P.pick_backend("auto", load_registry())
+    assert b.name == "elevenlabs"
 
 
 def test_render_rejects_cartoon_tts_for_narrator_specs(tmp_path, capsys):

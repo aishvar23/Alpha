@@ -88,7 +88,7 @@
               "why": "previous provisional pick; crisp and energetic but more presenter than cartoon"
             }
           ],
-          "approved": false
+          "approved": true
         },
         "kokoro": {
           "voice": "am_puck",
@@ -194,7 +194,7 @@
               "why": "previous provisional pick; rapid, erratic Gen-Z cadence fights Maya's patience"
             }
           ],
-          "approved": false
+          "approved": true
         },
         "kokoro": {
           "voice": "af_bella",
