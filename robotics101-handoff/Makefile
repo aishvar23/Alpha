@@ -29,7 +29,7 @@ scenes-full:  ## same at 1920x1080@30
 	$(MAKE) scenes PROFILE=full
 
 render:  ## validate -> narrate -> render-scenes -> compose -> manifest -> QA into $(OUT)
-	$(VENV)/bin/robotics101 render $(EPISODE) --out $(OUT) --profile $(PROFILE) --tts $(TTS_PROVIDER)
+	$(VENV)/bin/robotics101 render $(EPISODE) --out $(OUT) --profile $(PROFILE) --tts $(TTS_PROVIDER) $(RENDER_FLAGS)
 
 qa:  ## re-run QA on an existing bundle (rewrites qa_report.*, re-seals manifest.json)
 	$(VENV)/bin/robotics101 qa $(OUT)

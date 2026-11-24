@@ -611,6 +611,23 @@ def check_intro(rep, spec: dict, by: dict) -> None:
 
 
 
+def check_faces_clear(rep, by: dict) -> None:
+    """M05.7: overlays, cards, HUD and SFX text never cover a character's head or face. Measured at
+    render time on sampled frames (scenes.json ``facesClear``), same method as the caption band."""
+    measured = {sid: r["facesClear"] for sid, r in by.items() if "facesClear" in r}
+    if not measured:
+        rep.soft("layout.faces_clear", False, "no face-clear measurements in scenes.json (pre-M05.7 render)")
+        return
+    bad = [f"{sid}: {o['what']} covers {o['character']} from {o['first']}s ({o['n']} samples)"
+           for sid, r in measured.items() for o in r.get("offenders", [])]
+    missing = sorted(set(by) - set(measured))
+    n = sum(r.get("samples", 0) for r in measured.values())
+    rep.hard("layout.faces_clear", not bad and not missing,
+             f"{n} sampled frames, faces clear of overlays; problems: {bad or 'none'}; "
+             f"unmeasured scenes: {missing or 'none'}",
+             {sid: r.get("offenders", []) for sid, r in measured.items()})
+
+
 def check_charge_cable(rep, by: dict) -> None:
     """M05.6: while Bolt charges, the cable must not cross Maya's body (sampled at seat time)."""
     hits = [(sid, (r.get("facts") or {}).get("chargeCable")) for sid, r in by.items()
@@ -683,9 +700,12 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     check_kicker_variety(rep, spec, by)
     check_liveliness(rep, by)
     check_shots(rep, spec, timing, by)
+    from robotics101.cartoon.sync import check_sync
+    check_sync(rep, spec, timing, by, out_dir)                    # M05.8 narration sync (hard)
     check_one_example_per_frame(rep, spec, timing, by)
     check_clutter(rep, spec, by)
     check_charge_cable(rep, by)
+    check_faces_clear(rep, by)
     check_caption_band(rep, by)
     check_acting(rep, spec, by)
     if video_s:

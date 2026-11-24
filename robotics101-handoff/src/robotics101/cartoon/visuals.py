@@ -62,7 +62,7 @@ def robot_families(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     x0, y0, x1, y1 = box
     examples = ctx.get("examples") or ["vacuum", "arm", "rover"]
     reveal = ctx.get("reveal") or [None] * len(examples)
-    g = VGroup(board(box, "#FFFDF6"), PR.highlight_sweep(box, t))
+    g = VGroup(board(box, "#FFFDF6"))
     title = PR.txt("MEET THE ROBOT FAMILY!", 56, color="#6C4AB6", font="Luckiest Guy", weight="NORMAL", stroke=4)
     title.move_to(P((x0 + x1) / 2, y1 - 0.5 + 0.06 * math.sin(2 * PI * 0.8 * t)))
     g.add(title)
@@ -127,7 +127,7 @@ def echo_diagram(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
     strip and a bat appear on cue.
     """
     x0, y0, x1, y1 = box
-    g = VGroup(board(box, "#FFFFFF"), PR.highlight_sweep(box, t))
+    g = VGroup(board(box, "#FFFFFF"))
     head = PR.txt("HOW A DISTANCE SENSOR WORKS", 40, color="#6C4AB6", font="Luckiest Guy", weight="NORMAL")
     g.add(head.move_to(P((x0 + x1) / 2, y1 - 0.42)))
     cy = (y0 + y1) / 2 + 0.25
@@ -190,7 +190,7 @@ def sense_think_act(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
     """SENSE -> THINK -> ACT loop with icons; each step lights up as it is said (``ctx['sense'|'think'|'act']``),
     and a highlight token cycles around the loop for the whole shot so the board never sits still."""
     x0, y0, x1, y1 = box
-    g = VGroup(board(box, "#FFFFFF"), PR.highlight_sweep(box, t))
+    g = VGroup(board(box, "#FFFFFF"))
     g.add(PR.txt("HOW YOUR ROBOT BRAIN WORKS", 40, color="#6C4AB6", font="Luckiest Guy", weight="NORMAL")
           .move_to(P((x0 + x1) / 2, y1 - 0.42 + 0.05 * math.sin(2 * PI * 0.8 * t))))
     thr = ctx.get("threshold")
@@ -239,7 +239,7 @@ def sense_think_act(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
 def concept_visual(icon: str):
     def fn(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
         x0, y0, x1, y1 = box
-        g = VGroup(board(box, "#FFFFFF"), PR.highlight_sweep(box, t))
+        g = VGroup(board(box, "#FFFFFF"))
         if ctx.get("title"):
             g.add(PR.txt(ctx["title"].upper(), 40, color="#6C4AB6", font="Luckiest Guy", weight="NORMAL")
                   .move_to(P((x0 + x1) / 2, y1 - 0.42)))
@@ -284,11 +284,12 @@ def visual(name: str):
 
 
 TEACHING_VISUALS = {"echo_diagram", "sense_think_act", "the_rule", "rule_test", "servo_cutaway", "servo_dial",
-                    "servo_head", "quiz_question", "sensor_range", "robot_families"}
+                    "servo_head", "quiz_question", "sensor_range", "sensor_out_of_range", "robot_families",
+                    "servo_cause", "servo_split"}
 TEACHING_PREFIXES = ("example_", "part_", "concept_")
 EXAMPLE_PREFIXES = ("example_", "part_")
 EXAMPLE_VISUALS = {"echo_diagram", "sense_think_act", "the_rule", "rule_test", "servo_cutaway", "servo_dial",
-                   "servo_head", "quiz_question", "sensor_range"}
+                   "servo_head", "quiz_question", "sensor_range", "sensor_out_of_range", "servo_cause", "servo_split"}
 
 
 def is_teaching_visual(name: str | None) -> bool:

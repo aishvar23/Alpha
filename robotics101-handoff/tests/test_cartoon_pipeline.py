@@ -68,7 +68,7 @@ def test_render_rejects_cartoon_tts_for_narrator_specs(tmp_path, capsys):
 def test_render_routes_cartoon_spec_to_cartoon_pipeline(tmp_path, monkeypatch):
     seen = {}
 
-    def fake(episode, out, tts="auto", size="", log=print):
+    def fake(episode, out, tts="auto", size="", log=print, **kw):
         seen.update(episode=Path(episode), tts=tts, size=size)
         raise P.CartoonPipelineError("stop here", 7)
     monkeypatch.setattr(P, "render_cartoon_episode", fake)

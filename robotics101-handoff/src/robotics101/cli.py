@@ -166,10 +166,14 @@ def _cmd_render_cartoon_episode(args: argparse.Namespace) -> int:
     from robotics101.media import MediaError
     from robotics101.voice import VoiceError
 
+    if getattr(args, "scene", None) or getattr(args, "preview", False):
+        return _cmd_render_scene_previews(args)
     size = "1920x1080" if args.profile == "full" else "854x480"
     try:
         res = render_cartoon_episode(args.episode, args.out, tts=args.tts or "auto", size=size,
-                                     log=lambda m: print(m, flush=True))
+                                     log=lambda m: print(m, flush=True),
+                                     allow_unapproved=bool(getattr(args, "allow_unapproved", False)),
+                                     approvals_path=getattr(args, "approvals", None))
     except CartoonPipelineError as e:
         print(f"error: {e}", file=sys.stderr)
         return e.code
@@ -179,6 +183,47 @@ def _cmd_render_cartoon_episode(args: argparse.Namespace) -> int:
     _print_qa(res["qa"], args.out)
     print(f"stage seconds: {res['manifest'].get('stageSeconds')}")
     return EXIT_QA_FAILED if res["status"] == "FAIL" else EXIT_OK
+
+
+def _cmd_render_scene_previews(args: argparse.Namespace) -> int:
+    """M05.8: ``render <spec> --out <run> --scene <id> [--scene <id>] --preview``."""
+    from robotics101.cartoon.pipeline import CartoonPipelineError
+    from robotics101.cartoon.preview import PreviewError, render_scene_previews
+    from robotics101.media import MediaError
+    from robotics101.voice import VoiceError
+    if not (args.scene and args.preview):
+        print("error: single-scene rendering needs both --scene <id> and --preview", file=sys.stderr)
+        return EXIT_INPUT
+    if args.profile == "full":
+        print("error: --preview renders 854x480; drop --profile full", file=sys.stderr)
+        return EXIT_INPUT
+    try:
+        res = render_scene_previews(args.episode, args.out, args.scene, tts=args.tts or "auto",
+                                    approvals_path=args.approvals, log=lambda m: print(m, flush=True))
+    except CartoonPipelineError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return e.code
+    except (PreviewError, VoiceError, MediaError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_INPUT
+    failed = False
+    for sid, r in res.items():
+        sync = next((c for c in r["qa"]["checks"] if c["id"] == "sync.visual_narration"), {})
+        print(f"{sid}: {r['clip']} {r['duration']:.2f}s  QA {r['qa']['status']}  sync {sync.get('status')}")
+        failed |= r["qa"]["status"] == "FAIL"
+    return EXIT_QA_FAILED if failed else EXIT_OK
+
+
+def _cmd_approve_scene(args: argparse.Namespace) -> int:
+    from robotics101.cartoon.preview import PreviewError, approve_from_preview
+    try:
+        for sid in args.scene:
+            rec = approve_from_preview(args.out_dir, sid, by=args.by, approvals_path=args.approvals, note=args.note)
+            print(f"{sid}: approved {rec['approvedAt']} by {rec['approvedBy']} ({rec['contentSha256'][:12]}…)")
+    except PreviewError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return EXIT_INPUT
+    return EXIT_OK
 
 
 def _cmd_render(args: argparse.Namespace) -> int:
@@ -499,7 +544,23 @@ def build_parser() -> argparse.ArgumentParser:
                         "espeak|elevenlabs")
     r.add_argument("--workers", type=int, default=4, help="scenes rendered in parallel (default 4)")
     r.add_argument("--timeout", type=float, default=900.0, help="per-scene render timeout in seconds")
+    r.add_argument("--scene", action="append", metavar="SCENE_ID",
+                   help="cartoon: with --preview, render only this scene (repeatable) -> <out>/scenes/<id>-preview.mp4")
+    r.add_argument("--preview", action="store_true",
+                   help="cartoon: single-scene review clip (854x480, cached audio only, burned subtitles, scene QA)")
+    r.add_argument("--allow-unapproved", action="store_true",
+                   help="cartoon: DEV ONLY — stitch the full episode even if scenes are not approved / changed")
+    r.add_argument("--approvals", type=Path, default=None,
+                   help="scene approvals file (default approvals/<episodeId>/scene_approvals.json)")
     r.set_defaults(func=_cmd_render)
+
+    ap = sub.add_parser("approve-scene", help="lock reviewed scenes: record scene id, content hash and approval date")
+    ap.add_argument("out_dir", type=Path, help="run directory holding <id>-preview.json")
+    ap.add_argument("--scene", action="append", required=True, metavar="SCENE_ID")
+    ap.add_argument("--by", default="owner")
+    ap.add_argument("--note", default=None)
+    ap.add_argument("--approvals", type=Path, default=None)
+    ap.set_defaults(func=_cmd_approve_scene)
 
     q = sub.add_parser("qa", help="re-run QA on an existing bundle (rewrites qa_report.*, re-seals manifest)")
     q.add_argument("out_dir", type=Path)

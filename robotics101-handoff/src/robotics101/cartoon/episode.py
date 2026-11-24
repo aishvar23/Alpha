@@ -187,10 +187,12 @@ def _derive_template_examples(sc: dict) -> list[dict]:
         hit = _mention(beats, ("toaster",))
         if hit:
             i, _ = hit
+            # M05.8: the toaster frame illustrates the line that explains it ("doesn't think"), not the joke
+            # that first names it; the joke, the pop and the flinch play on stage with the toaster prop.
             j = _first(beats, lambda b: _line_has(b, "doesn't think", "does not think"), i)
+            k = j if j is not None else i
             out.append({"id": "toaster", "label": "Toaster", "visual": "example_toaster",
-                        "fromBeat": i, "toBeat": j if j is not None else i,
-                        "subtitle": "Not a robot — it doesn't think"})
+                        "fromBeat": k, "toBeat": k, "subtitle": "Not a robot — it doesn't think"})
         mentions = []
         seen = set()
         for eid, label, vis, words in _FAMILY_KINDS:
@@ -255,9 +257,14 @@ def _derive_template_examples(sc: dict) -> list[dict]:
                         "fromBeat": first, "toBeat": echo_line})
         three = _first(beats, lambda b: _line_has(b, "3 meters", "three meters", "3 metres"))
         oor = _first(beats, lambda b: _line_has(b, "out of range"))
+        # M05.8: one frame per idea, each on its own line: "measures up to 3 m" (Nib inside the range), then
+        # Nib's flight away plays on stage, then "out of range" gets its own frame (Nib past 3 m).
         if three is not None:
             out.append({"id": "range", "label": "Sensor range", "visual": "sensor_range",
-                        "fromBeat": three, "toBeat": oor if oor is not None else three})
+                        "fromBeat": three, "toBeat": three})
+        if oor is not None and oor != three:
+            out.append({"id": "out_of_range", "label": "Out of range", "visual": "sensor_out_of_range",
+                        "fromBeat": oor, "toBeat": oor})
 
     elif tmpl == "cartoon_rule_board":
         # Maya's rule line, not Bolt's "Got it!" repeat.
@@ -347,6 +354,26 @@ def _stamp_examples(sc: dict, examples: list[dict]) -> None:
         b.setdefault("examples", []).append(rec)
 
 
+# M05.8: actions a teaching visual itself depicts (they may sit inside its beat range); any other character
+# action / gag beat inside a derived shot's range ends the shot before it, so the gag plays on stage.
+SHOT_DEPICTS = {"echo_diagram": {"ping"}, "servo_split": {"arm_to"}, "servo_dial": {"arm_to"}}
+
+
+def trim_shots_at_gags(sc: dict) -> None:
+    beats = sc["beats"]
+    for sh in sc.get("shots") or []:
+        if sh.get("layout") not in EXPLAIN_LAYOUTS + ("split",):
+            continue
+        allowed = SHOT_DEPICTS.get(sh.get("visual"), set())
+        lo, hi = sh["fromBeat"], sh["toBeat"]
+        for i in range(lo + 1, hi + 1):
+            b = beats[i]
+            if b.get("type") == "action" and b.get("who") and str(b.get("do", "")).split(":")[0] not in allowed:
+                last = max((j for j in range(lo, i) if beats[j].get("type") == "line"), default=lo)
+                sh["toBeat"] = last
+                break
+
+
 def plan_shots(sc: dict) -> None:
     """Fill ``sc['shots']`` from derived teaching examples (unless authored), add generic illustration shots for
     uncovered ``explain`` lines, and mark every line inside an illustration/solo shot ``explain: true``."""
@@ -354,6 +381,7 @@ def plan_shots(sc: dict) -> None:
     if "shots" not in sc:
         examples = derive_examples(sc)
         sc["shots"] = shots_from_examples(examples)
+        trim_shots_at_gags(sc)                  # derived shots only; authored ranges are checked by QA
         _stamp_examples(sc, examples)
     shots = sc["shots"]
 

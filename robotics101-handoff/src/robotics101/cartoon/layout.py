@@ -6,6 +6,8 @@
   teaching visuals and readouts stay above it (world y >= ``BAND_TOP_Y``); subtitles always sit inside it.
 * **shots** (M05.1): ``stage`` (world staging), ``illustration`` (full-bleed teaching visual; no character or one
   small corner character) and ``solo`` (exactly one character + a wide visual).
+* **faces** (M05.7): overlays, cards, HUD and SFX lettering must not cover any character's head or face
+  (``faces_report`` / QA ``layout.faces_clear``).
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ CAPTION_BAND = 0.18                                   # bottom 18% of the frame 
 BAND_TOP_Y = FRAME_Y - (1 - CAPTION_BAND) * FRAME_H   # -2.56 world units
 CONTENT_FLOOR_Y = BAND_TOP_Y + 0.12                   # feet / lowest content line for overlays (shots)
 BAND_OVERLAP_TOL = 0.004                              # normalised slack (~4 px) for anti-aliased edges
+FACE_OVERLAP_TOL = 0.004                              # M05.7: same slack for overlay vs face boxes
 
 # M05.1 / M05.6 shot rules (QA)
 ILLUSTRATION_MIN_AREA = 0.75        # M05.6: a teaching visual fills most of the frame (above the caption band)
@@ -45,3 +48,18 @@ def band_overlap(b: list[float], band: float = CAPTION_BAND) -> float:
     if b[2] <= 0 or b[0] >= 1:
         return 0.0
     return max(0.0, min(b[3], 1.0) - (1 - band))
+
+
+def box_overlap(a: list[float], b: list[float]) -> float:
+    """Normalised intersection area of two [x0, y0, x1, y1] boxes (0 = no overlap)."""
+    w = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    h = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    return w * h
+
+
+def boxes_collide(a: list[float], b: list[float], tol: float = FACE_OVERLAP_TOL) -> bool:
+    """True when two boxes overlap by more than ``tol`` in both width and height (~4 px at 1080p)."""
+    w = min(a[2], b[2]) - max(a[0], b[0])
+    h = min(a[3], b[3]) - max(a[1], b[1])
+    return w > tol and h > tol
+

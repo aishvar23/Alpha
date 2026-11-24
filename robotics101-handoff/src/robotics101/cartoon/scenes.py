@@ -38,6 +38,64 @@ STAGED_LINE_ACTIONS = {"drive", "stop", "resume", "skid", "spin", "turn"}   # ha
 Overlay = Callable[[float, dict], list]
 
 
+_WORDS_CACHE: dict = {}
+
+
+def line_words(voice_dir, b: dict) -> list[dict] | None:
+    """Word alignment of a timing line beat in scene seconds: [{text, start_s, end_s}] or None. The words file
+    (``<voice line>.words.json``, written by the voice stage from the ElevenLabs alignment) is relative to the
+    line start (M05.8)."""
+    rel = b.get("words")
+    if not rel or voice_dir is None:
+        return None
+    path = Path(voice_dir) / rel
+    key = (str(path), b.get("start_s"))
+    if key not in _WORDS_CACHE:
+        try:
+            import json as _json
+            ws = _json.loads(path.read_text(encoding="utf-8")).get("words") or []
+        except (OSError, ValueError):
+            ws = []
+        lead = float(b.get("lead_s") or 0.0)
+        _WORDS_CACHE[key] = [{"text": w["text"], "start_s": round(b["start_s"] + lead + float(w["start_s"]), 3),
+                              "end_s": round(b["start_s"] + lead + float(w["end_s"]), 3)} for w in ws] or None
+    return _WORDS_CACHE[key]
+
+
+def _token_index(text: str, offset: int) -> int:
+    return len(text[:offset].split())
+
+
+def word_time_in_line(voice_dir, b: dict, word: str) -> float | None:
+    m = re.search(rf"\b{re.escape(word)}", b["text"], re.I)
+    if not m:
+        return None
+    ws = line_words(voice_dir, b)
+    if ws and len(ws) == len(b["text"].split()):
+        return ws[min(_token_index(b["text"], m.start()), len(ws) - 1)]["start_s"]
+    return b["start_s"] + (b["end_s"] - b["start_s"]) * m.start() / max(1, len(b["text"]))
+
+
+def word_end_in_line(voice_dir, b: dict, word: str) -> float | None:
+    """End time of the last token of the first match of ``word`` in the line."""
+    m = re.search(rf"\b{re.escape(word)}\w*", b["text"], re.I)
+    if not m:
+        return None
+    ws = line_words(voice_dir, b)
+    if ws and len(ws) == len(b["text"].split()):
+        return ws[min(_token_index(b["text"], m.end() - 1), len(ws) - 1)]["end_s"]
+    return b["start_s"] + (b["end_s"] - b["start_s"]) * m.end() / max(1, len(b["text"]))
+
+
+def line_span(voice_dir, b: dict) -> tuple[float, float]:
+    ws = line_words(voice_dir, b)
+    if ws:
+        return ws[0]["start_s"], ws[-1]["end_s"]
+    return b["start_s"], b["end_s"]
+
+
+
+
 @dataclass
 class Scene:
     sid: str
@@ -78,15 +136,24 @@ class Scene:
         hits = [b for b in self.beats if b["type"] == type_ and str(b.get(key, "")).split(":")[0] == value]
         return hits[nth] if len(hits) > nth else None
 
+    def line_words(self, b: dict) -> list[dict] | None:
+        """M05.8: the ElevenLabs word alignment of a line (scene seconds), or None (fixture / espeak voices)."""
+        return line_words(self.voice_dir, b)
+
     def word_time(self, word: str, after: float = 0.0) -> float | None:
-        """Approximate time a word is spoken: character position within the line (first match after ``after``)."""
+        """Time a word is spoken (first match whose line ends after ``after``). M05.8: uses the real ElevenLabs
+        word timings when the line has them; the old character-fraction estimate is only the fallback."""
         for b in self.lines():
             if b["end_s"] < after:
                 continue
-            m = re.search(rf"\b{re.escape(word)}", b["text"], re.I)
-            if m:
-                return b["start_s"] + (b["end_s"] - b["start_s"]) * m.start() / max(1, len(b["text"]))
+            t = word_time_in_line(self.voice_dir, b, word)
+            if t is not None:
+                return t
         return None
+
+    def line_span(self, b: dict) -> tuple[float, float]:
+        """(first word start, last word end) of a line in scene seconds (aligned when available)."""
+        return line_span(self.voice_dir, b)
 
 
 def sfx_word(word: str, color: str, start: float, at, dur: float = 0.9, size: int = 88) -> Overlay:
@@ -235,7 +302,9 @@ def stage_robot_family(sc: Scene) -> None:
     examples = ["vacuum", "arm", "rover"]
     sc.facts["examples"] = examples
     # M05.6: the family examples are full-screen one-example illustration shots, not a stage album grid.
-    generic_sfx_lettering(sc, {"toaster_pop": PR.P(4.9, 1.6)})
+    # M05.8: the pop now plays on stage (the toaster frame waits for its own line): POP! sits left of the
+    # toaster, below Nib and right of Bolt, never over a face.
+    generic_sfx_lettering(sc, {"toaster_pop": PR.P(3.5, -0.3)})
 
 
 def stage_checkup(sc: Scene) -> None:
@@ -250,8 +319,10 @@ def stage_checkup(sc: Scene) -> None:
     rig_parts = {"structure": ("body",), "sensors": ("screen",), "actuators": ("wheels", "arm_l", "arm_r"),
                  "power": ("belly",), "controller": ("bulb",)}
     sc.facts["parts"] = parts
+    # M05.7: compact card in the top-right, above head height, so it never covers Maya after she
+    # steps to Bolt's right for the charge.
     sc.front.append(lambda t, m: [PR.checklist(parts, [_u(t, k, k + 0.4) if k else 0 for k in ticks])
-                                  .move_to(PR.P(4.9, 1.35))])
+                                  .move_to(PR.P(5.45, 2.98))])
 
     def glow(t, m):
         out = []
@@ -276,8 +347,8 @@ def stage_checkup(sc: Scene) -> None:
             return []
         charging = t >= plug["end_s"]
         lvl = 0.18 + 0.82 * _u(t, plug["end_s"], plug["end_s"] + CHARGE_FILL_S)
-        # Big HUD battery, left of the stage (above the floor cable, clear of Maya on the right)
-        out = [PR.battery(lvl, charging).scale(2.2).move_to(PR.P(-3.6, 1.55))]
+        # Big HUD battery: upper-left, above standing head height and left of Nib's hover.
+        out = [PR.battery(lvl, charging).scale(2.2).move_to(PR.P(-5.25, 2.72))]
         b, may = m.get("bolt"), m.get("maya")
         if t >= plug["start_s"] and b is not None:
             port = PR.bolt_charge_port(b)
@@ -294,7 +365,9 @@ def stage_checkup(sc: Scene) -> None:
     sc.back.append(lambda t, m: [])
     sc.front.append(batt)
     bolt.feel(low_t, "sleepy").feel(plug["end_s"] + 1.2, "happy")
-    generic_sfx_lettering(sc, {"charge": PR.P(1.3, 1.25), "ding": PR.P(1.2, 2.1)})
+    # BZZT! / DING! sit above Bolt, left of Maya's charge stand, so they never cover a face.
+    # Above Bolt, in the gap between Nib (left-high) and Maya after she steps right.
+    generic_sfx_lettering(sc, {"charge": PR.P(0.45, 2.70), "ding": PR.P(0.55, 2.95)})
 
 
 def stage_sensor_ping(sc: Scene) -> None:
@@ -378,10 +451,12 @@ def stage_rule_board(sc: Scene) -> None:
     words = ["IF", "distance", "<", f"{thr:g} m", "→", "STOP", "&", "TURN"]
     sc.back.append(lambda t, m: [pile, tape])
     keep_out(sc, "ruler", tape)
-    keep_out(sc, "rule-board", PR.chalkboard(words, 1.0, at=PR.P(-1.2, 2.45), width=7.6, height=1.7),
+    # Raised and shifted right so Maya's hop never goes through the board (M05.7).
+    board_at, board_wh = PR.P(0.20, 2.95), dict(width=7.2, height=1.40)
+    keep_out(sc, "rule-board", PR.chalkboard(words, 1.0, at=board_at, **board_wh),
              rule_line["start_s"] - 1)
     sc.screen.append(lambda t, m: [PR.chalkboard(words, _u(t, rule_line["start_s"], rule_line["end_s"]),
-                                                 at=PR.P(-1.2, 2.45), width=7.6, height=1.7)] if t >= rule_line["start_s"] - 1 else [])
+                                                 at=board_at, **board_wh)] if t >= rule_line["start_s"] - 1 else [])
     expl = sc.lines("maya")[2]
     marks = [(n, sc.word_time(w, after=expl["start_s"] - 0.01)) for n, w in
              (("SENSE", "sense"), ("THINK", "think"), ("ACT", "act"))]
@@ -390,7 +465,7 @@ def stage_rule_board(sc: Scene) -> None:
         if not marks[0][1] or t < marks[0][1]:
             return []
         active = next((n for n, wt in reversed(marks) if wt and t >= wt), None)
-        return [PR.stc_chips(active if t < expl["end_s"] + 3 else None, at=PR.P(-1.2, 3.68))]
+        return [PR.stc_chips(active if t < expl["end_s"] + 3 else None, at=PR.P(0.20, 3.85))]
     sc.screen.append(chips)
     drive = sc.beat("action", "do", "drive")
     bolt.face(drive["start_s"] - 1.2, 1)
@@ -471,7 +546,8 @@ def stage_servo_highfive(sc: Scene) -> None:
         shoulder = b.parts["arm_r"].get_start()
         return [PR.protractor(shoulder, ang, facing=1, radius=1.25, target=goal)]
     sc.back.append(gauge)                              # behind the rigs so the real arm reads on top
-    generic_sfx_lettering(sc, {"whoosh": PR.P(-3.2, 1.4), "clap": PR.P(0.2, 2.2)})
+    # WHOOSH sits above Nib's hover; CLAP stays in the gap above Bolt / Maya (M05.7).
+    generic_sfx_lettering(sc, {"whoosh": PR.P(-4.55, 3.58), "clap": PR.P(0.2, 2.2)})
 
 
 def stage_obstacle_rematch(sc: Scene, robotcam: dict | None = None) -> None:
@@ -552,7 +628,7 @@ def stage_recap_chant(sc: Scene) -> None:
     lines = sc.lines()[:3]
     for (word, color), b, x in zip(chants, lines, (-4.7, 0.0, 4.7)):
         dur = 2.9 - (b["start_s"] - lines[0]["start_s"])
-        sc.screen.append(sfx_word(word, color, b["start_s"], PR.P(x, 2.6), dur=dur, size=100))
+        sc.screen.append(sfx_word(word, color, b["start_s"], PR.P(x, 3.62), dur=dur, size=100))
         sc.top_busy.append((b["start_s"], b["start_s"] + dur))
     q = sc.params.get("question", "")
     sc.facts["question"] = q
@@ -561,7 +637,8 @@ def stage_recap_chant(sc: Scene) -> None:
     if q_line:
         sc.top_busy.append((q_line["start_s"], outro["start_s"]))
         sc.screen.append(lambda t, m: [PR.card("Quiz time!", q, _u(t, q_line["start_s"], q_line["start_s"] + 0.6),
-                                               at=PR.P(-0.4, 2.45), width=8.4)] if q_line["start_s"] <= t < outro["start_s"] else [])
+                                               at=PR.P(0.0, 3.22), width=7.2).scale(0.80, about_point=PR.P(0.0, 3.22))]
+                         if q_line["start_s"] <= t < outro["start_s"] else [])
     dance = sc.beat("action", "do", "beep_dance")
     if dance:
         sc.front.append(lambda t, m: [PR.speech_bubble("beep boop!", m["nib"].get_top() + PR.P(-0.2, 0.05),
@@ -614,7 +691,7 @@ def stage_character_intro(sc: Scene) -> None:
     for i, (cid, c, x, t0, t1) in enumerate(segs):
         end = segs[i + 1][3] if i + 1 < len(segs) else sc.duration - 0.2
         line = next((b for b in sc.lines() if b.get("target") == cid), None)
-        at = PR.P(max(-3.4, min(3.4, x)), 2.75)
+        at = PR.P(max(-3.4, min(3.4, x)), 3.20)
 
         def plate(t, m, c=c, t1=t1, end=end, at=at):
             return [PR.nameplate(c["name"], c["tagline"], c.get("color", "#FFFFFF"), _u(t, t1 - 0.1, end), at, t)] \
@@ -714,7 +791,8 @@ SHOT_IN, SHOT_OUT = 0.4, 0.35          # seconds of the pop-in / shrink-out anim
 SHOT_LEAD, SHOT_TAIL = 0.15, 0.35      # shot starts a little before its first beat, ends after its last
 # Keep the seated charger + filling battery visible this long after the plug seats.
 CHARGE_HOLD_S = 2.2
-CHARGE_FILL_S = 2.0
+CHARGE_FILL_S = 1.2                     # M05.8: the battery fills red -> green before the controller frame
+SYNC_HOLD_MAX = 0.6                     # M05.8: a shot may start at most this late after its first word
 SOLO_GAIN = 1.2                         # solo character drawn a bit bigger than on stage
 CORNER_GAIN = 0.55                      # illustration corner character
 
@@ -774,11 +852,17 @@ def _ctx_part(sc: Scene, sh: dict) -> dict:
 def _ctx_example(sc: Scene, sh: dict) -> dict:
     vis = sh.get("visual") or ""
     kind = vis[len("example_"):] if vis.startswith("example_") else sh.get("example")
-    return {"kind": kind, "example": kind, "label": (sh.get("example") or kind or "").replace("_", " ").title()}
+    return {"kind": kind, "example": kind, "t0": sh.get("start"), "shot": sh}   # t1 = shot end at draw time
 
 
 def _ctx_range(sc: Scene, sh: dict) -> dict:
-    return {"range": 3.0, "oor": sc.word_time("out", after=sh["start"])}
+    rng = float(sc.params.get("rangeMeters", 3.0))
+    nib = float(sc.params.get("obstacleDistanceMeters", 1.2))
+    if sh.get("visual") == "sensor_out_of_range":
+        far = [float(b["do"].split(":")[1]) for b in sc.beats if b["type"] == "action"
+               and b["do"].startswith("fly_to:") and float(b["do"].split(":")[1]) > rng]
+        nib = far[0] if far else rng + 0.6
+    return {"range": rng, "nibMeters": nib, "t0": sh["start"]}
 
 
 def shot_context(sc: Scene, sh: dict) -> dict:
@@ -794,7 +878,8 @@ def shot_context(sc: Scene, sh: dict) -> dict:
 
 SHOT_CONTEXT = {"robot_families": _ctx_robot_families, "echo_diagram": _ctx_echo, "sense_think_act": _ctx_sta,
                 "the_rule": _ctx_rule, "rule_test": _ctx_rule, "servo_dial": _ctx_servo_dial,
-                "quiz_question": _ctx_quiz, "sensor_range": _ctx_range, "part_power": _ctx_part}
+                "quiz_question": _ctx_quiz, "sensor_range": _ctx_range, "sensor_out_of_range": _ctx_range,
+                "part_power": _ctx_part}
 
 
 def shot_at(sc: Scene, t: float) -> dict | None:
@@ -826,6 +911,45 @@ def _clip_overlapping_shots(sc: Scene) -> None:
             il["start"] = max(il["start"], sh["start"] + SHOT_IN)
 
 
+def illustrated_span(sc: Scene, spec: dict) -> tuple[float, float]:
+    """M05.8: (start, end) of what a shot illustrates, from the word timings (see ``illustrated_span_beats``)."""
+    return illustrated_span_beats(sc.beats, sc.voice_dir, spec)
+
+
+def illustrated_span_beats(beats: list[dict], voice_dir, spec: dict) -> tuple[float, float]:
+    """(start, end) of what a shot illustrates: the first relevant word (``atWord``, else the first word of the
+    first line / the start of the first staged action) to the last word of the last line (or ``untilWord``).
+    Shared by staging and QA ``sync.visual_narration``."""
+    lo, hi = spec["fromBeat"], min(spec["toBeat"], len(beats) - 1)
+    rng = beats[lo:hi + 1]
+    first = rng[0]
+    if first["type"] == "line":
+        s0 = line_span(voice_dir, first)[0]
+        if spec.get("atWord"):
+            wt = word_time_in_line(voice_dir, first, spec["atWord"])
+            s0 = wt if wt is not None else s0
+        else:
+            # M05.8 default: the frame starts at the first word of its topic ("And last, | the controller"),
+            # so a lead-in ("Perfect!", "Here's how it works.") plays on stage, not over the picture
+            from robotics101.cartoon.sync import first_keyword_time
+            kt = first_keyword_time(voice_dir, first, spec)
+            s0 = kt if kt is not None else s0
+    else:
+        s0 = first["start_s"]
+    last_line = next((b for b in reversed(rng) if b["type"] == "line"), None)
+    s1 = line_span(voice_dir, last_line)[1] if last_line is not None else rng[-1]["end_s"]
+    if last_line is not None and rng[-1]["type"] != "line":
+        s1 = max(s1, rng[-1]["end_s"])
+    if spec.get("untilWord"):
+        for b in rng:
+            if b["type"] == "line":
+                wt = word_time_in_line(voice_dir, b, spec["untilWord"])
+                if wt is not None and wt > s0:
+                    s1 = wt
+                    break
+    return round(s0, 3), round(max(s0 + 0.1, s1), 3)
+
+
 def stage_shots(sc: Scene, shots: list[dict]) -> None:
     """M05.1: illustration / solo shots cover the stage over their beat ranges with a full-frame backdrop, the wide
     teaching visual and (solo) the one character, who keeps performing (lip sync, gestures) from its Performer."""
@@ -836,25 +960,18 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
         if spec["layout"] == "stage":
             continue
         b0, b1 = sc.beats[spec["fromBeat"]], sc.beats[min(spec["toBeat"], len(sc.beats) - 1)]
-        start = max(b0["start_s"] - SHOT_LEAD, k if sc.trans_in else 0.0,
+        span0, span1 = illustrated_span(sc, spec)
+        floor = max(k if sc.trans_in else 0.0,
                     max((c["end"] for c in sc.concepts if c["start"] <= b0["start_s"]), default=0.0))
-        end = min(b1["end_s"] + SHOT_TAIL, sc.duration - (k if sc.trans_out else 0.0))
-        # atWord only splits a shared line; a sole example on a line starts at the line, not mid-phrase.
-        siblings = [s for s in shots if s.get("fromBeat") == spec["fromBeat"] and s is not spec]
-        use_at = spec.get("atWord") and (spec.get("untilWord") or any(s.get("atWord") or s.get("untilWord") for s in siblings))
-        if use_at:
-            wt = sc.word_time(spec["atWord"], after=max(0.0, b0["start_s"] - 0.05))
-            if wt is not None:
-                start = max(wt, k if sc.trans_in else 0.0,
-                            max((c["end"] for c in sc.concepts if c["start"] <= b0["start_s"]), default=0.0))
-        if spec.get("untilWord"):
-            wt = sc.word_time(spec["untilWord"], after=start)
-            if wt is not None:
-                end = min(wt, sc.duration - (k if sc.trans_out else 0.0))
+        # M05.8: the shot is timed to the words it illustrates (ElevenLabs word timings): it starts at the first
+        # relevant word and cuts away when the last illustrated line ends. No intervening gag can extend it.
+        start = max(span0 - SHOT_LEAD, floor)
+        end = min(span1 + SHOT_TAIL, sc.duration - (k if sc.trans_out else 0.0))
         plug = sc.beat("action", "do", "plug_in")
         if plug and start < plug["end_s"] + CHARGE_HOLD_S < end:
-            # keep the seated charger visible (spark + battery) before the next teaching frame
-            start = plug["end_s"] + CHARGE_HOLD_S
+            # keep the seated charger visible (spark + battery) a moment, but never more than SYNC_HOLD_MAX
+            # past the first illustrated word: the narration must not move on without the picture (M05.8)
+            start = max(start, min(plug["end_s"] + CHARGE_HOLD_S, span0 + SYNC_HOLD_MAX))
         sh = {"layout": spec["layout"], "visual": spec.get("visual") or "concept_robot",
               "character": spec.get("character"), "corner": spec.get("corner", "left"),
               "fromBeat": spec["fromBeat"], "toBeat": spec["toBeat"], "start": round(start, 3), "end": round(end, 3)}
@@ -879,7 +996,7 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
             if sh["layout"] == "illustration" and box_area(cb) > CORNER_MAX_AREA:
                 raise ValueError(f"{sc.sid}: illustration corner character {cid} too big ({box_area(cb):.2f})")
         sh["characters"] = chars
-        ctx = SHOT_CONTEXT.get(sh["visual"], lambda sc_, sh_: {})(sc, sh)
+        ctx = shot_context(sc, sh)
         if sh["visual"].startswith("concept_"):
             ctx = {"title": next((c["title"] for c in sc.concepts), "")}
         sc.shots.append(sh)
@@ -1075,6 +1192,72 @@ def _bbox(m) -> list[float]:
     return norm_box(x0, y0, x1, y1)
 
 
+# Head / face parts measured for layout.faces_clear (M05.7). Antennae and bodies stay out so a
+# label above a head is allowed; the union of these parts is the face box.
+FACE_PARTS = {
+    "maya": ("head", "eyes", "mouth", "brows", "nose", "cheeks", "ears", "puffs", "band", "goggles"),
+    "bolt": ("screen", "eyes", "mouth", "brows", "cheeks"),
+    "nib": ("body", "eye", "beak"),
+}
+
+
+def face_box(cid: str, mob) -> list[float]:
+    """Normalised box of ``cid``'s head/face, from named rig parts (fallback: the top 40% of the body)."""
+    from robotics101.cartoon.layout import norm_box
+    parts = getattr(mob, "parts", None) or {}
+    xs, ys = [], []
+    for k in FACE_PARTS.get(cid, ()):
+        p = parts.get(k)
+        if p is None or (not p.has_points() and not p.submobjects):
+            continue
+        x0, y0 = p.get_corner(np.array([-1, -1, 0]))[:2]
+        x1, y1 = p.get_corner(np.array([1, 1, 0]))[:2]
+        xs += [float(x0), float(x1)]
+        ys += [float(y0), float(y1)]
+    if not xs:
+        x0, y0 = mob.get_corner(np.array([-1, -1, 0]))[:2]
+        x1, y1 = mob.get_corner(np.array([1, 1, 0]))[:2]
+        y0 = float(y0) + 0.60 * (float(y1) - float(y0))
+        return norm_box(x0, y0, x1, y1)
+    return norm_box(min(xs), min(ys), max(xs), max(ys))
+
+
+def faces_report(sc: Scene, step: float = BAND_SAMPLE_S) -> dict:
+    """M05.7: sample real overlay geometry and flag cards, HUD, SFX and similar overlays that cover
+    a character's head or face. Teaching shots, concept cards, transitions and cutaways are skipped
+    (the stage is fully covered on purpose). Props tagged ``on_character``, ``decor``,
+    ``scene_fx`` (e.g. a ping meant to hit an obstacle) or ``covers_stage`` (title cards) are ignored."""
+    from robotics101.cartoon.layout import boxes_collide
+    k = transition_frames(sc) / FPS
+    offenders, n = {}, 0
+    t = 0.0
+    while t < sc.duration:
+        skip = ((sc.trans_in and t < k) or (sc.trans_out and t >= sc.duration - k)
+                or any(c["start"] <= t < c["end"] for c in sc.cutaways)
+                or any(c["start"] <= t < c["end"] for c in sc.concepts)
+                or any(sh["start"] <= t < sh["end"] for sh in sc.shots))
+        if not skip:
+            n += 1
+            mobs, _, _ = frame_layers(sc, t)
+            _, over = named_layers(sc, t, mobs)
+            faces = [(cid, face_box(cid, m)) for cid, m in mobs.items()]
+            boxes: list = []
+            for name, m in over:
+                if (getattr(m, "on_character", False) or getattr(m, "decor", False)
+                        or getattr(m, "scene_fx", False) or getattr(m, "covers_stage", False)):
+                    continue
+                _content_boxes(m, boxes, name)
+            for oname, ob in boxes:
+                for cid, fb in faces:
+                    if boxes_collide(ob, fb):
+                        key = f"{cid}/{oname}"
+                        o = offenders.setdefault(key, {"character": cid, "what": oname,
+                                                       "first": round(t, 2), "n": 0})
+                        o["n"] += 1
+        t += step
+    return {"samples": n, "offenders": list(offenders.values())}
+
+
 def transition_frames(sc: Scene) -> int:
     return max(1, round(sc.trans_half * FPS))
 
@@ -1179,6 +1362,7 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
         from robotics101.cartoon.liveliness import scene_liveliness
         live = scene_liveliness(sc, presence, HEIGHT, SCALES)
         band = band_report(sc)
+        faces = faces_report(sc)
         from robotics101.cartoon.liveliness import scene_acting
         acting = scene_acting(sc, presence, HEIGHT, SCALES)
         facts = {k: v for k, v in sc.facts.items() if k != "approach"}
@@ -1191,6 +1375,7 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
                                  "minPresence": pres, "enterAt": sc.enter_at, "lipsync": sc.lipsync_methods,
                                  "lipsyncAgreement": agree, "liveliness": live, "captionBand": band,
                                  "acting": acting, "background": background_record(sc),
+                                 "facesClear": faces,
                                  "illustrations": sc.illustrations, "keepouts": sc.keepouts, "facts": facts,
                                  "cutaways": [{**c, "clip": str(Path(c["clip"]).relative_to(out_dir))}
                                               for c in sc.cutaways],

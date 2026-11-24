@@ -184,7 +184,7 @@ def pick_backend(tts: str, registry):
 
 
 def render_cartoon_episode(episode: Path, out_dir: Path, tts: str = "auto", size: str = "1920x1080",
-                           log=print) -> dict:
+                           log=print, allow_unapproved: bool = False, approvals_path: Path | None = None) -> dict:
     from robotics101.cartoon.audio import mix_episode
     from robotics101.cartoon.scenes import render_cartoon_scenes
     from robotics101.cartoon.thumbnail import make_cartoon_thumbnail
@@ -221,6 +221,19 @@ def render_cartoon_episode(episode: Path, out_dir: Path, tts: str = "auto", size
     (out_dir / "episode.source.json").write_bytes(spec_bytes)
     (out_dir / "episode.json").write_text(json.dumps(spec, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     episode = out_dir / "episode.json"
+    # M05.8 scene lock: a full episode is stitched only from approved scenes (cheap pre-check before rendering;
+    # the content hashes are verified again after the scenes are rendered, before compose).
+    from robotics101.cartoon import approvals as A
+    apath = Path(approvals_path) if approvals_path else A.default_path(spec["episodeId"])
+    scene_ids = [s["sceneId"] for s in spec["scenes"]]
+    if not allow_unapproved:
+        missing = [sid for sid in scene_ids if sid not in (A.load(apath).get("scenes") or {})]
+        if missing:
+            raise CartoonPipelineError(f"refusing to stitch the episode: scenes not approved {missing} (approvals: "
+                                       f"{apath}); preview + approve each scene first, or pass --allow-unapproved "
+                                       "(dev only)", 6)
+    else:
+        log("  scene lock: --allow-unapproved (dev override) — approvals not enforced")
     stages["validate"] = round(time.monotonic() - t0, 2)
     log(f"[1/7] validate: {spec['episodeId']} ok; run {run_id}")
 
@@ -238,6 +251,13 @@ def render_cartoon_episode(episode: Path, out_dir: Path, tts: str = "auto", size
     render_cartoon_scenes(episode, out_dir, out_dir, w, h, log=log)
     stages["render_scenes"] = round(time.monotonic() - t0, 2)
     log(f"[3/7] scenes rendered [{stages['render_scenes']}s]")
+
+    if not allow_unapproved:
+        try:
+            A.require_approved(apath, A.bundle_scene_hashes(out_dir), scene_ids)
+        except A.SceneLockError as e:
+            raise CartoonPipelineError(str(e), 6) from e
+        log(f"  scene lock: all {len(scene_ids)} scenes approved and unchanged")
 
     t0 = time.monotonic()
     mix_episode(timing, out_dir, out_dir, log=log, spec=spec)

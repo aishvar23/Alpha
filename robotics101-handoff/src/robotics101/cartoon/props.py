@@ -150,19 +150,21 @@ def album(examples: list[str], reveal: list[float], open_u: float = 1.0, t: floa
 # ------------------------------------------------------------------------------------------ check-up
 
 def checklist(parts: list[str], ticks: list[float]) -> VGroup:
-    card = _o(RoundedRectangle(width=3.5, height=0.6 + 0.55 * len(parts), corner_radius=0.2, fill_color="#FFFFFF",
-                               fill_opacity=1))
-    g = VGroup(card, txt("ROBOT CHECK-UP", 24, color="#6C4AB6").move_to(card.get_top() + DOWN * 0.3))
+    """Compact checkup card (M05.7): short enough to sit above character heads in the top-right."""
+    row, head, width = 0.36, 0.36, 3.05
+    card = _o(RoundedRectangle(width=width, height=head + row * len(parts) + 0.14, corner_radius=0.2,
+                               fill_color="#FFFFFF", fill_opacity=1))
+    g = VGroup(card, txt("ROBOT CHECK-UP", 20, color="#6C4AB6").move_to(card.get_top() + DOWN * 0.22))
     for i, (name, t) in enumerate(zip(parts, ticks)):
-        y = card.get_top()[1] - 0.8 - 0.55 * i
-        boxm = _o(Square(0.32, fill_color="#FFFFFF", fill_opacity=1), 3).move_to(P(-1.35, y))
-        label = txt(name.capitalize(), 24, color=ink() if t > 0 else "#9A8C98")
-        label.move_to(P(-1.05 + label.width / 2, y))
+        y = card.get_top()[1] - 0.60 - row * i
+        boxm = _o(Square(0.28, fill_color="#FFFFFF", fill_opacity=1), 3).move_to(P(-1.22, y))
+        label = txt(name.capitalize(), 22, color=ink() if t > 0 else "#9A8C98")
+        label.move_to(P(-0.95 + label.width / 2, y))
         g.add(boxm, label)
         if t > 0:
-            tick = VMobject(stroke_color=OK_GREEN, stroke_width=8).set_points_as_corners(
-                [P(-1.47, y + 0.02), P(-1.37, y - 0.1), P(-1.17, y + 0.16)])
-            g.add(tick.scale(pop(t), about_point=P(-1.35, y)))
+            tick = VMobject(stroke_color=OK_GREEN, stroke_width=7).set_points_as_corners(
+                [P(-1.34, y + 0.02), P(-1.24, y - 0.09), P(-1.06, y + 0.14)])
+            g.add(tick.scale(pop(t), about_point=P(-1.22, y)))
     return g
 
 
@@ -270,6 +272,7 @@ def charge_lead(socket, port_pos, u: float = 1.0) -> VGroup:
     g = VGroup(c, port, plug, prongs, spark)
     g.port, g.plug, g.spark, g.seated, g.cable = port, plug, spark, u >= 0.999, c
     g.cable_points = [c.point_from_proportion(i / 24) for i in range(25)]
+    g.on_character = True            # seats on Bolt; faces_clear does not treat the lead as a covering overlay
     return g
 
 
@@ -290,7 +293,9 @@ def glow_outline(mob, u: float = 1.0, color: str = "#FFE66D") -> VGroup:
     g = mob.copy()
     g.set_fill(opacity=0)
     g.set_stroke(color, 16 + 10 * k, opacity=0.55 + 0.35 * k)
-    return VGroup(g)
+    out = VGroup(g)
+    out.on_character = True          # M05.7: a highlight on the rig itself is not a covering overlay
+    return out
 
 
 def part_label(text: str, at: np.ndarray, u: float) -> VGroup:
@@ -314,17 +319,14 @@ def ping_waves(origin: np.ndarray, u: float, reach: float, back: bool = False, c
         arc = Arc(radius=r, start_angle=-0.6, angle=1.2, stroke_width=7, color=color if not back else "#F72585")
         arc.set_stroke(opacity=1 - 0.6 * v)
         g.add(arc.move_to(origin + RIGHT * (0.1 + d)))
+    g.scene_fx = True  # the ping is meant to travel toward (and hit) the obstacle
     return g
 
 
 def highlight_sweep(box, t: float, period: float = 2.6, color: str = "#FFD166",
                     opacity: float = 0.32) -> VGroup:
-    """Soft diagonal sheen that travels across a teaching board so the frame never freezes.
-
-    Pipeline default for every full-screen teaching shot: idle highlight sweeps keep
-    ``illustrations.animated`` and ``video.no_long_holds`` under the 2 s still limit.
-    ``box`` is world corners ``(x0, y0, x1, y1)`` and the bar stays inside it. Gold, not white:
-    a white bar is invisible on the cream teaching boards.
+    """Retired (M05.7): a board-wide gold bar read as a smudge on the art. Kept only so older
+    renders can be compared; teaching motion now lives on the illustration itself.
     """
     x0, y0, x1, y1 = box
     w, h = x1 - x0, y1 - y0
@@ -520,7 +522,9 @@ def title_card(u: float, subtitle: str = "with Bolt, Maya & Nib") -> VGroup:
     k = pop(u / 0.25)
     if u > 0.85:
         k *= max(0.001, 1 - (u - 0.85) / 0.15)
-    return g.scale(k)
+    g.scale(k)
+    g.covers_stage = True  # full-stage sting / outro; not a covering overlay
+    return g
 
 
 def card(title: str, body: str, u: float, at: np.ndarray = P(0, 2.2), width: float = 9.5) -> VGroup:
@@ -594,8 +598,9 @@ def nameplate(name: str, tagline: str, color: str, u: float, at: np.ndarray, t: 
     ``u`` is 0..1 over the plate's life (0-0.15 pop in, 0.85-1 shrink out)."""
     if u <= 0 or u >= 1:
         return VGroup()
-    title = txt(name.upper(), 110, color=color, font="Luckiest Guy", weight="NORMAL", stroke=8)
-    tag_t = txt(tagline, 38)
+    # Sized to sit above hop height without covering a face (M05.7).
+    title = txt(name.upper(), 86, color=color, font="Luckiest Guy", weight="NORMAL", stroke=7)
+    tag_t = txt(tagline, 32)
     ribbon = RoundedRectangle(width=tag_t.width + 0.8, height=tag_t.height + 0.4, corner_radius=0.22,
                               fill_color="#FFFFFF", fill_opacity=1).set_stroke(ink(), 6)
     tag_g = VGroup(ribbon, tag_t.move_to(ribbon))

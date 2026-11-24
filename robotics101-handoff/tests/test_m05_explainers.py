@@ -35,7 +35,7 @@ def test_ep1_teaching_beats_are_illustration_only_one_example_each():
     expected = {
         "scene-002": ["toaster", "vacuum", "arm", "rover"],
         "scene-003": ["structure", "sensors", "actuators", "power", "controller"],
-        "scene-004": ["echo", "range"],
+        "scene-004": ["echo", "range", "out_of_range"],
         "scene-005": ["the_rule", "sta"],
         "scene-006": ["servo_what", "servo_dial", "servo_head"],
         "scene-007": ["rule_test"],
@@ -186,18 +186,56 @@ def test_servo_dial_fixed_labels_sit_outside_the_ring():
     from robotics101.cartoon.explainers import servo_dial
     from robotics101.cartoon.visuals import ILLUSTRATION_BOX
     g = servo_dial(1.0, {"angle": 30, "spoken": 30}, ILLUSTRATION_BOX)
-    texts = {}
+    from collections import defaultdict
+    cands = defaultdict(list)
     def walk(m):
         tx = getattr(m, "original_text", None) or (str(m.text) if hasattr(m, "text") else None)
         if tx and "°" in str(tx):
-            texts[str(tx)] = m.get_center()
+            cands[str(tx)].append(m.get_center())
         for c in getattr(m, "submobjects", []):
             walk(c)
     walk(g)
+    # the live readout repeats the current angle at the hub; pick the label furthest from the dial centre
+    import math
+    mid = (cands["0°"][0] + cands["180°"][0]) / 2
+    def outermost(k):
+        return max(cands[k], key=lambda p: math.hypot(p[0] - mid[0], p[1] - mid[1]))
+    texts = {k: outermost(k) for k in ("0°", "30°", "60°", "90°", "180°")}
     assert "0°" in texts and "90°" in texts and "180°" in texts
-    # 90 at the top, 0 to the right, 180 to the left
+    assert "30°" in texts and "60°" in texts
+    # 90 at the top, 0 to the right, 180 to the left; 30 and 60 along the arc between them
     assert texts["90°"][1] > texts["0°"][1] and texts["90°"][1] > texts["180°"][1]
     assert texts["0°"][0] > texts["90°"][0] > texts["180°"][0]
+    assert texts["90°"][0] < texts["60°"][0] < texts["30°"][0] < texts["0°"][0]
+    assert texts["0°"][1] < texts["30°"][1] < texts["60°"][1] < texts["90°"][1]
+    # all five labels sit outside the ring (at least as far from the centre as the 90° label)
+    import math
+    cx = (texts["0°"][0] + texts["180°"][0]) / 2
+    cy = texts["0°"][1]
+    r90 = math.hypot(texts["90°"][0] - cx, texts["90°"][1] - cy)
+    for d in ("0°", "30°", "60°", "90°", "180°"):
+        assert math.hypot(texts[d][0] - cx, texts[d][1] - cy) >= r90 - 0.08, d
+    # no two degree-labels overlap
+    boxes = {}
+    def boxes_walk(m):
+        tx = getattr(m, "original_text", None) or (str(m.text) if hasattr(m, "text") else None)
+        if tx and str(tx) in ("0°", "30°", "60°", "90°", "180°"):
+            c = m.get_center()
+            # skip the hub readout (same filter as the tick positions)
+            if math.hypot(c[0] - mid[0], c[1] - mid[1]) < r90 * 0.6:
+                pass
+            else:
+                x0, y0 = m.get_corner(__import__("numpy").array([-1, -1, 0]))[:2]
+                x1, y1 = m.get_corner(__import__("numpy").array([1, 1, 0]))[:2]
+                boxes[str(tx)] = (float(x0), float(y0), float(x1), float(y1))
+        for c in getattr(m, "submobjects", []):
+            boxes_walk(c)
+    boxes_walk(g)
+    keys = ["0°", "30°", "60°", "90°", "180°"]
+    for a, b in ((i, j) for i in keys for j in keys if i < j):
+        ax0, ay0, ax1, ay1 = boxes[a]
+        bx0, by0, bx1, by1 = boxes[b]
+        assert not (min(ax1, bx1) - max(ax0, bx0) > 0 and min(ay1, by1) - max(ay0, by0) > 0), (a, b)
 
 
 def test_charge_cable_hugs_the_floor_and_misses_a_mid_stage_body():

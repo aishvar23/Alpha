@@ -47,8 +47,9 @@ def title(text: str, box, y_off: float = 0.0, size: int = 64, t: float | None = 
 
 
 def live_board(box, t: float, color: str = "#FFFFFF") -> VGroup:
-    """Flush teaching board plus the pipeline-default highlight sweep."""
-    return VGroup(board(box, color), PR.highlight_sweep(box, t))
+    """Flush teaching board. Motion lives on the art (idle loops, title bob, glows), never a
+    board-wide sheen — a traveling bar read as a smudge across the illustration (M05.7)."""
+    return VGroup(board(box, color))
 
 
 def caption(text: str, box, size: int = 36, color: str = ink()) -> VGroup:
@@ -111,35 +112,73 @@ def _vacuum_full(t: float, area) -> VGroup:
     return g
 
 
-def _rover_full(t: float, area) -> VGroup:
-    """Space rover on a wide Martian slope that fills the teaching frame."""
+def _rover_full(t: float, area, ctx: dict | None = None) -> VGroup:
+    """M05.8: the space rover visibly DRIVES across a Martian slope: it rolls left to right over the shot, its
+    wheels turn with the ground speed, dust puffs kick up behind it and it leaves twin tracks."""
+    ctx = ctx or {}
     x0, y0, x1, y1 = area
     w, h = x1 - x0, y1 - y0
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     g = VGroup(Rectangle(width=w, height=h, fill_color="#FFE5D9", fill_opacity=1, stroke_width=0).move_to(P(cx, cy)))
     g.add(_o(Circle(0.7, fill_color="#F4A261", fill_opacity=1), 4).move_to(P(x1 - 1.8, y1 - 1.1)))
+    for rx, ry, rr in ((x0 + 2.2, y1 - 1.6, 0.12), (x0 + 5.5, y1 - 0.9, 0.08), (cx + 1.4, y1 - 1.4, 0.1)):
+        g.add(Circle(rr, fill_color="#FFFFFF", fill_opacity=0.9, stroke_width=0).move_to(P(rx, ry)))
+
     def gy(x):
-        return y0 + 0.55 * h + 0.55 * math.sin((x - x0) * 0.45 + 0.45 * t)
-    xs = np.linspace(x0, x1, 48)
-    pts = [P(x, gy(x)) for x in xs] + [P(x1, y0), P(x0, y0)]
-    g.add(Polygon(*pts, fill_color="#E76F51", fill_opacity=1, stroke_color=ink(), stroke_width=4))
-    rx0 = cx
+        return y0 + 0.42 * h + 0.35 * math.sin((x - x0) * 0.42)
+    xs = np.linspace(x0, x1, 64)
+    g.add(Polygon(*([P(x, gy(x)) for x in xs] + [P(x1, y0), P(x0, y0)]), fill_color="#E76F51", fill_opacity=1,
+                  stroke_color=ink(), stroke_width=4))
+    for kx in (0.12, 0.31, 0.58, 0.83):                         # rocks (fixed: the rover moves past them)
+        rx = x0 + kx * w
+        g.add(_o(Ellipse(width=0.55, height=0.3, fill_color="#9C4A3A", fill_opacity=1), 3).move_to(P(rx, gy(rx) - 0.35)))
+    t0, t1 = ctx.get("t0"), ctx.get("t1") or (ctx.get("shot") or {}).get("end")
+    if t0 is None or t1 is None or t1 - t0 < 0.5:
+        u = (t / 6.0) % 1.0
+    else:
+        u = clamp01((t - t0) / (t1 - t0))
+    start_x, end_x = x0 + 2.6, x1 - 2.6
+    rx0 = start_x + (end_x - start_x) * u
+    speed = (end_x - start_x) / max(0.5, (t1 - t0) if t0 is not None and t1 is not None else 6.0)
+    # tracks: twin dashed ruts from the start to the rover's rear wheel
+    for k in range(int(max(0.0, rx0 - 1.6 - start_x + 1.6) / 0.32)):
+        tx = start_x - 1.6 + k * 0.32
+        if tx > rx0 - 1.6:
+            break
+        g.add(Line(P(tx, gy(tx) - 0.06), P(tx + 0.18, gy(tx + 0.18) - 0.06), stroke_width=5, color="#7A3328"))
     yb, yf = gy(rx0 - 0.7), gy(rx0 + 0.7)
     tilt = math.atan2(yf - yb, 1.4)
     wr = 0.55
+    bump_y = 0.04 * math.sin(t * 22.0)                          # suspension jiggle while rolling
     body = _o(RoundedRectangle(width=3.8, height=1.25, corner_radius=0.28, fill_color="#F4F1DE", fill_opacity=1), 8)
     mast = Line(P(0.85, 0.55), P(0.85, 1.85), stroke_width=12, color=ink())
     cam = _o(Rectangle(width=0.95, height=0.52, fill_color="#2EC4B6", fill_opacity=1), 5).move_to(P(0.85, 2.1))
     panel = _o(Rectangle(width=1.9, height=0.26, fill_color="#118AB2", fill_opacity=1), 4).move_to(P(-0.45, 0.75))
     wheels = VGroup()
+    spin = -(rx0 - start_x) / wr                                # rolling without slipping
     for wx in (-1.35, 0.0, 1.35):
-        a = -t * 6.0
-        wh = VGroup(_o(Circle(wr, fill_color="#45505E", fill_opacity=1), 6),
-                    Line(P(-wr * math.cos(a), -wr * math.sin(a)), P(wr * math.cos(a), wr * math.sin(a)),
-                         stroke_width=7, color="#FFFFFF"))
+        wh = VGroup(_o(Circle(wr, fill_color="#45505E", fill_opacity=1), 6))
+        for j in range(3):
+            a = spin + j * PI / 3
+            wh.add(Line(P(-wr * math.cos(a), -wr * math.sin(a)), P(wr * math.cos(a), wr * math.sin(a)),
+                        stroke_width=6, color="#FFFFFF"))
         wheels.add(wh.move_to(P(wx, -0.85)))
-    rv = VGroup(body, mast, cam, panel, wheels).rotate(tilt, about_point=P(0, -0.85))
-    g.add(rv.move_to(P(rx0, (yb + yf) / 2 + 0.95)))
+    rv = VGroup(body.shift(UP * bump_y), mast.shift(UP * bump_y), cam.shift(UP * bump_y), panel.shift(UP * bump_y),
+                wheels).rotate(tilt, about_point=P(0, -0.85))
+    rv.move_to(P(rx0, (yb + yf) / 2 + 0.95))
+    # dust: puffs spawn behind the rear wheel and drift back / up as they fade
+    for k in range(6):
+        age = ((t * 3.0) + k / 6) % 1.0
+        px = rx0 - 1.9 - age * 1.2
+        py = gy(rx0 - 1.9) + 0.1 + age * 0.7
+        g.add(Circle(0.16 + 0.32 * age, fill_color="#D9A38B", fill_opacity=0.75 * (1 - age),
+                     stroke_width=0).move_to(P(px, py)))
+    # speed lines
+    for k in range(3):
+        ly = (yb + yf) / 2 + 0.6 + k * 0.42
+        g.add(Line(P(rx0 - 2.6 - 0.3 * k, ly), P(rx0 - 2.05 - 0.3 * k, ly), stroke_width=5, color=ink(),
+                   stroke_opacity=0.5 + 0.3 * math.sin(10 * t + k)))
+    g.add(rv)
     return g
 
 
@@ -188,31 +227,74 @@ def _arm_full(t: float, area) -> VGroup:
     return g
 
 
+# M05.8 middle-ground scale for the one-example family frames: the example sits in a framed scene ("diorama")
+# that spans ~55-70% of the frame (width and height), centred between the title and the caption, with breathing
+# room on every side; never edge-to-edge (M05.6 was too zoomed in) and never a small inset (M05.5).
+SUBJECT_SHARE = (0.55, 0.70)
+FRAME_W, FRAME_H = 14.222, 8.0
+SUBJECT_W, SUBJECT_H = 0.64 * FRAME_W, 0.57 * FRAME_H
+
+
+def subject_box(box=ILLUSTRATION_BOX) -> tuple[float, float, float, float]:
+    """World corners of the framed example scene inside a teaching box."""
+    x0, y0, x1, y1 = box
+    top = y1 - 0.98                                  # below the title
+    bottom = y0 + 1.0                                # above the caption
+    h = min(SUBJECT_H, top - bottom)
+    cy = (top + bottom) / 2
+    cx = (x0 + x1) / 2
+    return (cx - SUBJECT_W / 2, cy - h / 2, cx + SUBJECT_W / 2, cy + h / 2)
+
+
+def subject_share(box=ILLUSTRATION_BOX) -> dict:
+    sx0, sy0, sx1, sy1 = subject_box(box)
+    return {"width": round((sx1 - sx0) / FRAME_W, 3), "height": round((sy1 - sy0) / FRAME_H, 3),
+            "marginX": round((sx0 + FRAME_W / 2) / FRAME_W, 3)}
+
+
+def _in_panel(art: VGroup, panel) -> VGroup:
+    """Scale full-bleed art (drawn for the old teaching box) into the diorama panel."""
+    px0, py0, px1, py1 = panel
+    art.scale(min((px1 - px0) / max(art.width, 0.01), (py1 - py0) / max(art.height, 0.01)))
+    return art.move_to(P((px0 + px1) / 2, (py0 + py1) / 2))
+
+
 def one_example(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
-    """One example, full screen: a large animated illustration and its name. Never a grid of several examples."""
+    """One example, full screen: a framed animated scene at the middle-ground scale and its name. Never a grid
+    of several examples."""
     kind = (ctx.get("kind") or ctx.get("example") or "robot").lower()
     label = ctx.get("label") or kind.replace("_", " ").title()
     sub = ctx.get("subtitle") or ""
     g = VGroup(live_board(box, t, "#FFFDF6"))
-    area = box  # full-bleed into the teaching box; title and caption sit on top of the scene
+    panel = subject_box(box)
+    px0, py0, px1, py1 = panel
+    full = _art_box(box, top=0.0, bottom=0.0, pad=0.0)          # the art's native canvas (old full-bleed box)
+    frame = _o(RoundedRectangle(width=px1 - px0, height=py1 - py0, corner_radius=0.25, fill_opacity=0), 8)
+    frame.move_to(P((px0 + px1) / 2, (py0 + py1) / 2))
+    shadow = RoundedRectangle(width=px1 - px0, height=py1 - py0, corner_radius=0.25, fill_color="#E8E1CF",
+                              fill_opacity=1, stroke_width=0).move_to(P((px0 + px1) / 2 + 0.12, (py0 + py1) / 2 - 0.12))
     if kind == "toaster":
-        g.add(_fit(_toaster_art(t), box, margin=0.4, top=1.1, bottom=1.0))
         sub = sub or "Not a robot — it doesn't think"
+        art = VGroup(Rectangle(width=full[2] - full[0], height=full[3] - full[1], fill_color="#FFF1D6",
+                               fill_opacity=1, stroke_width=0).move_to(P((full[0] + full[2]) / 2, (full[1] + full[3]) / 2)))
+        art.add(Rectangle(width=full[2] - full[0], height=1.6, fill_color="#C68B59", fill_opacity=1, stroke_width=0)
+                .move_to(P((full[0] + full[2]) / 2, full[1] + 0.8)))
+        toaster = _toaster_art(t).scale(1.55).move_to(P((full[0] + full[2]) / 2, full[1] + 1.6 + 1.45))
+        art.add(toaster)
     elif "vacuum" in kind:
-        g.add(_vacuum_full(t, area))
+        art = _vacuum_full(t, full)
     elif kind in ("arm", "factory_arm") or "arm" in kind:
-        g.add(_arm_full(t, area))
+        art = _arm_full(t, full)
     elif "rover" in kind:
-        g.add(_rover_full(t, area))
+        art = _rover_full(t, full, ctx)
     elif kind in KINDS:
-        g.add(_fit(vignette(kind, t), box))
+        art = _fit(vignette(kind, t), box)
     else:
-        g.add(_fit(PR.icon(kind), box))
+        art = _fit(PR.icon(kind), box)
+    g.add(shadow, _in_panel(art, panel), frame)
     g.add(title(label.upper() + "!", box, t=t))
-    if sub:
-        g.add(caption(sub, box))
-    else:
-        g.add(caption(label, box))
+    g.add(caption(sub or label, box))
+    g.subject_box = panel
     return g
 
 
@@ -499,7 +581,7 @@ def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
             if marks[i][0] < t < marks[i + 1][0]:
                 easing = True
                 break
-    wobble = (2.0 if easing else 7.0) * math.sin(2.8 * t)
+    wobble = (2.0 if easing else 8.0) * math.sin(3.7 * t)
     ang = target + wobble
     if ctx.get("spoken") is None:
         if ctx.get("t60") is not None and t >= ctx["t60"]:
@@ -516,7 +598,7 @@ def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     dial = Annulus(inner_radius=r - 0.16, outer_radius=r + 0.16, fill_color="#EEF2F7", fill_opacity=1,
                    stroke_width=0).move_to(P(cx, cy))
     ticks = VGroup()
-    spoken = ctx.get("spoken")  # 30 or 60: highlighted ticks only; the number lives in the big readout
+    spoken = ctx.get("spoken")  # 30 or 60: highlighted ticks; numbers sit outside the ring with 0/90/180
     for d in range(0, 181, 10):
         long = d in (0, 90, 180)
         mid = d in (30, 60)
@@ -526,7 +608,16 @@ def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
                        color="#E76F51" if mid else ink()))
         if d in (0, 90, 180):
             lab = PR.txt(f"{d}°", 40, color="#6C4AB6", font="Luckiest Guy", stroke=4)
-            lab.move_to(pt(d, r + 0.78))  # all three fixed labels sit outside the ring
+            lab.move_to(pt(d, r + 0.78))  # fixed labels sit outside the ring
+            ticks.add(lab)
+        elif d in (30, 60):
+            # spoken practice angles: outside the ring, along the tick, slightly smaller so 60° stays
+            # clear of 90° at the top and 30° stays clear of 0° on the right
+            lab = PR.txt(f"{d}°", 32, color="#E76F51", font="Luckiest Guy", stroke=4)
+            lab.move_to(pt(d, r + 0.92))
+            if hot:
+                # pulse the spoken target label (active element only — never a bar across the art)
+                lab.scale(1.0 + 0.10 * math.sin(3.7 * t))
             ticks.add(lab)
     # horn
     horn = VGroup(_o(Circle(0.32, fill_color="#EF476F", fill_opacity=1), 6),
@@ -540,8 +631,11 @@ def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     face = _o(Circle(r - 0.18, fill_color="#FFFFFF", fill_opacity=1), 6).move_to(P(cx, cy))
     # a bright tick at the live horn angle so the wobble (and the ease) reads clearly
     tip = pt(ang, r + 0.12)
-    glow = Circle(0.22 + 0.05 * math.sin(4.0 * t), fill_color="#EF476F", fill_opacity=0.85, stroke_width=0).move_to(tip)
-    g.add(dial, face, ticks, horn, glow, readout, rt)
+    pulse = 0.5 + 0.5 * math.sin(3.7 * t)
+    halo = Circle(0.58 + 0.22 * pulse, fill_color="#FFD166", fill_opacity=0.40 + 0.25 * pulse,
+                  stroke_width=0).move_to(tip)
+    glow = Circle(0.32 + 0.14 * pulse, fill_color="#EF476F", fill_opacity=0.95, stroke_width=0).move_to(tip)
+    g.add(dial, face, ticks, horn, halo, glow, readout, rt)
     g.add(caption(ctx.get("subtitle") or "The horn turns exactly as far as the brain tells it", box))
     return g
 
@@ -576,43 +670,84 @@ def servo_head(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
 # ------------------------------------------------------------------------------------------ echo as illustration + quiz
 
 
-def sensor_range(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
-    """A 0–3 m range bar: a pip travels between in-range and out-of-range, timed to the narration."""
-    g = VGroup(live_board(box, t, "#F4FBFF"), title("SENSOR RANGE", box, t=t))
+def _nib_icon(t: float, h: float = 1.0) -> VGroup:
+    """Nib himself (the real rig, small), propeller spinning, so the range frames show *him*, not a dot."""
+    from robotics101.cartoon.rigs import Pose, build
+    g = build("nib", Pose(prop=t * 18.0, gaze=(-0.8, 0.0), facing=-1, expression="happy"))
+    return g.scale(h / max(g.height, 0.01))
+
+
+def _range_scene(t: float, ctx: dict, box, out: bool) -> VGroup:
+    """M05.8 shared drawing for the two range frames: Bolt's eye-like distance sensor on the left sends waves
+    that fade out at the 3 m edge of a green detection zone; Nib hovers at his real distance."""
     x0, y0, x1, y1 = box
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    bar_w = min(10.0, x1 - x0 - 2.0)
-    bar = _o(RoundedRectangle(width=bar_w, height=0.7, corner_radius=0.2, fill_color="#EEF2F7", fill_opacity=1), 5)
-    bar.move_to(P(cx, cy))
-    # 0 .. 3 m ticks
-    ticks = VGroup()
-    for i, lab in enumerate(("0 m", "1 m", "2 m", "3 m")):
-        x = cx - bar_w / 2 + bar_w * (i / 3)
-        ticks.add(Line(P(x, cy - 0.45), P(x, cy + 0.45), stroke_width=4, color=ink()))
-        ticks.add(PR.txt(lab, 28, color=ink(), font="Luckiest Guy", stroke=3).move_to(P(x, cy - 1.0)))
-    oor_t = ctx.get("oor")
-    period = 3.2
-    if oor_t is None or t < oor_t:
-        # stay in range, but keep the pip moving so a long "in range" line never freezes
-        u = 0.5 + 0.5 * math.sin(2 * PI * t / period)
-        meters = 0.25 + 2.35 * u
+    rng = float(ctx.get("range") or 3.0)
+    g = VGroup(live_board(box, t, "#F4FBFF"))
+    g.add(title("OUT OF RANGE!" if out else "SENSOR RANGE: 3 METERS", box, t=t, size=56))
+    cy = (y0 + y1) / 2 + 0.45
+    sx = x0 + 1.25                                   # sensor
+    bar0, bar1 = sx + 0.9, x1 - 2.6                  # 0 m .. 3 m
+    per_m = (bar1 - bar0) / rng
+    # detection zone (grows in at the start of the frame, then breathes)
+    grow = ease_out(_u(t, ctx.get("t0"), 0.9)) if ctx.get("t0") is not None else 1.0
+    zone_w = max(0.05, (bar1 - bar0) * grow)
+    zone = Rectangle(width=zone_w, height=2.3, fill_color="#06D6A0", fill_opacity=0.16 + 0.04 * math.sin(2.4 * t),
+                     stroke_width=0).move_to(P(bar0 + zone_w / 2, cy))
+    g.add(zone)
+    edge = Line(P(bar1, cy - 1.3), P(bar1, cy + 1.3), stroke_width=8, color="#E76F51" if out else "#06D6A0")
+    g.add(edge)
+    # ground ruler with metre ticks
+    ry = cy - 1.55
+    g.add(Line(P(bar0, ry), P(x1 - 0.6, ry), stroke_width=6, color=ink()))
+    for m in range(0, int(rng) + 2):
+        x = bar0 + m * per_m
+        if x > x1 - 0.5:
+            break
+        g.add(Line(P(x, ry - 0.18), P(x, ry + 0.18), stroke_width=5, color=ink()))
+        g.add(PR.txt(f"{m} m", 30, color=ink(), font="Luckiest Guy", stroke=3).move_to(P(x, ry - 0.42)))
+    # sensor "eye"
+    eye = VGroup(_o(RoundedRectangle(width=1.3, height=1.0, corner_radius=0.3, fill_color="#2EC4B6", fill_opacity=1), 6),
+                 _o(Circle(0.24, fill_color="#1B263B", fill_opacity=1), 3).move_to(P(-0.27, 0)),
+                 _o(Circle(0.24, fill_color="#1B263B", fill_opacity=1), 3).move_to(P(0.27, 0)))
+    g.add(eye.move_to(P(sx, cy)))
+    # waves travel out and fade at the range edge (never past it)
+    for k in range(4):
+        ph = ((t * 0.9) + k / 4) % 1.0
+        wx = bar0 + ph * (bar1 - bar0)
+        rad = 0.35 + 1.1 * ph
+        op = max(0.0, 1.0 - ph) * 0.9
+        g.add(Arc(radius=rad, start_angle=-0.6, angle=1.2, color="#118AB2", stroke_width=7,
+                  stroke_opacity=op).move_to(P(wx, cy)))
+    # Nib at his distance
+    nib_m = float(ctx.get("nibMeters") or (3.6 if out else 1.2))
+    if out:
+        nib_m = max(nib_m, rng + 0.6)
+    nx = bar0 + nib_m * per_m
+    nx = min(nx, x1 - 0.8)
+    bob = 0.12 * math.sin(2.6 * t)
+    nib = _nib_icon(t, 1.25).move_to(P(nx, cy + 0.15 + bob))
+    g.add(nib)
+    dist = PR.txt(f"{nib_m:g} m", 34, color="#E76F51" if out else "#118AB2", font="Luckiest Guy", stroke=3)
+    g.add(dist.move_to(P(nx, cy + 1.25 + bob)))
+    if out:
+        q = PR.txt("?", 72, color="#E76F51", font="Luckiest Guy", stroke=4)
+        g.add(q.move_to(P(sx + 0.95, cy + 1.0)).scale(1.0 + 0.12 * math.sin(4.0 * t)))
+        g.add(caption("Farther than 3 m: the sensor can't see him", box, color="#E76F51"))
     else:
-        # first crossing is synced to "out": ease past 3 m, then roam in the out-of-range zone
-        elapsed = t - oor_t
-        if elapsed < 0.85:
-            meters = 1.2 + (3.45 - 1.2) * ease_in_out(elapsed / 0.85)
-        else:
-            meters = 3.28 + 0.32 * math.sin(1.8 * (elapsed - 0.85))
-    out = meters > 3.0
-    tag = "OUT OF RANGE" if out else "IN RANGE"
-    col = "#E76F51" if out else "#06D6A0"
-    pip_x = cx - bar_w / 2 + bar_w * (meters / 3.0)
-    pulse = 1.0 + 0.12 * math.sin(3.4 * t)
-    pip = _o(Circle(0.38 * pulse, fill_color=col, fill_opacity=1), 6).move_to(P(pip_x, cy))
-    # a short trail so the travel reads clearly
-    trail = Circle(0.18, fill_color=col, fill_opacity=0.35, stroke_width=0).move_to(P(pip_x - 0.35, cy))
-    g.add(bar, ticks, trail, pip, caption(tag, box, color=col))
+        chk = PR.txt("IN RANGE", 30, color="#06D6A0", font="Luckiest Guy", stroke=3)
+        g.add(chk.move_to(P(nx, cy - 0.95 + bob)))
+        g.add(caption("The sensor measures things up to 3 meters away", box, color=ink()))
     return g
+
+
+def sensor_range(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
+    """M05.8: "measures things up to 3 m": the green detection zone with Nib inside it (in range)."""
+    return _range_scene(t, ctx, box, out=False)
+
+
+def sensor_out_of_range(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
+    """M05.8: "farther than 3 m, out of range": Nib beyond the zone edge, the waves stop at 3 m."""
+    return _range_scene(t, ctx, box, out=True)
 
 
 def quiz_question(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
@@ -694,7 +829,8 @@ EXPLAINERS = {
     "servo_head": (servo_head, ("illustration",)),
     "quiz_question": (quiz_question, ("illustration",)),
     "sensor_range": (sensor_range, ("illustration",)),
+    "sensor_out_of_range": (sensor_out_of_range, ("illustration",)),
 }
 
-__all__ = ["EXPLAINERS", "one_example", "checkup_part", "the_rule", "rule_test", "servo_cutaway", "servo_dial",
-           "servo_head", "quiz_question", "sensor_range", "ILLUSTRATION_BOX"]
+__all__ = ["EXPLAINERS", "SUBJECT_SHARE", "subject_box", "subject_share", "one_example", "checkup_part", "the_rule", "rule_test", "servo_cutaway", "servo_dial",
+           "servo_head", "quiz_question", "sensor_range", "sensor_out_of_range", "ILLUSTRATION_BOX"]
