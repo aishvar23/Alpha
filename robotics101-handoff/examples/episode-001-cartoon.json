@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.1",
+  "schemaVersion": "1.2",
   "episodeId": "ep-001",
   "episodeNumber": 1,
   "title": "Bolt Bumps Into Everything",
@@ -33,6 +33,8 @@
       "educationalObjective": "Hook: robots need to notice the world around them",
       "engine": "cartoon",
       "template": "cartoon_cold_open",
+      "section": "cold_open",
+      "background": "auto",
       "durationTargetSeconds": 30,
       "parameters": {
         "obstacle": "boxes"
@@ -144,6 +146,8 @@
       "educationalObjective": "A robot is a machine that can sense, think and act; examples of robots",
       "engine": "cartoon",
       "template": "cartoon_robot_family",
+      "section": "robot_family",
+      "background": "auto",
       "durationTargetSeconds": 40,
       "parameters": {
         "examples": [
@@ -248,6 +252,8 @@
       "educationalObjective": "The five main parts of a robot: structure, sensors, actuators, power, controller",
       "engine": "cartoon",
       "template": "cartoon_robot_checkup",
+      "section": "checkup",
+      "background": "auto",
       "durationTargetSeconds": 40,
       "parameters": {
         "parts": [
@@ -370,6 +376,8 @@
       "educationalObjective": "A distance sensor sends a sound and times the echo; it has a range",
       "engine": "cartoon",
       "template": "cartoon_sensor_ping",
+      "section": "sensors",
+      "background": "auto",
       "durationTargetSeconds": 45,
       "parameters": {
         "rangeMeters": 3.0,
@@ -512,6 +520,8 @@
       "educationalObjective": "Sense, think, act: a controller rule with a 0.5 m threshold",
       "engine": "cartoon",
       "template": "cartoon_rule_board",
+      "section": "the_rule",
+      "background": "auto",
       "durationTargetSeconds": 50,
       "parameters": {
         "thresholdMeters": 0.5,
@@ -662,6 +672,8 @@
       "educationalObjective": "Actuators turn decisions into movement; a servo turns to an exact angle",
       "engine": "cartoon",
       "template": "cartoon_servo_highfive",
+      "section": "servo",
+      "background": "auto",
       "durationTargetSeconds": 35,
       "parameters": {
         "startAngleDegrees": 0,
@@ -775,6 +787,8 @@
       "educationalObjective": "Applying sense-think-act: stop and turn before the obstacle, then keep going",
       "engine": "cartoon",
       "template": "cartoon_obstacle_rematch",
+      "section": "rule_test",
+      "background": "auto",
       "durationTargetSeconds": 30,
       "parameters": {
         "thresholdMeters": 0.5,
@@ -896,6 +910,8 @@
       "educationalObjective": "Recap sense-think-act and ask a question",
       "engine": "cartoon",
       "template": "cartoon_recap_chant",
+      "section": "quiz",
+      "background": "auto",
       "durationTargetSeconds": 30,
       "parameters": {
         "question": "Which part of a robot measures distance?"

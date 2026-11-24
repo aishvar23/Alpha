@@ -24,14 +24,25 @@ the owner wants in every episode:
   shot covers gets a ``solo`` shot of its speaker with the scene's concept visual. Shot beat indices refer to the
   expanded beat list (they are shifted when concept stings are inserted).
 
+* **section backgrounds** (M05.5, schema 1.2): every section gets its own background. A scene's ``section`` id
+  groups consecutive scenes (default: each scene is its own section); ``background`` is ``auto`` (default) or
+  ``{theme, palette}``. Auto picks the template's preferred theme (``TEMPLATE_THEMES``), never the previous section's
+  theme and preferably one not used yet in the episode; a theme used again gets its next palette. Every scene ends
+  up with ``background = {theme, palette, section, auto}`` and the expanded spec is 1.2 (1.1 input is upgraded).
+* **card kickers** (M05.5): the small line above a concept card title comes from the concept's ``kicker``, else the
+  section's ``kicker``, else the section type's default (``TEMPLATE_KICKERS``); null/empty hides it, and there is
+  no global default. A section whose kicker isn't shown on a card gets a short section banner instead.
+
 Expansion is idempotent (an already-expanded spec is returned unchanged apart from a fresh copy), so every entry
 point (``render``, ``voice``, ``render-cartoon``) can call it. The expanded spec is valid against the 1.1 schema and
-is what the bundle stores as ``episode.json``.
+is what the bundle stores as ``episode.json`` (valid against the 1.2 schema).
 """
 
 from __future__ import annotations
 
 import copy
+
+from robotics101.cartoon import BACKGROUND_THEMES, CARTOON_SCHEMA_VERSIONS, LATEST_CARTOON_SCHEMA
 
 INTRO_TEMPLATE = "cartoon_character_intro"
 INTRO_SCENE_ID = "scene-intro"
@@ -197,14 +208,118 @@ def intro_scene(spec: dict, registry) -> dict:
     beats.append({"type": "pause", "seconds": 0.6})
     return {"sceneId": INTRO_SCENE_ID, "sequence": 1, "title": "Meet the crew",
             "educationalObjective": "Meet the recurring characters and their personalities",
-            "engine": "cartoon", "template": INTRO_TEMPLATE, "durationTargetSeconds": 6 * max(1, len(who)),
+            "engine": "cartoon", "template": INTRO_TEMPLATE, "section": "intro", "durationTargetSeconds": 6 * max(1, len(who)),
             "parameters": {"characters": cards}, "validation": {"requiredChecks": ["render_success"]},
             "beats": beats, "generated": "intro"}
 
 
+# M05.5: preferred background themes per template (first free one wins; unknown templates take any free theme)
+TEMPLATE_THEMES = {
+    "cartoon_cold_open": ("workshop",),
+    INTRO_TEMPLATE: ("studio",),
+    "cartoon_robot_family": ("museum",),
+    "cartoon_robot_checkup": ("lab_bench",),
+    "cartoon_sensor_ping": ("sound_lab", "lab_bench"),
+    "cartoon_rule_board": ("control_room", "blueprint"),
+    "cartoon_servo_highfive": ("blueprint", "lab_bench"),
+    "cartoon_obstacle_rematch": ("test_track",),
+    "cartoon_recap_chant": ("quiz_stage", "studio"),
+}
+
+
+def sections(scenes: list[dict]) -> list[list[dict]]:
+    """Consecutive scenes grouped by section id (default: the scene's own id)."""
+    out: list[list[dict]] = []
+    for sc in scenes:
+        sid = sc.get("section") or sc["sceneId"]
+        if out and (out[-1][0].get("section") or out[-1][0]["sceneId"]) == sid:
+            out[-1].append(sc)
+        else:
+            out.append([sc])
+    return out
+
+
+def _authored(sc: dict) -> tuple[str | None, str | None]:
+    bg = sc.get("background")
+    if not isinstance(bg, dict) or bg.get("auto"):
+        return None, None
+    theme = bg.get("theme")
+    return (None if theme in (None, "auto") else theme), (None if bg.get("palette") in (None, "auto") else bg.get("palette"))
+
+
+def resolve_backgrounds(scenes: list[dict]) -> None:
+    """Give every scene its section's background; adjacent sections never share a theme (auto) and a re-used
+    theme takes its next palette. Authored themes/palettes win (validation reports clashes)."""
+    used: dict[str, int] = {}
+    prev = None
+    for grp in sections(scenes):
+        sid = grp[0].get("section") or grp[0]["sceneId"]
+        theme, palette = next(((t, p) for t, p in map(_authored, grp) if t), (None, None))
+        auto = theme is None
+        if auto:
+            cands = list(TEMPLATE_THEMES.get(grp[0]["template"], ())) + list(BACKGROUND_THEMES)
+            theme = next((c for c in cands if c != prev and not used.get(c)), None) \
+                or next(c for c in cands if c != prev)
+        pals = BACKGROUND_THEMES.get(theme, ("default",))
+        palette = palette or pals[used.get(theme, 0) % len(pals)]
+        used[theme] = used.get(theme, 0) + 1
+        for sc in grp:
+            sc["background"] = {"theme": theme, "palette": palette, "section": sid, "auto": auto}
+        prev = theme
+
+
+# M05.5: default card kickers by section type (None = no good default -> hidden; there is no global fallback)
+TEMPLATE_KICKERS = {
+    "cartoon_cold_open": None,
+    INTRO_TEMPLATE: None,
+    "cartoon_robot_family": "Meet the robots!",
+    "cartoon_robot_checkup": "Checkup time!",
+    "cartoon_sensor_ping": "Sensor science!",
+    "cartoon_rule_board": "The Rule",
+    "cartoon_servo_highfive": "Servo time!",
+    "cartoon_obstacle_rematch": "Let's test it!",
+    "cartoon_recap_chant": "Recap & quiz!",
+}
+
+
+def _kicker_key(k: str | None) -> str:
+    return " ".join((k or "").split()).casefold()
+
+
+def resolve_kickers(scenes: list[dict]) -> None:
+    """Section kicker -> first scene of the section (``kicker``: authored, else the section type's default, else
+    hidden); concept cards keep an authored ``kicker`` (null/'' = hidden), else the first card of a section gets the
+    section kicker and later cards none. A default never repeats an earlier kicker (it is hidden instead)."""
+    seen: set[str] = set()
+    for grp in sections(scenes):
+        authored = next((sc["kicker"] for sc in grp if "kicker" in sc), "__default__")
+        for sc in grp:
+            sc.pop("kicker", None)
+        sec = TEMPLATE_KICKERS.get(grp[0]["template"]) if authored == "__default__" else authored
+        if authored == "__default__" and _kicker_key(sec) in seen:
+            sec = None
+        sec = sec or None
+        grp[0]["kicker"] = sec
+        used_section = False
+        for sc in grp:
+            for c in sorted(sc.get("concepts") or [], key=lambda c: c.get("beforeBeat", 0)):
+                if "kicker" in c:
+                    c["kicker"] = c["kicker"] or None
+                elif sec and not used_section:
+                    c["kicker"] = sec
+                else:
+                    c["kicker"] = None
+                if c["kicker"] and _kicker_key(c["kicker"]) == _kicker_key(sec):
+                    used_section = True
+                if c["kicker"]:
+                    seen.add(_kicker_key(c["kicker"]))
+        if sec:
+            seen.add(_kicker_key(sec))
+
+
 def expand_episode(spec: dict, registry) -> dict:
     s = copy.deepcopy(spec)
-    if s.get("schemaVersion") != "1.1":
+    if s.get("schemaVersion") not in CARTOON_SCHEMA_VERSIONS:
         return s
     scenes = s["scenes"]
     cfg = intro_settings(s)
@@ -219,7 +334,10 @@ def expand_episode(spec: dict, registry) -> dict:
             plan_shots(sc)                      # anchored on authored beats, shifted by the sting insertion
         insert_concept_stings(sc)
     resolve_transitions(scenes, transition_settings(s))
+    resolve_backgrounds(scenes)
+    resolve_kickers(scenes)
+    s["schemaVersion"] = LATEST_CARTOON_SCHEMA
     return s
 
 
-__all__ = ["DEFAULT_SHOTS", "EXPLAIN_LAYOUTS", "LAYOUTS", "plan_shots", "AUTO_CYCLE", "CONCEPT_CUE", "TRANSITION_STYLES", "transition_settings", "INTRO_SCENE_ID", "INTRO_TEMPLATE", "expand_episode", "intro_scene", "intro_settings", "main_characters"]
+__all__ = ["TEMPLATE_KICKERS", "resolve_kickers", "TEMPLATE_THEMES", "resolve_backgrounds", "sections", "DEFAULT_SHOTS", "EXPLAIN_LAYOUTS", "LAYOUTS", "plan_shots", "AUTO_CYCLE", "CONCEPT_CUE", "TRANSITION_STYLES", "transition_settings", "INTRO_SCENE_ID", "INTRO_TEMPLATE", "expand_episode", "intro_scene", "intro_settings", "main_characters"]

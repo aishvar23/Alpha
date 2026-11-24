@@ -262,6 +262,19 @@ def ruler_rev(x_face: float, meters: float, **kw) -> VGroup:
     return g.shift(RIGHT * x_face)
 
 
+def lift_labels(ruler_group: VGroup) -> VGroup:
+    """M05.5: take a ruler's distance labels out of the (behind-the-characters) tape and return them on small cream
+    pills for a front layer, so a character standing on the tape never hides '3 m'."""
+    labels = [m for m in ruler_group if isinstance(m, Text)]
+    out = VGroup()
+    for lb in labels:
+        ruler_group.remove(lb)
+        pill = RoundedRectangle(width=lb.width + 0.16, height=lb.height + 0.1, corner_radius=0.08,
+                                fill_color="#FFF8E7", fill_opacity=0.92).set_stroke(ink(), 2).move_to(lb)
+        out.add(VGroup(pill, lb))
+    return out
+
+
 def range_zone(x0: float, meters: float, u: float = 1.0, y_mid: float = GROUND + 1.6, h: float = 2.6) -> VGroup:
     w = meters * METER * ease_out(u)
     zone = Rectangle(width=max(0.01, w), height=h, fill_color="#4CC9F0", fill_opacity=0.16, stroke_width=0)
@@ -603,7 +616,7 @@ def concept_icon(kind: str, t: float) -> VGroup:
     return VGroup(_o(star, 5)).rotate(t * 1.5)
 
 
-def concept_card(title: str, subtitle: str, icon_kind: str, u: float, t: float) -> VGroup:
+def concept_card(title: str, subtitle: str, icon_kind: str, u: float, t: float, kicker: str | None = None) -> VGroup:
     """Full-screen animated concept title card. ``u`` 0..1 over the card's life (pop in, live icon, zoom out)."""
     if u <= 0 or u >= 1:
         return VGroup()
@@ -612,7 +625,7 @@ def concept_card(title: str, subtitle: str, icon_kind: str, u: float, t: float) 
         .rotate(t * 0.25)
     bg = VGroup(Rectangle(width=FW, height=FH, fill_color="#4CC9F0", fill_opacity=0.92, stroke_width=0), burst)
     bg.set_opacity(max(0.0, back_k))
-    tag_ = txt("NEW IDEA!", 34, color="#FFFFFF", font="Luckiest Guy", weight="NORMAL", stroke=5)
+    tag_ = txt(kicker, 34, color="#FFFFFF", font="Luckiest Guy", weight="NORMAL", stroke=5) if kicker else VGroup()
     head = txt(title, 92, color="#FFD166", font="Luckiest Guy", weight="NORMAL", stroke=8)
     if head.width > 11.5:
         head.scale(11.5 / head.width)
@@ -624,7 +637,7 @@ def concept_card(title: str, subtitle: str, icon_kind: str, u: float, t: float) 
     panel = RoundedRectangle(width=3.6, height=3.3, corner_radius=0.4, fill_color="#FFFFFF", fill_opacity=1) \
         .set_stroke(ink(), 8)
     icon_g = VGroup(panel, icon_.move_to(panel))
-    col = VGroup(tag_, head, sub).arrange(DOWN, buff=0.22)
+    col = VGroup(*[m for m in (tag_, head, sub) if m.has_points() or m.submobjects]).arrange(DOWN, buff=0.22)
     card_g = VGroup(icon_g, col).arrange(DOWN, buff=0.3)
     if card_g.height > CARD_MAX_H:                      # M05.2: stay above the caption band even at the overshoot
         card_g.scale(CARD_MAX_H / card_g.height)
@@ -636,3 +649,18 @@ def concept_card(title: str, subtitle: str, icon_kind: str, u: float, t: float) 
 
 
 CARD_CY, CARD_MAX_H = 0.75, 5.4
+
+
+def section_banner(text: str, u: float, t: float, color: str = "#FFD166") -> VGroup:
+    """M05.5 section kicker banner (top centre) for a section without a concept card: pops in, wobbles, pops out."""
+    if u <= 0 or u >= 1 or not text:
+        return VGroup()
+    word = txt(text, 46, color=color, font="Luckiest Guy", weight="NORMAL", stroke=6)
+    if word.width > 7.5:
+        word.scale(7.5 / word.width)
+    pill = RoundedRectangle(width=word.width + 0.9, height=word.height + 0.5, corner_radius=0.35,
+                            fill_color="#6C4AB6", fill_opacity=0.95).set_stroke(ink(), 7)
+    at = P(0, 3.15)
+    g = VGroup(pill, word.move_to(pill)).move_to(at).rotate(0.04 * math.sin(2 * math.pi * 1.1 * t))
+    k = pop(u / 0.2) * (1 if u < 0.85 else max(0.001, 1 - (u - 0.85) / 0.15))
+    return g.scale(k, about_point=at)

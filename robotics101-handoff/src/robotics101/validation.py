@@ -28,7 +28,8 @@ from robotics101.templates.registry import get_template
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCHEMA_PATH = PROJECT_ROOT / "contracts" / "episode.schema.json"
-SCHEMA_PATHS = {"1.0": DEFAULT_SCHEMA_PATH, "1.1": PROJECT_ROOT / "contracts" / "episode.v1.1.schema.json"}
+SCHEMA_PATHS = {"1.0": DEFAULT_SCHEMA_PATH, "1.1": PROJECT_ROOT / "contracts" / "episode.v1.1.schema.json",
+                "1.2": PROJECT_ROOT / "contracts" / "episode.v1.2.schema.json"}
 DIALOGUE_WPS = 2.6            # planning estimate: words per second of cartoon dialogue
 MIN_DIALOGUE_COVERAGE = 0.6   # warn when estimated dialogue covers less of a scene's target
 
@@ -101,9 +102,43 @@ def validate_episode(spec: Any, schema: dict[str, Any] | None = None) -> Validat
     _check_sequences(scenes, report)
     _check_durations(spec, report)
     _check_templates(scenes, report)
-    if spec.get("schemaVersion") == "1.1":
+    if spec.get("schemaVersion") in ("1.1", "1.2"):
         _check_cartoon(spec, report)
+    if spec.get("schemaVersion") == "1.2":
+        _check_sections(spec, report)
     return report
+
+
+def _check_sections(spec: dict, report: ValidationReport) -> None:
+    """v1.2 (M05.5): section ids are contiguous, one background per section, known theme/palette, and two adjacent
+    sections never name the same theme (a section change must change the background)."""
+    from robotics101.cartoon import BACKGROUND_THEMES
+    from robotics101.cartoon.episode import _authored, sections
+    scenes = spec["scenes"]
+    groups = sections(scenes)
+    seen: set[str] = set()
+    prev = None
+    for gi, grp in enumerate(groups):
+        sid = grp[0].get("section") or grp[0]["sceneId"]
+        if sid in seen:
+            report.error(f"scenes[{scenes.index(grp[0])}].section",
+                         f"section {sid!r} is split by another section (a section's scenes must be consecutive)")
+        seen.add(sid)
+        named = {(t, p) for t, p in map(_authored, grp) if t}
+        if len({t for t, _ in named}) > 1:
+            report.error(f"scenes[{scenes.index(grp[0])}].background",
+                         f"section {sid!r} names more than one background {sorted(t for t, _ in named)}")
+        for t, pal in named:
+            if t not in BACKGROUND_THEMES:
+                report.error(f"scenes[{scenes.index(grp[0])}].background.theme", f"unknown theme {t!r}")
+            elif pal and pal not in BACKGROUND_THEMES[t]:
+                report.error(f"scenes[{scenes.index(grp[0])}].background.palette",
+                             f"unknown palette {pal!r} for {t} (choose from {list(BACKGROUND_THEMES[t])})")
+        theme = next(iter(sorted(t for t, _ in named)), None)
+        if theme and theme == prev:
+            report.error(f"scenes[{scenes.index(grp[0])}].background",
+                         f"section {sid!r} uses the same background theme {theme!r} as the section before it")
+        prev = theme
 
 
 def _check_cartoon(spec: dict, report: ValidationReport) -> None:

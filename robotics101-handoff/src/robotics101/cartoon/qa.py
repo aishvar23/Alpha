@@ -9,6 +9,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from robotics101.cartoon import CARTOON_SCHEMA_VERSIONS
 from robotics101.animation.render import PROFILES
 from robotics101.media import find_ffmpeg, summarize
 from robotics101.qa import QaReport, _check_captions, _check_final
@@ -410,6 +411,67 @@ def check_subtitles(rep, out_dir: Path, spec: dict, timing: dict, video_s: float
              f"{min(fracs, default=0):.3f} (≥ {SUB_MIN_TEXT_FRAC}); weak: {weak or 'none'}", round(min(fracs, default=0), 3))
 
 
+SECTION_SWATCH_MIN = 10.0     # M05.5: adjacent sections' background swatches must differ by ≥ this (0..255 mean)
+
+
+def check_section_backgrounds(rep, spec: dict, by: dict) -> None:
+    """M05.5 ``scenes.section_backgrounds`` (hard): every scene records the section background it drew; consecutive
+    scenes of one section share it, and adjacent sections differ in theme AND in drawn colours (swatch distance)."""
+    from robotics101.cartoon.backgrounds import swatch_distance
+    order = [s["sceneId"] for s in spec["scenes"]]
+    missing = [sid for sid in order if not (by.get(sid) or {}).get("background")]
+    groups: list[dict] = []
+    bad = []
+    for sid in order:
+        b = (by.get(sid) or {}).get("background")
+        if not b:
+            continue
+        if groups and groups[-1]["section"] == b.get("section"):
+            g = groups[-1]
+            if (b["theme"], b.get("palette")) != (g["theme"], g["palette"]):
+                bad.append(f"{sid}: background {b['theme']}/{b.get('palette')} differs inside section {g['section']!r}")
+            g["scenes"].append(sid)
+            continue
+        groups.append({"section": b.get("section"), "theme": b["theme"], "palette": b.get("palette"),
+                       "swatch": b.get("swatch"), "scenes": [sid]})
+    for a, b in zip(groups, groups[1:]):
+        d = swatch_distance(a["swatch"], b["swatch"]) if a.get("swatch") and b.get("swatch") else 0.0
+        if a["theme"] == b["theme"]:
+            bad.append(f"{a['section']} → {b['section']}: same theme {a['theme']!r}")
+        elif d < SECTION_SWATCH_MIN:
+            bad.append(f"{a['section']} → {b['section']}: backgrounds look alike (swatch Δ {d:.1f} < {SECTION_SWATCH_MIN})")
+    rows = [{"section": g["section"], "theme": g["theme"], "palette": g["palette"], "scenes": g["scenes"]} for g in groups]
+    rep.hard("scenes.section_backgrounds", not bad and not missing and len(groups) >= 1,
+             f"{len(groups)} sections, backgrounds " + ", ".join(f"{g['section']}={g['theme']}/{g['palette']}" for g in groups)
+             + f"; adjacent clashes: {bad or 'none'}; unrecorded scenes: {missing or 'none'}", rows)
+
+
+def card_kickers(spec: dict, by: dict) -> list[dict]:
+    """Every shown kicker in episode order: concept-card kickers and section banners (M05.5)."""
+    out = []
+    for sc in spec["scenes"]:
+        f = (by.get(sc["sceneId"]) or {}).get("facts") or {}
+        items = [(c.get("start", 0.0), "card", c.get("id"), c.get("kicker")) for c in f.get("conceptCards") or []]
+        if f.get("sectionBanner"):
+            b = f["sectionBanner"]
+            items.append((b.get("start", 0.0), "banner", sc["sceneId"], b.get("kicker")))
+        out += [{"scene": sc["sceneId"], "kind": k, "id": i, "kicker": kk} for _, k, i, kk in sorted(items) if kk]
+    return out
+
+
+def check_kicker_variety(rep, spec: dict, by: dict) -> None:
+    """M05.5 ``cards.kicker_variety`` (hard): no two cards/banners share a kicker (case-insensitive) — the old single
+    'NEW IDEA!' on every card read as a bug; ``cards.kicker_adjacent`` (soft): consecutive cards never repeat one."""
+    ks = card_kickers(spec, by)
+    norm = [" ".join(k["kicker"].split()).casefold() for k in ks]
+    dup = sorted({k["kicker"] for k, n in zip(ks, norm) if norm.count(n) > 1})
+    rep.hard("cards.kicker_variety", not dup,
+             f"{len(ks)} kickers: " + (", ".join(f"{k['scene']}={k['kicker']!r}" for k in ks) or "none")
+             + f"; repeated: {dup or 'none'}", [k["kicker"] for k in ks])
+    adj = [f"{a['scene']}→{b['scene']} {a['kicker']!r}" for a, b, na, nb in zip(ks, ks[1:], norm, norm[1:]) if na == nb]
+    rep.soft("cards.kicker_adjacent", not adj, f"adjacent repeated kickers: {adj or 'none'}", adj)
+
+
 def check_intro(rep, spec: dict, by: dict) -> None:
     """M03.1: the generated cast intro is present (unless the spec turns it off) and introduces every main registry
     character of the episode cast: on stage (presence), nameplate with the registry display name, and a voiced line
@@ -462,8 +524,8 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     ffmpeg, ffprobe = find_ffmpeg()
     spec = _load(out_dir / "episode.json")
     rep = QaReport((spec or {}).get("episodeId"), profile_name, str(out_dir))
-    if not rep.hard("bundle.spec", spec is not None and spec.get("schemaVersion") == "1.1",
-                    "episode.json is a cartoon (1.1) spec"):
+    if not rep.hard("bundle.spec", spec is not None and spec.get("schemaVersion") in CARTOON_SCHEMA_VERSIONS,
+                    "episode.json is a cartoon (1.1/1.2) spec"):
         return rep
     timing = check_dialogue(rep, out_dir)
     if timing is None:
@@ -505,6 +567,8 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
                  f"{low or 'none'}", round(mean, 3))
 
     check_intro(rep, spec, by)
+    check_section_backgrounds(rep, spec, by)
+    check_kicker_variety(rep, spec, by)
     check_liveliness(rep, by)
     check_shots(rep, spec, timing, by)
     check_caption_band(rep, by)

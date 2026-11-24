@@ -24,9 +24,10 @@ import numpy as np
 from robotics101.cartoon import props as PR
 from robotics101.cartoon.lipsync import line_cues
 from robotics101.cartoon.motion import Performer, clamp01, ease_in_out, ease_out
-from robotics101.cartoon.obstacle import BOLT_FRONT, Approach, assert_no_collision, plan_approach
+from robotics101.cartoon.obstacle import BOLT_FRONT, Approach, assert_no_collision, hud_lines, plan_approach
 from robotics101.cartoon.rigs import build
-from robotics101.cartoon.sets import GROUND, METER, SOCKET_POS, garage
+from robotics101.cartoon.backgrounds import backdrop
+from robotics101.cartoon.sets import GROUND, METER, SOCKET_POS
 
 FPS = 30
 SCALES = {"bolt": 0.78, "maya": 0.8, "nib": 0.95}
@@ -63,6 +64,8 @@ class Scene:
     concepts: list = field(default_factory=list)           # [{id,title,subtitle,icon,start,end}]
     shots: list = field(default_factory=list)              # M05.1 [{layout,visual,character,start,end,...}]
     top: list[Overlay] = field(default_factory=list)       # M05.1 shot layer: above everything but transitions
+    background: dict = field(default_factory=lambda: {"theme": "workshop", "palette": "sunny"})   # M05.5 section set
+    top_busy: list = field(default_factory=list)            # M05.5 (start, end) when the top-centre band is in use
 
     @property
     def n_frames(self) -> int:
@@ -515,18 +518,17 @@ def stage_obstacle_rematch(sc: Scene, robotcam: dict | None = None) -> None:
         bolt.move(bonk["start_s"], bonk["start_s"] + 0.6, x=face - BOLT_FRONT * s - 0.5, ease="out")
     pile = PR.box_pile(box_x)
     tape = PR.ruler_rev(face, 3.0, danger=thr)
+    labels = PR.lift_labels(tape)          # M05.5: distance labels drawn in front so Bolt's treads never hide them
     sc.back.append(lambda t, m: [pile, tape])
+    sc.front.append(lambda t, m: [labels])
     keep_out(sc, "ruler", tape)
+    keep_out(sc, "ruler-labels", labels)
 
     def hud(t, m):
         if t < a.t0 - 0.3 or t > resume["end_s"] + 1.5:
             return []
-        r = a.reading(t)
-        alert = r < thr
-        lines = [(f"distance: {r:.2f} m", "#EF476F" if alert else "#7CFFCB"), (f"rule: stop if < {thr:g} m", "#FFFFFF")]
-        if alert:
-            lines.append(("path clear → GO" if t >= resume["start_s"] else "STOP & TURN!", "#FFD166"))
-        return [PR.readout(lines, PR.P(4.3, 2.75))]
+        turned = t >= min(turn["end_s"], resume["start_s"])     # facing away: the sensor sees open floor
+        return [PR.readout(hud_lines(a.reading(t), thr, turned), PR.P(4.3, 2.75))]
     sc.screen.append(hud)
 
     def waves(t, m):
@@ -554,13 +556,15 @@ def stage_recap_chant(sc: Scene) -> None:
     chants = [("SENSE", "#4CC9F0"), ("THINK", "#FFD166"), ("ACT", "#06D6A0")]
     lines = sc.lines()[:3]
     for (word, color), b, x in zip(chants, lines, (-4.7, 0.0, 4.7)):
-        sc.screen.append(sfx_word(word, color, b["start_s"], PR.P(x, 2.6), dur=2.9 - (b["start_s"] - lines[0]["start_s"]),
-                                  size=100))
+        dur = 2.9 - (b["start_s"] - lines[0]["start_s"])
+        sc.screen.append(sfx_word(word, color, b["start_s"], PR.P(x, 2.6), dur=dur, size=100))
+        sc.top_busy.append((b["start_s"], b["start_s"] + dur))
     q = sc.params.get("question", "")
     sc.facts["question"] = q
     q_line = next((b for b in sc.lines("maya") if q and q.split()[0] in b["text"] and "question" in b["text"]), None)
     outro = sc.beat("music", "cue", "outro")
     if q_line:
+        sc.top_busy.append((q_line["start_s"], outro["start_s"]))
         sc.screen.append(lambda t, m: [PR.card("Quiz time!", q, _u(t, q_line["start_s"], q_line["start_s"] + 0.6),
                                                at=PR.P(-0.4, 2.45), width=8.4)] if q_line["start_s"] <= t < outro["start_s"] else [])
     dance = sc.beat("action", "do", "beep_dance")
@@ -569,8 +573,12 @@ def stage_recap_chant(sc: Scene) -> None:
                                                        _u(t, dance["start_s"], dance["end_s"] + 0.6),
                                                        m["nib"].get_top() + PR.P(0.3, 1.0))]
                         if "nib" in m and dance["start_s"] <= t < dance["end_s"] + 0.6 else [])
+    sc.top_busy.append((outro["start_s"], sc.duration))
     sc.screen.append(lambda t, m: [PR.title_card(min(0.8, _u(t, outro["start_s"], outro["start_s"] + 3.0)),
                                                  subtitle="See you next time!")] if t >= outro["start_s"] else [])
+
+
+INTRO_SLOT_X = 4.0
 
 
 def stage_character_intro(sc: Scene) -> None:
@@ -578,7 +586,8 @@ def stage_character_intro(sc: Scene) -> None:
     (display name in its caption colour + personality tagline) while its intro line plays; all stay in a lineup."""
     cards = sc.params.get("characters", [])
     n = len(cards)
-    slots = [(-4.6 + 9.2 * i / max(1, n - 1)) if n > 1 else 0.0 for i in range(n)]
+    # M05.5: lineup slots ±4.0 (was ±4.6) so the outer characters' hops/arm swings stay inside the frame
+    slots = [(-INTRO_SLOT_X + 2 * INTRO_SLOT_X * i / max(1, n - 1)) if n > 1 else 0.0 for i in range(n)]
     segs = []
     for i, (c, x) in enumerate(zip(cards, slots)):
         cid = c["id"]
@@ -641,6 +650,8 @@ def build_scene(spec_scene: dict, timing_scene: dict, voice_dir: Path, robotcam:
                 trans_out: str | None = None, trans_half: float = 0.4) -> Scene:
     sc = Scene(timing_scene["sceneId"], spec_scene["template"], spec_scene.get("parameters", {}),
                timing_scene["beats"], timing_scene["scene_duration_s"], Path(voice_dir))
+    if isinstance(spec_scene.get("background"), dict) and spec_scene["background"].get("theme") not in (None, "auto"):
+        sc.background = dict(spec_scene["background"])       # M05.5: resolved by episode.resolve_backgrounds
     tin = spec_scene.get("transitionIn")
     sc.trans_in = tin if tin not in (None, "cut") else None
     sc.trans_out = trans_out if trans_out not in (None, "cut") else None
@@ -651,6 +662,7 @@ def build_scene(spec_scene: dict, timing_scene: dict, voice_dir: Path, robotcam:
     else:
         stage(sc)
     stage_concept_cards(sc, spec_scene.get("concepts") or [])
+    stage_section_banner(sc, spec_scene.get("kicker"))
     stage_shots(sc, spec_scene.get("shots") or [])
     perform_dialogue(sc)
     for p in sc.perf.values():
@@ -668,13 +680,37 @@ def stage_concept_cards(sc: Scene, concepts: list[dict]) -> None:
         t0, t1 = b["start_s"], b["end_s"]
         nxt = next((x["start_s"] for x in sc.lines() if x["start_s"] >= t0), sc.duration)
         card = {"id": c["id"], "title": c["title"], "subtitle": c.get("subtitle", ""), "icon": c.get("icon", ""),
+                "kicker": c.get("kicker") or None,
                 "start": round(t0, 3), "end": round(t1, 3), "teachStart": round(nxt, 3)}
         cards.append(card)
         sc.screen.append(lambda t, m, c=card: [PR.concept_card(c["title"], c["subtitle"], c["icon"],
-                                                                _u(t, c["start"], c["end"]), t)]
+                                                                _u(t, c["start"], c["end"]), t, kicker=c["kicker"])]
                          if c["start"] <= t < c["end"] else [])
     sc.concepts = cards
     sc.facts["conceptCards"] = cards
+
+
+BANNER_S = 2.4
+
+
+def stage_section_banner(sc: Scene, kicker: str | None) -> None:
+    """M05.5: a section whose kicker isn't shown on one of its concept cards announces itself with a short top
+    banner right after the transition in (no timing change)."""
+    if not kicker or any((c.get("kicker") or "").casefold() == kicker.casefold() for c in sc.concepts):
+        return
+    t0 = (sc.trans_half if sc.trans_in else 0.0) + 0.1
+    limit = sc.duration - 0.5
+    if sc.concepts:
+        limit = min(limit, sc.concepts[0]["start"])
+    busy = sorted(sc.top_busy + [(c["start"], c["end"]) for c in sc.concepts])
+    for a, b in busy:                       # wait for the top band to be free (recap chants, question cards)
+        if a < t0 + BANNER_S and b > t0:
+            t0 = max(t0, b + 0.1)
+    t1 = min(limit, t0 + BANNER_S, *[a for a, _ in busy if a >= t0] or [limit])
+    if t1 - t0 < 1.0 or t0 > (sc.trans_half if sc.trans_in else 0.0) + 8.0:
+        return
+    sc.facts["sectionBanner"] = {"kicker": kicker, "start": round(t0, 3), "end": round(t1, 3)}
+    sc.screen.append(lambda t, m: [PR.section_banner(kicker, _u(t, t0, t1), t)] if t0 <= t < t1 else [])
 
 
 # ------------------------------------------------------------------------------------------ M05.1 shots
@@ -856,12 +892,21 @@ def named_layers(sc: Scene, t: float, mobs: dict) -> tuple[list, list]:
 
 
 def frame_fn(sc: Scene):
-    bg = garage(sc.set_variant)
+    bg = backdrop(sc.background["theme"], sc.background.get("palette"), sc.set_variant)
 
     def frame(t: float):
         mobs, back, over = frame_layers(sc, t)
         return [bg] + back + list(mobs.values()) + over + transition_overlay(sc, t)
     return frame
+
+
+def background_record(sc: Scene) -> dict:
+    """M05.5 scenes.json entry: the section background actually drawn + a 4x3 colour swatch of it (QA compares
+    adjacent sections' swatches, so two differently-named but look-alike sets still fail)."""
+    from robotics101.cartoon.backgrounds import swatch
+    b = sc.background
+    return {"theme": b["theme"], "palette": b.get("palette"), "section": b.get("section", sc.sid),
+            "auto": b.get("auto", True), "swatch": swatch(b["theme"], b.get("palette"))}
 
 
 # ------------------------------------------------------------------------------------------ M05.2 caption band
@@ -1049,7 +1094,7 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
                                  "duration_s": sc.duration, "video": str(final.relative_to(out_dir)),
                                  "minPresence": pres, "enterAt": sc.enter_at, "lipsync": sc.lipsync_methods,
                                  "lipsyncAgreement": agree, "liveliness": live, "captionBand": band,
-                                 "acting": acting,
+                                 "acting": acting, "background": background_record(sc),
                                  "illustrations": sc.illustrations, "keepouts": sc.keepouts, "facts": facts,
                                  "cutaways": [{**c, "clip": str(Path(c["clip"]).relative_to(out_dir))}
                                               for c in sc.cutaways],

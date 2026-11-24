@@ -84,6 +84,22 @@ def assert_no_collision(a: Approach) -> None:
 BOLT_FRONT = 2.03        # rig units from Bolt's centre to his frontmost point (hands); distance is measured from here
 
 
+CLEAR_READING = "distance: > 3 m (clear)"
+
+
+def hud_lines(reading: float, threshold: float, turned: bool) -> list[tuple[str, str]]:
+    """Distance-HUD rows. Once the robot has turned away the sensor no longer sees the obstacle, so the HUD shows a
+    clear reading with 'path clear → GO' (M05.5: never the old 0.47 m next to GO, which contradicted itself)."""
+    rule = (f"rule: stop if < {threshold:g} m", "#FFFFFF")
+    if turned:
+        return [(CLEAR_READING, "#7CFFCB"), rule, ("path clear → GO", "#FFD166")]
+    alert = reading < threshold
+    rows = [(f"distance: {reading:.2f} m", "#EF476F" if alert else "#7CFFCB"), rule]
+    if alert:
+        rows.append(("STOP & TURN!", "#FFD166"))
+    return rows
+
+
 def bolt_center_x(a: Approach, t: float, box_face_x: float, scale: float, meter: float) -> float:
     """Bolt's centre x while approaching an obstacle face on his right (facing +1)."""
     return box_face_x - a.distance(t) * meter - BOLT_FRONT * scale
@@ -112,12 +128,7 @@ def demo_frame_fn(a: Approach, box_x: float, turn_t: float, resume_t: float, sca
         expr = "surprised" if stopped and t < turn_t else "happy"
         pose = Pose(expression=expr, facing=facing, mouth="X", arm_l=20, arm_r=20, lean=0.05 if not stopped else -0.05)
         bolt = build("bolt", pose).scale(scale, about_point=np.zeros(3)).shift(np.array([x, GROUND, 0]))
-        r = a.reading(t)
-        alert = r < a.threshold
-        lines = [(f"distance: {r:.2f} m", "#EF476F" if alert else "#7CFFCB"),
-                 (f"rule: stop if < {a.threshold:g} m", "#FFFFFF")]
-        if alert:
-            lines.append(("STOP & TURN!" if t < resume_t else "path clear → GO", "#FFD166"))
+        lines = hud_lines(a.reading(t), a.threshold, t >= turn_t)
         mobs = [bg, tape, pile, bolt, p.readout(lines, p.P(3.9, 2.6))]
         if not stopped:
             sensor = np.array([x + BOLT_FRONT * scale * 0.7, GROUND + 1.6 * scale, 0])

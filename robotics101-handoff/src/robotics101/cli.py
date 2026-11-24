@@ -13,6 +13,7 @@ import json
 import sys
 from pathlib import Path
 
+from robotics101.cartoon import CARTOON_SCHEMA_VERSIONS
 from robotics101 import __version__
 from robotics101.validation import validate_file
 
@@ -45,7 +46,7 @@ def _cartoon_not_ready(episode: Path) -> bool:
         version = json.loads(Path(episode).read_text(encoding="utf-8")).get("schemaVersion")
     except (OSError, json.JSONDecodeError, AttributeError):
         return False
-    if version == "1.1":
+    if version in CARTOON_SCHEMA_VERSIONS:
         print(f"error: {episode} is a cartoon episode (schema 1.1); this command is for 1.0 "
               "narrator episodes. Use `render` (end-to-end cartoon pipeline) or `voice` / `render-cartoon` / `mix`.", file=sys.stderr)
         return True
@@ -183,7 +184,7 @@ def _cmd_render_cartoon_episode(args: argparse.Namespace) -> int:
 def _cmd_render(args: argparse.Namespace) -> int:
     from robotics101.pipeline import FAIL, PipelineError, render_episode
 
-    if _schema_version(args.episode) == "1.1":
+    if _schema_version(args.episode) in CARTOON_SCHEMA_VERSIONS:
         return _cmd_render_cartoon_episode(args)
     if args.tts in ("auto", "kokoro", "elevenlabs"):
         print(f"error: --tts {args.tts} is for cartoon (1.1) episodes; use espeak or fixture", file=sys.stderr)
@@ -214,7 +215,7 @@ def _cmd_qa(args: argparse.Namespace) -> int:
         print(f"error: {args.out_dir} is not a directory", file=sys.stderr)
         return EXIT_INPUT
     try:
-        if _schema_version(args.out_dir / "episode.json") == "1.1":
+        if _schema_version(args.out_dir / "episode.json") in CARTOON_SCHEMA_VERSIONS:
             from robotics101.cartoon.pipeline import qa_and_seal_cartoon
             doc = qa_and_seal_cartoon(args.out_dir, args.profile or _bundle_profile(args.out_dir))
         else:
@@ -268,7 +269,7 @@ def _cmd_voice(args: argparse.Namespace) -> int:
     if rc != EXIT_OK:
         return rc
     spec = json.loads(args.episode.read_text(encoding="utf-8"))
-    if spec.get("schemaVersion") != "1.1":
+    if spec.get("schemaVersion") not in CARTOON_SCHEMA_VERSIONS:
         print("error: `voice` is for cartoon episodes (schema 1.1); use `narrate` for 1.0", file=sys.stderr)
         return EXIT_INPUT
     try:
