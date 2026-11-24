@@ -174,6 +174,12 @@ def _check_cartoon(spec: dict, report: ValidationReport) -> None:
             if c["id"] in concept_ids:
                 report.error(f"$.scenes[{i}].concepts[{k}].id", f"concept '{c['id']}' is introduced twice")
             concept_ids.add(c["id"])
+        from robotics101.cartoon.acting import POSE_NAMES                  # M05.3 script cues
+        for j, b in enumerate(scene["beats"]):
+            for key in ("pose", "react"):
+                if b.get("type") == "line" and b.get(key) and b[key] not in POSE_NAMES:
+                    report.error(f"$.scenes[{i}].beats[{j}].{key}",
+                                 f"unknown pose '{b[key]}' (choose from {', '.join(POSE_NAMES)})")
         for k, sh in enumerate(scene.get("shots") or []):                 # M05.1 layout shots
             where = f"$.scenes[{i}].shots[{k}]"
             if not 0 <= sh["fromBeat"] <= sh["toBeat"] < len(scene["beats"]):

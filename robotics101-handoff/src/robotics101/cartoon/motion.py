@@ -15,8 +15,9 @@ import random
 from bisect import bisect_right
 from dataclasses import dataclass, field
 
+from robotics101.cartoon import acting as ACT
 from robotics101.cartoon.lipsync import MouthTrack
-from robotics101.cartoon.rigs import Pose
+from robotics101.cartoon.rigs import Pose, expressions
 
 
 # ------------------------------------------------------------------------------------------ easing
@@ -201,6 +202,7 @@ class Performer:
     stops: list[tuple[float, int]] = field(default_factory=list)            # (time a move settles, direction)
     starts: list[tuple[float, int]] = field(default_factory=list)           # (time a move begins, direction)
     life: bool = True                                                        # M03.3 idle/secondary motion
+    poses: list[Act] = field(default_factory=list)                           # M05.3 emotion poses (arg = gain)
 
     # -- authoring helpers
     def move(self, start: float, end: float, x: float | None = None, y: float | None = None, arc: float = 0.0,
@@ -216,6 +218,17 @@ class Performer:
         if base == "turn":           # the flip happens mid-action and persists afterwards
             self.face(end, -self._held(self.facings, start, self.facing))
         return self
+
+    def emote(self, start: float, name: str, gain: float = 1.0, end: float | None = None) -> "Performer":
+        """M05.3: play an emotion pose from ``acting.POSES`` (``gain`` < 1 for smaller listener reactions)."""
+        if name not in ACT.POSES:
+            raise ValueError(f"unknown pose {name!r}; choose from {ACT.POSE_NAMES}")
+        self.poses.append(Act(start, end if end is not None else start + ACT.pose_duration(name), name, str(gain)))
+        self.poses.sort(key=lambda a: a.start)
+        return self
+
+    def poses_at(self, t: float) -> list[str]:
+        return [a.name for a in self.poses if a.start <= t <= a.end]
 
     def feel(self, t: float, expression: str) -> "Performer":
         self.emotions.append((t, expression))
@@ -268,7 +281,7 @@ class Performer:
     def life_offsets(self, t: float, facing: int, airborne: bool, talking: bool) -> dict:
         """M03.3 always-on life: breathing bob, weight-shift sway, arm drift, talk emphasis, listener nods/reactions,
         anticipation before and follow-through after moves (damped overshoot). Pure function of t."""
-        o = {"dy": 0.0, "lean": 0.0, "squash": 1.0, "arm_l": 0.0, "arm_r": 0.0}
+        o = {"dy": 0.0, "lean": 0.0, "squash": 1.0, "arm_l": 0.0, "arm_r": 0.0, "head_tilt": 0.0}
         if not self.life:
             return o
         ph = (_seed(self.cid) % 1000) / 1000 * 2 * math.pi
@@ -286,6 +299,8 @@ class Performer:
                     o["squash"] *= 1 - 0.035 * k * max(0.0, math.sin(2 * math.pi * 1.1 * (t - a)))   # nods
                     o["lean"] += 0.06 * side * facing * min(1.0, (t - a) / 0.4)
                     o["dy"] += 0.012 * k * math.sin(2 * math.pi * 0.7 * (t - a))                 # attentive sway
+                    o["head_tilt"] += 0.07 * side * facing * min(1.0, (t - a) / 0.5) \
+                        * (0.6 + 0.4 * math.sin(2 * math.pi * 0.35 * (t - a)))                   # M05.3 curious tilt
                 else:
                     o["squash"] *= 1 - 0.07 * bump((t - b) / 0.6)                            # reaction bounce
                 break
@@ -332,13 +347,15 @@ class Performer:
         d = t - self.blinks[i]
         return max(0.0, 1 - abs(d - 0.07) / 0.07) if d < 0.14 else 0.0
 
-    def state(self, t: float) -> FrameState:
+    def _core(self, t: float) -> tuple:
+        """Everything but secondary motion: (x, y, channel dict, facing, expression, gaze, airborne)."""
         x, y = self.position_at(t)
         facing = self._held(self.facings, t, self.facing)
         expr = self._held(self.emotions, t, self.expression)
         gaze = self._held(self.gazes, t, (0.0, 0.0))
         p = {"squash": 1.0, "lean": 0.0, "arm_l": 20.0, "arm_r": 20.0, "dy": 0.0, "dx": 0.0, "glow": 0.5,
-             "blink": self.blink_at(t), "extras": (), "mouth": None, "flip": False}
+             "blink": self.blink_at(t), "extras": (), "mouth": None, "flip": False, "head_tilt": 0.0, "brow": 0.0,
+             "stride": 0.0}
         # idle breathing / hover, talk gestures
         phase = (_seed(self.cid) % 1000) / 1000 * 2 * math.pi
         airborne = self.airborne_at(t)
@@ -354,6 +371,7 @@ class Performer:
         p["squash"] *= lo["squash"]
         p["arm_l"] += lo["arm_l"]
         p["arm_r"] += lo["arm_r"]
+        p["head_tilt"] += lo.get("head_tilt", 0.0)
         if self.life:
             gx, gy = self.glance_at(t)
             gaze = (max(-1.0, min(1.0, gaze[0] + gx)), max(-1.0, min(1.0, gaze[1] + gy)))
@@ -361,8 +379,17 @@ class Performer:
             p["dy"] += 0.025 * abs(math.sin(2 * math.pi * 2.2 * t))
             p["arm_l"] += 10 * (1 + math.sin(2 * math.pi * 0.8 * t + phase))
             p["arm_r"] += 14 * (1 + math.sin(2 * math.pi * 0.6 * t + phase + 1.0))
+            sh = self.mouth.shape_at(t)                       # M05.3: brows pop on open vowels
+            p["brow"] += 0.35 if sh in ("C", "D", "E") else 0.0
+            p["head_tilt"] += 0.05 * math.sin(2 * math.pi * 0.5 * t + phase)
         if self.moving_at(t) and not airborne:
-            p["dy"] += 0.04 * abs(math.sin(2 * math.pi * 3 * t))
+            if self.cid == "maya":                           # M05.3: bouncy walk with leg swing
+                p["dy"] += 0.1 * abs(math.sin(2 * math.pi * 2.2 * t))
+                p["stride"] = math.sin(2 * math.pi * 2.2 * t)
+                p["squash"] *= 1 + 0.04 * math.cos(2 * math.pi * 4.4 * t)
+            else:
+                p["dy"] += 0.06 * abs(math.sin(2 * math.pi * 3 * t))
+        arm_set = set()
         for a in self.acts:
             if a.start <= t <= a.end:
                 u = (t - a.start) / max(1e-6, a.end - a.start)
@@ -378,10 +405,61 @@ class Performer:
                         p[k] = tuple(dict.fromkeys(p[k] + tuple(v)))
                     else:
                         p[k] = v
+                        if k in ("arm_l", "arm_r"):
+                            arm_set.add(k)
+        for a in self.poses:                                  # M05.3 emotion poses (additive, gain-scaled)
+            if a.start <= t <= a.end:
+                u = (t - a.start) / max(1e-6, a.end - a.start)
+                g = float(a.arg or 1.0)
+                o = ACT.pose_fn(a.name)(u)
+                for k, v in o.items():
+                    if v is None:
+                        continue
+                    if k == "squash":
+                        p[k] *= 1 + (v - 1) * g
+                    elif k in ("lean", "dy", "head_tilt", "brow"):
+                        p[k] += v * g
+                    elif k in ("arm_l", "arm_r"):
+                        if k not in arm_set:                  # an authored action keeps its arm
+                            p[k] = p[k] + (v - 20.0) * g
+                    elif k == "extras":
+                        if g >= 0.75:
+                            p[k] = tuple(dict.fromkeys(p[k] + tuple(v)))
+                    elif k == "expression" and g >= 0.75 and v in expressions(self.cid):
+                        expr = v
+        return x, y, p, facing, expr, gaze, airborne
+
+    def secondary(self, t: float, cur: tuple) -> tuple[float, float]:
+        """M05.3 follow-through: Bolt's antenna / Nib's mast lag the body (sideways motion and lean), Maya's hair
+        puffs lag its vertical motion — a damped spring approximated from the body's recent history (pure in t)."""
+        if not self.life:
+            return 0.0, 0.0
+        d = 0.07
+        x0, y0, p0, f0, *_ = cur
+        x1, y1, p1, *_ = self._core(t - d)
+        x2, y2, p2, *_ = self._core(t - 2 * d)
+        vx = ((x0 + p0["dx"]) - (x1 + p1["dx"])) / d
+        vx1 = ((x1 + p1["dx"]) - (x2 + p2["dx"])) / d
+        vy = ((y0 + p0["dy"]) - (y1 + p1["dy"])) / d
+        vy1 = ((y1 + p1["dy"]) - (y2 + p2["dy"])) / d
+        dl = (p0["lean"] - p1["lean"]) / d
+        dl += (p0["head_tilt"] - p1["head_tilt"]) / d
+        ph = (_seed(self.cid) % 1000) / 1000 * 2 * math.pi
+        ant = 0.06 * vx * f0 + 0.05 * (vx - vx1) / d * f0 * 0.05 + 0.12 * dl + 0.05 * math.sin(2 * math.pi * t / 1.9 + ph)
+        hair = -0.35 * vy - 0.1 * (vy - vy1) / d * 0.1 + 0.15 * math.sin(2 * math.pi * t / 1.7 + ph)
+        return max(-0.6, min(0.6, ant)), max(-1.0, min(1.0, hair))
+
+    def state(self, t: float) -> FrameState:
+        cur = self._core(t)
+        x, y, p, facing, expr, gaze, airborne = cur
+        ant, hair = self.secondary(t, cur)
         if p.pop("flip"):
             facing = -facing
         mouth = p.pop("mouth") or self.mouth.shape_at(t)
         pose = Pose(expression=expr, mouth=mouth, blink=p["blink"], gaze=gaze, squash=p["squash"],
                     lean=p["lean"], arm_l=p["arm_l"], arm_r=p["arm_r"], facing=facing, glow=p["glow"],
-                    prop=(t * 26.0) if airborne else 0.3, extras=p["extras"])
+                    prop=(t * 26.0) if airborne else 0.3, extras=p["extras"],
+                    head_tilt=max(-0.35, min(0.35, p["head_tilt"])), brow=max(-1.0, min(1.0, p["brow"])),
+                    antenna=ant if self.cid in ("bolt", "nib") else 0.0, hair=hair if self.cid == "maya" else 0.0,
+                    stride=p["stride"], wheel=-(x + p["dx"] * facing) / 0.17 if self.cid == "bolt" else 0.0)
         return FrameState(pose, x + p["dx"] * facing, y + p["dy"], self.scale)

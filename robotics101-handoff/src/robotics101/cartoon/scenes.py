@@ -124,6 +124,35 @@ def perform_dialogue(sc: Scene) -> None:
             sc.perf[b["who"]].act(b["start_s"], b["end_s"], b["do"])
             if b.get("emotion"):
                 sc.perf[b["who"]].feel(b["start_s"], b["emotion"])
+    perform_acting(sc)
+
+
+def perform_acting(sc: Scene) -> None:
+    """M05.3 acting defaults: every line gets an emotion pose (authored ``pose`` or ``acting.auto_pose``), the
+    listeners react (``react`` or ``acting.auto_react``), emotional action beats get the matching pose, and
+    celebration cues (victory/chant/title stings, sparkle/ding/clap sfx) make the characters dance."""
+    from robotics101.cartoon import acting as ACTING
+    last = None
+    for b in sc.beats:
+        if b["type"] == "line" and b["speaker"] in sc.perf:
+            p = sc.perf[b["speaker"]]
+            name = ACTING.auto_pose(b)
+            p.emote(b["start_s"], name, 1.0, end=min(b["end_s"] + 0.3, b["start_s"] + ACTING.pose_duration(name)))
+            rx = ACTING.auto_react(b, name)
+            if rx:
+                for cid, other in sc.perf.items():
+                    if cid != b["speaker"] and cid in sc.cast:
+                        other.emote(b["start_s"] + 0.35, rx[0], rx[1])
+            last = b["speaker"]
+        elif b["type"] == "action" and b["who"] in sc.perf and b.get("emotion") in ACTING.EMOTION_TO_POSE:
+            sc.perf[b["who"]].emote(b["start_s"], ACTING.EMOTION_TO_POSE[b["emotion"]], 0.9)
+        elif b["type"] == "music" and b.get("cue") in ACTING.CELEBRATION_CUES:
+            d = max(1.6, b["end_s"] - b["start_s"])
+            for cid, perf in sc.perf.items():
+                if cid in sc.cast:
+                    perf.emote(b["start_s"], "celebrate", 1.0 if cid != "nib" else 0.8, end=b["start_s"] + d)
+        elif b["type"] == "sfx" and b.get("id") in ACTING.CELEBRATION_SFX and last in sc.perf:
+            sc.perf[last].emote(b["start_s"], "celebrate", 0.9)
 
 
 def generic_sfx_lettering(sc: Scene, positions: dict[str, np.ndarray], skip: tuple[str, ...] = ()) -> None:
@@ -972,6 +1001,8 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
         from robotics101.cartoon.liveliness import scene_liveliness
         live = scene_liveliness(sc, presence, HEIGHT, SCALES)
         band = band_report(sc)
+        from robotics101.cartoon.liveliness import scene_acting
+        acting = scene_acting(sc, presence, HEIGHT, SCALES)
         facts = {k: v for k, v in sc.facts.items() if k != "approach"}
         from robotics101.cartoon.lipsync import lipsync_agreement
         agree = {f"{sid}#{b['index']}": round(lipsync_agreement(sc.perf[b["speaker"]].mouth, Path(voice_dir) / b["wav"],
@@ -981,6 +1012,7 @@ def render_cartoon_scenes(spec_path: Path, voice_dir: Path, out_dir: Path, width
                                  "duration_s": sc.duration, "video": str(final.relative_to(out_dir)),
                                  "minPresence": pres, "enterAt": sc.enter_at, "lipsync": sc.lipsync_methods,
                                  "lipsyncAgreement": agree, "liveliness": live, "captionBand": band,
+                                 "acting": acting,
                                  "illustrations": sc.illustrations, "keepouts": sc.keepouts, "facts": facts,
                                  "cutaways": [{**c, "clip": str(Path(c["clip"]).relative_to(out_dir))}
                                               for c in sc.cutaways],

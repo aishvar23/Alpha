@@ -1,6 +1,6 @@
 {
   "schemaVersion": "robotics101.characters/1",
-  "rigVersion": 1,
+  "rigVersion": 2,
   "outlineColor": "#2B2140",
   "characters": {
     "bolt": {

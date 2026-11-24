@@ -245,6 +245,51 @@ def check_shots(rep, spec: dict, timing: dict, by: dict) -> None:
              f"problems: {bad or 'none'}", rows)
 
 
+def check_acting(rep, spec: dict, by: dict) -> None:
+    """M05.3 acting: per scene and on-stage character, motion energy (mean key-point speed) above the threshold and
+    still share ≤ 30 %; every speaking character plays ≥ 3 distinct emotion poses over the episode and an emotion
+    pose in every scene where it speaks; at least one celebration (soft)."""
+    from robotics101.cartoon.acting import EMOTION_POSES
+    from robotics101.cartoon.liveliness import (ENERGY_MIN_BY_CHARACTER, ENERGY_MIN_PX_S, MIN_DISTINCT_EMOTION_POSES,
+                                                STILL_SHARE_MAX)
+    measured = {sid: r["acting"] for sid, r in by.items() if "acting" in r}
+    if not measured:
+        rep.soft("characters.acting", False, "no acting metrics in scenes.json (pre-M05.3 render)")
+        return
+    bad, low = [], {}
+    speakers: dict[str, set] = {}
+    for sc in spec["scenes"]:
+        for b in sc["beats"]:
+            if b["type"] == "line":
+                speakers.setdefault(b["speaker"], set()).add(sc["sceneId"])
+    used: dict[str, set] = {}
+    for sid, d in measured.items():
+        for cid, v in d.items():
+            need = ENERGY_MIN_BY_CHARACTER.get(cid, ENERGY_MIN_PX_S)
+            if v.get("frames", 0) and v["energy"] < need:
+                bad.append(f"{cid} energy {v['energy']} px/s < {need} in {sid}")
+            if v.get("frames", 0) and v["stillShare"] > STILL_SHARE_MAX:
+                bad.append(f"{cid} still {v['stillShare']:.0%} of the time in {sid}")
+            if v["energy"] < low.get(cid, (1e9, ""))[0]:
+                low[cid] = (v["energy"], sid)
+            used.setdefault(cid, set()).update(v.get("poses", []))
+            if sid in speakers.get(cid, set()) and not v.get("poseCount"):
+                bad.append(f"{cid} speaks in {sid} without an emotion pose")
+    for cid in speakers:
+        emo = used.get(cid, set()) & set(EMOTION_POSES)
+        if cid in {c for d in measured.values() for c in d} and len(emo) < MIN_DISTINCT_EMOTION_POSES:
+            bad.append(f"{cid} plays only {sorted(emo)} (< {MIN_DISTINCT_EMOTION_POSES} distinct emotion poses)")
+    missing = sorted(set(by) - set(measured))
+    rep.hard("characters.acting", not bad and not missing,
+             f"lowest motion energy per character { {c: f'{e} px/s ({s})' for c, (e, s) in low.items()} } "
+             f"(≥ {ENERGY_MIN_PX_S}, Nib ≥ {ENERGY_MIN_BY_CHARACTER.get('nib')}); still share ≤ {STILL_SHARE_MAX:.0%}; "
+             f"emotion poses used { {c: sorted(v & set(EMOTION_POSES)) for c, v in used.items()} }; problems: "
+             f"{bad or 'none'}; unmeasured scenes: {missing or 'none'}",
+             {c: e for c, (e, _) in low.items()})
+    rep.soft("characters.celebrate", any("celebrate" in v for v in used.values()),
+             "a celebration / dance beat plays somewhere in the episode")
+
+
 def check_caption_band(rep, by: dict) -> None:
     """M05.2: the bottom caption band is reserved for subtitles — no character, teaching visual, readout or prop
     geometry (measured at render time on sampled frames) reaches into it beyond a few anti-aliased pixels."""
@@ -463,6 +508,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     check_liveliness(rep, by)
     check_shots(rep, spec, timing, by)
     check_caption_band(rep, by)
+    check_acting(rep, spec, by)
     if video_s:
         check_transitions(rep, out_dir, spec, timing, float(sj.get("transitionHalfSeconds", 0.4)))
         check_concepts(rep, out_dir, spec, by, timing)

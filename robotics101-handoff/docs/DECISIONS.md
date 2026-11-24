@@ -41,4 +41,4 @@
 
 ## Change control
 When changing an adopted decision, append a new ADR with rationale, consequences and migration plan. Do not silently rewrite contracts or accepted behavior.
-
+- ADR-029 (M05.3): Acting is data-driven on top of the analytic vector rig rather than a new rig technology. A pose library (`cartoon/acting.py`, pure functions of time with anticipation/overshoot envelopes) is layered additively onto the base motion; every dialogue line gets an automatic pose from its emotion and punctuation and every listener a reaction, overridable per line with `pose`/`react`; celebration cues come from music/sfx ids. Rig v2 adds head tilt, brows, stride, wheel spin and secondary channels (antenna/mast/hair follow-through). QA `characters.acting` makes motion energy, stillness and pose variety a hard gate for every episode. Larger steps (bone/mesh rigs: Spine, Grease Pencil, Rive/Lottie, 3D) are documented with tradeoffs in docs/RIG_FEASIBILITY.md; recommended next: richer poses (hands, elbows/knees, 3/4 head) in this rig + a Grease Pencil/Spine prototype.

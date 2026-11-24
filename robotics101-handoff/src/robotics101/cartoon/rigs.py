@@ -23,7 +23,7 @@ from manim import (DOWN, LEFT, ORIGIN, PI, RIGHT, UP, Arc, ArcBetweenPoints, Cir
 
 from robotics101.characters import DEFAULT_REGISTRY_PATH, load_registry
 
-RIG_VERSION = 1
+RIG_VERSION = 2                      # 2 = M05.3 acting channels (head tilt, brows, antenna, hair, stride, wheels)
 MOUTH_SHAPES = ("A", "B", "C", "D", "E", "F", "G", "H", "X")
 EXTRAS = ("stars", "sweat", "sparkle", "zzz", "question", "heart")
 
@@ -42,6 +42,13 @@ class Pose:
     glow: float = 0.5                        # Bolt antenna bulb glow 0..1
     prop: float = 0.0                        # Nib propeller phase (radians)
     extras: tuple[str, ...] = ()
+    # M05.3 acting channels (all default to the M02 neutral look)
+    head_tilt: float = 0.0                   # radians, + = toward the facing direction (Bolt: upper body)
+    brow: float = 0.0                        # -1..1 extra brow raise (+ up / surprised, - down / determined)
+    antenna: float = 0.0                     # Bolt antenna / Nib mast sway (radians, secondary motion)
+    hair: float = 0.0                        # Maya hair-puff bounce (-1..1, secondary motion)
+    stride: float = 0.0                      # Maya walk: leg swing -1..1
+    wheel: float = 0.0                       # Bolt wheel rotation (radians)
 
     def with_(self, **kw) -> "Pose":
         return replace(self, **kw)
@@ -234,6 +241,8 @@ def bolt(pose: Pose = Pose()) -> VGroup:
                ink).move_to(_pt(0, 0.35))
     wheels = VGroup(*[_o(Circle(0.22, fill_color=p["wheel"], fill_opacity=1), ink, 4).move_to(_pt(x, 0.35))
                       for x in (-0.85, 0, 0.85)])
+    hubs = VGroup(*[Dot(_pt(x + 0.11 * math.cos(pose.wheel), 0.35 + 0.11 * math.sin(pose.wheel)), radius=0.045,
+                        color=ink) for x in (-0.85, 0, 0.85)])
     body_c = _pt(0, 1.9)
     body = _o(RoundedRectangle(width=2.9, height=2.5, corner_radius=0.9, fill_color=p["body"], fill_opacity=1),
               ink).move_to(body_c)
@@ -259,12 +268,28 @@ def bolt(pose: Pose = Pose()) -> VGroup:
     arm_r = _limb(sh_r, pose.arm_r, 1.25, 1).set_stroke(ink, 14)
     hands = VGroup(*[_o(Circle(0.2, fill_color=p["belly"], fill_opacity=1), ink, 4).move_to(a.get_end())
                      for a in (arm_l, arm_r)])
+    b_ang, b_up = BOLT_BROWS.get(pose.expression, (0.0, 0.0))
+    b_up += 0.07 * max(0.0, pose.brow)
+    show = abs(b_ang) > 0.01 or pose.brow > 0.25            # LED brows light up for strong feelings only
+    brows = VGroup(*[Line(LEFT * 0.13, RIGHT * 0.13, stroke_width=6, color=p["led"])
+                     .rotate(b_ang * (1 if sx < 0 else -1)).move_to(face_c + _pt(sx, 0.52 + b_up))
+                     for sx in (-0.5, 0.5)]) if show else VGroup()
+    if pose.antenna:                                  # M05.3 secondary motion: antenna lags the body
+        VGroup(stem, bulb, glow).rotate(-pose.antenna, about_point=top)
     extras = _extras(tuple(dict.fromkeys(auto_extras + pose.extras)), bulb.get_center() + DOWN * 0.3, ink)
     parts = dict(glow=glow, stem=stem, bulb=bulb, arm_l=arm_l, arm_r=arm_r, hands=hands, tread=tread,
-                 wheels=wheels, body=body, belly=belly, rivets=rivets, screen=screen, cheeks=cheeks, eyes=eyes,
-                 mouth=mouth, extras=extras)
+                 wheels=wheels, hubs=hubs, body=body, belly=belly, rivets=rivets, screen=screen, cheeks=cheeks,
+                 eyes=eyes, brows=brows, mouth=mouth, extras=extras)
     g = VGroup(*parts.values())
+    if pose.head_tilt:                                # upper body tilts on the treads
+        VGroup(*[v for k, v in parts.items() if k not in ("tread", "wheels", "hubs")]) \
+            .rotate(-0.6 * pose.head_tilt, about_point=_pt(0, 0.7))
     return _finish(g, parts, pose)
+
+
+# LED brows on Bolt's screen (M05.3): angle (+ = inner ends up / worried), raise
+BOLT_BROWS = {"happy": (0.0, 0.0), "surprised": (0.12, 0.04), "worried": (0.4, 0.0), "proud": (-0.2, -0.02),
+              "sleepy": (0.0, 0.0), "dizzy": (0.3, 0.0), "thinking": (-0.25, 0.02), "laugh": (0.0, 0.0)}
 
 
 # ----------------------------------------------------------------------------------- Maya
@@ -329,18 +354,32 @@ def maya(pose: Pose = Pose(expression="happy")) -> VGroup:
     if pose.expression not in MAYA_EXPR:
         raise ValueError(f"maya has no expression {pose.expression!r}")
     brow_a, brow_up, rest, eye_s, cheek_a, auto_extras = MAYA_EXPR[pose.expression]
+    brow_up += 0.08 * pose.brow
+    brow_a += 0.1 * max(0.0, pose.brow)
     gx, gy = pose.gaze
-    legs = VGroup(*[_o(RoundedRectangle(width=0.35, height=1.0, corner_radius=0.15, fill_color=p["trousers"],
-                                        fill_opacity=1), ink, 4).move_to(_pt(x, 0.65)) for x in (-0.3, 0.3)])
-    shoes = VGroup(*[_o(Ellipse(width=0.6, height=0.3, fill_color=p["shoes"], fill_opacity=1), ink, 4)
-                     .move_to(_pt(x + 0.05, 0.15)) for x in (-0.35, 0.35)])
+    legs, shoes = VGroup(), VGroup()
+    for i, x in enumerate((-0.3, 0.3)):               # M05.3: legs swing from the hip when walking
+        leg = _o(RoundedRectangle(width=0.35, height=1.0, corner_radius=0.15, fill_color=p["trousers"],
+                                  fill_opacity=1), ink, 4).move_to(_pt(x, 0.65))
+        shoe = _o(Ellipse(width=0.6, height=0.3, fill_color=p["shoes"], fill_opacity=1), ink, 4) \
+            .move_to(_pt(x * 35 / 30 + 0.05, 0.15))
+        if pose.stride:
+            a = 0.32 * pose.stride * (1 if i else -1)
+            hip = _pt(x, 1.15)
+            leg.rotate(a, about_point=hip)
+            shoe.rotate(a, about_point=hip)
+        legs.add(leg)
+        shoes.add(shoe)
     torso = _o(RoundedRectangle(width=1.5, height=1.5, corner_radius=0.5, fill_color=p["hoodie"], fill_opacity=1),
                ink).move_to(_pt(0, 1.85))
     belt = _o(Rectangle(width=1.5, height=0.22, fill_color=p["belt"], fill_opacity=1), ink, 3).move_to(_pt(0, 1.45))
     buckle = _o(Rectangle(width=0.22, height=0.16, fill_color="#FFD166", fill_opacity=1), ink, 3).move_to(_pt(0, 1.45))
     head_c = _pt(0, 3.45)
-    puffs = VGroup(*[_o(Circle(r, fill_color=p["hair"], fill_opacity=1), ink, 5).move_to(head_c + off)
-                     for r, off in ((0.55, _pt(-0.95, 0.7)), (0.55, _pt(0.95, 0.7)), (0.75, _pt(0, 0.75)))])
+    hb = pose.hair                                    # M05.3: puffs bounce / splay with the head's motion
+    puffs = VGroup(*[_o(Circle(r, fill_color=p["hair"], fill_opacity=1), ink, 5)
+                     .move_to(head_c + off + _pt(0.06 * hb * sx, 0.07 * hb * (1 if sx else 0.6)))
+                     for r, off, sx in ((0.55, _pt(-0.95, 0.7), -1), (0.55, _pt(0.95, 0.7), 1),
+                                        (0.75, _pt(0, 0.75), 0))])
     head = _o(Circle(0.95, fill_color=p["skin"], fill_opacity=1), ink).move_to(head_c)
     band = Line(head_c + _pt(-0.8, 0.75), head_c + _pt(0.8, 0.75), stroke_width=12, color=p["strap"])
     goggles = VGroup(*[_o(Circle(0.27, fill_color=p["goggles"], fill_opacity=1), ink, 6)
@@ -379,6 +418,9 @@ def maya(pose: Pose = Pose(expression="happy")) -> VGroup:
                  puffs=puffs, ears=ears, head=head, cheeks=cheeks, eyes=eyes, brows=brows, nose=nose, mouth=mouth,
                  band=band, goggles=goggles, extras=extras)
     g = VGroup(*parts.values())
+    if pose.head_tilt:                                # M05.3: head tilts on the neck
+        VGroup(*[parts[k] for k in ("puffs", "ears", "head", "cheeks", "eyes", "brows", "nose", "mouth", "band",
+                                    "goggles", "extras")]).rotate(-pose.head_tilt, about_point=_pt(0, 2.55))
     return _finish(g, parts, pose)
 
 
@@ -436,13 +478,22 @@ def nib(pose: Pose = Pose(expression="happy")) -> VGroup:
     extras = _extras(tuple(dict.fromkeys(NIB_EXTRAS.get(pose.expression, ()) + pose.extras)),
                      body_c + UP * 0.6, ink)
     extras.scale(0.6, about_point=body_c + UP * 0.6)
+    if pose.antenna:                                  # M05.3: propeller mast sways (secondary motion)
+        VGroup(mast, prop, hub).rotate(-pose.antenna, about_point=body_c + UP * 0.37)
     parts = dict(feet=feet, body=body, belly=belly, wing=wing, eye=eye, beak=beak, mast=mast, prop=prop, hub=hub,
                  extras=extras)
     g = VGroup(*parts.values())
+    if pose.head_tilt:                                # the whole little body tilts above the feet
+        VGroup(*[v for k, v in parts.items() if k != "feet"]).rotate(-pose.head_tilt, about_point=_pt(0, 0.2))
     return _finish(g, parts, pose)
 
 
 BUILDERS = {"bolt": bolt, "maya": maya, "nib": nib}
+
+
+def expressions(cid: str) -> tuple[str, ...]:
+    """Rig expressions a character supports (M05.3 poses only switch to ones the rig can draw)."""
+    return tuple({"bolt": BOLT_EXPR, "maya": MAYA_EXPR, "nib": NIB_EYES}[cid])
 
 
 def build(cid: str, pose: Pose | None = None) -> VGroup:
