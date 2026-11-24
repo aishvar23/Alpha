@@ -174,6 +174,18 @@ def _check_cartoon(spec: dict, report: ValidationReport) -> None:
             if c["id"] in concept_ids:
                 report.error(f"$.scenes[{i}].concepts[{k}].id", f"concept '{c['id']}' is introduced twice")
             concept_ids.add(c["id"])
+        for k, sh in enumerate(scene.get("shots") or []):                 # M05.1 layout shots
+            where = f"$.scenes[{i}].shots[{k}]"
+            if not 0 <= sh["fromBeat"] <= sh["toBeat"] < len(scene["beats"]):
+                report.error(where, f"beat range {sh['fromBeat']}..{sh['toBeat']} outside the scene's "
+                                    f"{len(scene['beats'])} beats")
+            if sh["layout"] == "solo" and not sh.get("character"):
+                report.error(where, "a solo shot needs its one `character`")
+            vis = sh.get("visual")
+            if vis and not vis.startswith("concept_"):
+                from robotics101.cartoon.visuals import VISUALS
+                if vis not in VISUALS:
+                    report.error(where, f"unknown shot visual '{vis}' (known: {sorted(VISUALS)} or concept_<icon>)")
         est = words / DIALOGUE_WPS
         if est < MIN_DIALOGUE_COVERAGE * scene["durationTargetSeconds"]:
             report.warn(f"$.scenes[{i}].beats",

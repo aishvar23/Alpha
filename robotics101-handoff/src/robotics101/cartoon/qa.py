@@ -200,6 +200,51 @@ def check_liveliness(rep, by: dict) -> None:
              {c: w[0] for c, w in worst.items()})
 
 
+def check_shots(rep, spec: dict, timing: dict, by: dict) -> None:
+    """M05.1 illustration-first layouts: every explanatory line (``explain: true``, set by the template defaults or
+    the author) is on screen inside an ``illustration`` / ``solo`` shot; illustration visuals cover >= 55% of the
+    frame and solo visuals >= 35%; character counts per layout (illustration 0-1 small corner character, solo
+    exactly 1)."""
+    from robotics101.cartoon.layout import (CORNER_MAX_AREA, ILLUSTRATION_MIN_AREA, MAX_CHARACTERS, MIN_CHARACTERS,
+                                            SOLO_MIN_AREA)
+    tim = {s["sceneId"]: s for s in timing["scenes"]}
+    bad, rows, n_explain = [], [], 0
+    for sc in spec["scenes"]:
+        sid = sc["sceneId"]
+        shots = ((by.get(sid) or {}).get("facts") or {}).get("shots") or []
+        for sh in shots:
+            lay, n = sh["layout"], len(sh.get("characters") or [])
+            need = ILLUSTRATION_MIN_AREA if lay == "illustration" else SOLO_MIN_AREA
+            rows.append({"scene": sid, "layout": lay, "visual": sh.get("visual"), "areaShare": sh.get("areaShare"),
+                         "characters": [c["id"] for c in sh.get("characters") or []],
+                         "start": sh["start"], "end": sh["end"]})
+            if (sh.get("areaShare") or 0) < need:
+                bad.append(f"{sid} {lay} visual covers {sh.get('areaShare')} of the frame (< {need})")
+            if not MIN_CHARACTERS.get(lay, 0) <= n <= MAX_CHARACTERS.get(lay, 9):
+                bad.append(f"{sid} {lay} shot has {n} characters")
+            if lay == "illustration" and any(c.get("area", 0) > CORNER_MAX_AREA for c in sh.get("characters") or []):
+                bad.append(f"{sid} illustration corner character too big")
+        beats = {b["index"]: b for b in (tim.get(sid) or {}).get("beats", [])}
+        for i, b in enumerate(sc["beats"]):
+            if b["type"] != "line" or not b.get("explain"):
+                continue
+            n_explain += 1
+            tb = beats.get(i)
+            if tb is None:
+                bad.append(f"{sid}#{i}: explanatory line missing from timing")
+                continue
+            if not any(sh["layout"] in ("illustration", "solo") and sh["start"] <= tb["start_s"] + 0.05
+                       and tb["end_s"] - 0.05 <= sh["end"] for sh in shots):
+                bad.append(f"{sid}#{i}: explanatory line not shown in an illustration/solo shot")
+    if not rows and not n_explain:
+        rep.soft("layout.illustration_first", False, "no explanatory beats / illustration or solo shots in the episode")
+        return
+    rep.hard("layout.illustration_first", not bad,
+             f"{n_explain} explanatory lines in {len(rows)} illustration/solo shots "
+             f"({', '.join(f'{r['scene']}:{r['layout']}/{r['visual']} {r['areaShare']:.0%}' for r in rows)}); "
+             f"problems: {bad or 'none'}", rows)
+
+
 SUB_COVER_TOL = 0.05
 SUB_COLOR_DIST = 70.0         # RGB distance to the speaker colour that counts as "subtitle text" pixels
 SUB_MIN_TEXT_FRAC = 0.04      # share of the cue box covered by speaker-coloured text in the final video
@@ -386,6 +431,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
 
     check_intro(rep, spec, by)
     check_liveliness(rep, by)
+    check_shots(rep, spec, timing, by)
     if video_s:
         check_transitions(rep, out_dir, spec, timing, float(sj.get("transitionHalfSeconds", 0.4)))
         check_concepts(rep, out_dir, spec, by, timing)

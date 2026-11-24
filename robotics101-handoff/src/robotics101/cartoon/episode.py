@@ -16,6 +16,14 @@ the owner wants in every episode:
 * **concept title cards** (M03.2): each scene ``concepts`` marker gets a ``concept_sting`` music beat inserted before
   beat ``beforeBeat`` (default 0); the scene engine shows the animated card for exactly that beat.
 
+* **illustration-first shots** (M05.1): explanatory beats are shown as an ``illustration`` shot (full-bleed teaching
+  visual, no characters or one small corner character) or a ``solo`` shot (exactly one character + a wide visual)
+  instead of the crowded three-character stage. A scene's ``shots`` list is authored or filled from the per-template
+  defaults in ``DEFAULT_SHOTS`` (anchored on beats, so any episode using the template gets them); lines covered by an
+  illustration/solo shot are marked ``explain: true``. Generic rule: any line authored with ``explain: true`` that no
+  shot covers gets a ``solo`` shot of its speaker with the scene's concept visual. Shot beat indices refer to the
+  expanded beat list (they are shifted when concept stings are inserted).
+
 Expansion is idempotent (an already-expanded spec is returned unchanged apart from a fresh copy), so every entry
 point (``render``, ``voice``, ``render-cartoon``) can call it. The expanded spec is valid against the 1.1 schema and
 is what the bundle stores as ``episode.json``.
@@ -60,7 +68,94 @@ def insert_concept_stings(sc: dict) -> None:
     if not concepts or have >= len(concepts):
         return
     for c in sorted(concepts, key=lambda c: c.get("beforeBeat", 0), reverse=True):
-        sc["beats"].insert(min(c.get("beforeBeat", 0), len(sc["beats"])), {"type": "music", "cue": CONCEPT_CUE})
+        at = min(c.get("beforeBeat", 0), len(sc["beats"]))
+        sc["beats"].insert(at, {"type": "music", "cue": CONCEPT_CUE})
+        for sh in sc.get("shots") or []:            # keep shot ranges on the same beats
+            if sh["fromBeat"] >= at:
+                sh["fromBeat"] += 1
+            if sh["toBeat"] >= at:
+                sh["toBeat"] += 1
+
+
+# ------------------------------------------------------------------------------------------ M05.1 shots
+
+LAYOUTS = ("stage", "illustration", "solo")
+EXPLAIN_LAYOUTS = ("illustration", "solo")
+
+
+def _first(beats: list[dict], pred, start: int = 0) -> int | None:
+    return next((i for i in range(start, len(beats)) if pred(beats[i])), None)
+
+
+def _is_sfx(name: str):
+    return lambda b: b["type"] == "sfx" and b.get("id") == name
+
+
+def _is_line(b: dict) -> bool:
+    return b["type"] == "line"
+
+
+def shots_robot_family(beats: list[dict]) -> list[dict]:
+    """The robot families are a full-screen illustration from the album page-flip through the last example line."""
+    a = _first(beats, _is_sfx("page_flip"))
+    if a is None:
+        return []
+    end = _first(beats, _is_sfx("sparkle"), a)
+    lines = [i for i in range(a, end if end is not None else len(beats)) if _is_line(beats[i])]
+    if not lines:
+        return []
+    return [{"layout": "illustration", "fromBeat": a, "toBeat": lines[-1], "visual": "robot_families"}]
+
+
+def shots_sensor_ping(beats: list[dict]) -> list[dict]:
+    """The echo explanation (first line through the line after the first echo) is a solo of the explainer with a wide
+    sound-wave diagram."""
+    first = _first(beats, _is_line)
+    echo = _first(beats, _is_sfx("echo"))
+    if first is None or echo is None:
+        return []
+    last = _first(beats, _is_line, echo)
+    if last is None:
+        return []
+    who = beats[first]["speaker"]
+    return [{"layout": "solo", "fromBeat": first, "toBeat": last, "visual": "echo_diagram", "character": who}]
+
+
+def shots_rule_board(beats: list[dict]) -> list[dict]:
+    """The sense -> think -> act walkthrough line ("Here's how it works ...") is a solo with the STA loop diagram."""
+    i = _first(beats, lambda b: _is_line(b) and "how it works" in b["text"].lower())
+    if i is None:
+        return []
+    return [{"layout": "solo", "fromBeat": i, "toBeat": i, "visual": "sense_think_act",
+             "character": beats[i]["speaker"]}]
+
+
+DEFAULT_SHOTS = {"cartoon_robot_family": shots_robot_family, "cartoon_sensor_ping": shots_sensor_ping,
+                 "cartoon_rule_board": shots_rule_board}
+
+
+def plan_shots(sc: dict) -> None:
+    """Fill ``sc['shots']`` from the template defaults (unless authored), add generic solo shots for uncovered
+    ``explain`` lines, and mark every line inside an illustration/solo shot ``explain: true``."""
+    beats = sc["beats"]
+    if "shots" not in sc:
+        fn = DEFAULT_SHOTS.get(sc.get("template", ""))
+        sc["shots"] = fn(beats) if fn else []
+    shots = sc["shots"]
+
+    def covered(i: int) -> bool:
+        return any(s["layout"] in EXPLAIN_LAYOUTS and s["fromBeat"] <= i <= s["toBeat"] for s in shots)
+    icon = next((c.get("icon") for c in sc.get("concepts") or [] if c.get("icon")), "robot")
+    for i, b in enumerate(beats):
+        if _is_line(b) and b.get("explain") and not covered(i):
+            shots.append({"layout": "solo", "fromBeat": i, "toBeat": i, "visual": f"concept_{icon}",
+                          "character": b["speaker"], "generated": True})
+    shots.sort(key=lambda s: s["fromBeat"])
+    for i, b in enumerate(beats):
+        if _is_line(b) and covered(i):
+            b["explain"] = True
+    if not shots:
+        sc.pop("shots")
 
 
 def intro_settings(spec: dict) -> dict:
@@ -120,9 +215,11 @@ def expand_episode(spec: dict, registry) -> dict:
         scenes.insert(at, intro_scene(s, registry))
     for i, sc in enumerate(scenes, 1):
         sc["sequence"] = i
+        if not any(b["type"] == "music" and b.get("cue") == CONCEPT_CUE for b in sc["beats"]):
+            plan_shots(sc)                      # anchored on authored beats, shifted by the sting insertion
         insert_concept_stings(sc)
     resolve_transitions(scenes, transition_settings(s))
     return s
 
 
-__all__ = ["AUTO_CYCLE", "CONCEPT_CUE", "TRANSITION_STYLES", "transition_settings", "INTRO_SCENE_ID", "INTRO_TEMPLATE", "expand_episode", "intro_scene", "intro_settings", "main_characters"]
+__all__ = ["DEFAULT_SHOTS", "EXPLAIN_LAYOUTS", "LAYOUTS", "plan_shots", "AUTO_CYCLE", "CONCEPT_CUE", "TRANSITION_STYLES", "transition_settings", "INTRO_SCENE_ID", "INTRO_TEMPLATE", "expand_episode", "intro_scene", "intro_settings", "main_characters"]

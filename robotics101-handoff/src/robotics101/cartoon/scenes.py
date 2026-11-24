@@ -61,6 +61,8 @@ class Scene:
     trans_out: str | None = None                           # transition into the NEXT scene (drawn at our end)
     trans_half: float = 0.4
     concepts: list = field(default_factory=list)           # [{id,title,subtitle,icon,start,end}]
+    shots: list = field(default_factory=list)              # M05.1 [{layout,visual,character,start,end,...}]
+    top: list[Overlay] = field(default_factory=list)       # M05.1 shot layer: above everything but transitions
 
     @property
     def n_frames(self) -> int:
@@ -616,6 +618,7 @@ def build_scene(spec_scene: dict, timing_scene: dict, voice_dir: Path, robotcam:
     else:
         stage(sc)
     stage_concept_cards(sc, spec_scene.get("concepts") or [])
+    stage_shots(sc, spec_scene.get("shots") or [])
     perform_dialogue(sc)
     for p in sc.perf.values():
         p.finalize(sc.duration)
@@ -641,6 +644,123 @@ def stage_concept_cards(sc: Scene, concepts: list[dict]) -> None:
     sc.facts["conceptCards"] = cards
 
 
+# ------------------------------------------------------------------------------------------ M05.1 shots
+
+SHOT_IN, SHOT_OUT = 0.4, 0.35          # seconds of the pop-in / shrink-out animation
+SHOT_LEAD, SHOT_TAIL = 0.15, 0.35      # shot starts a little before its first beat, ends after its last
+SOLO_GAIN = 1.2                         # solo character drawn a bit bigger than on stage
+CORNER_GAIN = 0.55                      # illustration corner character
+
+
+def _ctx_robot_families(sc: Scene, sh: dict) -> dict:
+    examples = sc.facts.get("examples") or ["vacuum", "arm", "rover"]
+    return {"examples": examples, "reveal": [sc.word_time(w, after=sh["start"]) for w in examples]}
+
+
+def _ctx_echo(sc: Scene, sh: dict) -> dict:
+    ping = next((b["start_s"] for b in sc.beats if b["type"] == "sfx" and b["id"] == "ping"
+                 and sh["start"] <= b["start_s"] < sh["end"]), sh["start"] + 0.6)
+    return {"ping": ping, "faster": sc.word_time("faster", after=sh["start"]),
+            "bats": sc.word_time("bats", after=sh["start"])}
+
+
+def _ctx_sta(sc: Scene, sh: dict) -> dict:
+    out = {w: sc.word_time(w, after=sh["start"]) for w in ("sense", "think", "act")}
+    thr = sc.params.get("thresholdMeters")
+    out["threshold"] = float(thr) if thr is not None else None
+    if thr is not None:
+        sc.facts["shotThresholdMeters"] = float(thr)
+    return out
+
+
+SHOT_CONTEXT = {"robot_families": _ctx_robot_families, "echo_diagram": _ctx_echo, "sense_think_act": _ctx_sta}
+
+
+def shot_at(sc: Scene, t: float) -> dict | None:
+    return next((sh for sh in sc.shots if sh["start"] <= t < sh["end"]), None)
+
+
+def shot_character_place(sh: dict) -> tuple[float, float, float, int]:
+    """(x, feet y, scale, facing) of the character drawn in a shot."""
+    from robotics101.cartoon.layout import CONTENT_FLOOR_Y
+    from robotics101.cartoon.visuals import SOLO_X
+    cid = sh["character"]
+    if sh["layout"] == "solo":
+        return SOLO_X, CONTENT_FLOOR_Y, SCALES[cid] * SOLO_GAIN, 1
+    left = sh.get("corner", "left") == "left"
+    return (-5.9 if left else 5.9), CONTENT_FLOOR_Y + 0.05, SCALES[cid] * CORNER_GAIN, 1 if left else -1
+
+
+def stage_shots(sc: Scene, shots: list[dict]) -> None:
+    """M05.1: illustration / solo shots cover the stage over their beat ranges with a full-frame backdrop, the wide
+    teaching visual and (solo) the one character, who keeps performing (lip sync, gestures) from its Performer."""
+    from robotics101.cartoon.layout import (CORNER_MAX_AREA, box_area, norm_box)
+    from robotics101.cartoon import visuals as VZ
+    k = transition_frames(sc) / FPS
+    for spec in shots:
+        if spec["layout"] == "stage":
+            continue
+        b0, b1 = sc.beats[spec["fromBeat"]], sc.beats[min(spec["toBeat"], len(sc.beats) - 1)]
+        start = max(b0["start_s"] - SHOT_LEAD, k if sc.trans_in else 0.0,
+                    max((c["end"] for c in sc.concepts if c["start"] <= b0["start_s"]), default=0.0))
+        end = min(b1["end_s"] + SHOT_TAIL, sc.duration - (k if sc.trans_out else 0.0))
+        sh = {"layout": spec["layout"], "visual": spec.get("visual") or "concept_robot",
+              "character": spec.get("character"), "corner": spec.get("corner", "left"),
+              "fromBeat": spec["fromBeat"], "toBeat": spec["toBeat"], "start": round(start, 3), "end": round(end, 3)}
+        if sh["character"] and sh["character"] not in sc.perf:
+            sh["character"] = None
+        box = VZ.default_box(sh["layout"])
+        sh["visualBox"] = norm_box(*box)
+        sh["areaShare"] = round(box_area(sh["visualBox"]), 3)
+        chars = []
+        if sh["character"]:
+            x, fy, scale, _ = shot_character_place(sh)
+            cid = sh["character"]
+            hw, h = HALF_W[cid] * scale / SCALES[cid], HEIGHT[cid] * scale / SCALES[cid]
+            cb = norm_box(x - hw, fy, x + hw, fy + h)
+            chars.append({"id": cid, "box": cb, "area": round(box_area(cb), 3)})
+            if sh["layout"] == "illustration" and box_area(cb) > CORNER_MAX_AREA:
+                raise ValueError(f"{sc.sid}: illustration corner character {cid} too big ({box_area(cb):.2f})")
+        sh["characters"] = chars
+        ctx = SHOT_CONTEXT.get(sh["visual"], lambda sc_, sh_: {})(sc, sh)
+        if sh["visual"].startswith("concept_"):
+            ctx = {"title": next((c["title"] for c in sc.concepts), "")}
+        sc.shots.append(sh)
+        if sh["visual"] == "robot_families":
+            for name, r, (cx, cy, w, h) in zip(ctx["examples"], ctx["reveal"], VZ.family_tile_boxes(ctx)):
+                if r:
+                    sc.illustrations.append({"id": f"shot-family-{name}", "kind": name, "start": round(r + 0.5, 3),
+                                             "end": sh["end"] - SHOT_OUT, "box": world_box(cx, cy, w, h)})
+        fn = VZ.visual(sh["visual"])
+        x0, y0, x1, y1 = box
+        sc.keepouts.append({"id": f"shot-{sh['visual']}", "box": norm_box(*box), "start": sh["start"],
+                            "end": sh["end"], "shot": sh["layout"]})
+
+        def draw(t, m, sh=sh, fn=fn, ctx=ctx):
+            if not (sh["start"] <= t < sh["end"]):
+                return []
+            g = [VZ.backdrop(sh["layout"], t), fn(t, ctx)]
+            if sh["character"]:
+                x, fy, scale, facing = shot_character_place(sh)
+                st = sc.perf[sh["character"]].state(t)
+                pose = st.pose.with_(facing=facing, gaze=(0.6, st.pose.gaze[1]))
+                perf = sc.perf[sh["character"]]
+                dy = (st.y - perf.position_at(t)[1]) * scale / perf.scale    # hops / bounces, not stage height
+                g.append(build(sh["character"], pose).scale(scale, about_point=np.zeros(3))
+                         .shift(np.array([x, fy + dy, 0])))
+            from manim import VGroup
+            grp = VGroup(*g)
+            u_in, u_out = (t - sh["start"]) / SHOT_IN, (sh["end"] - t) / SHOT_OUT
+            kk = PR.pop(u_in) if u_in < 1 else 1.0
+            if u_out < 1:
+                kk *= max(0.001, ease_in_out(u_out))
+            if kk != 1.0:
+                grp.scale(kk, about_point=np.zeros(3))
+            return [grp]
+        sc.top.append(draw)
+    sc.facts["shots"] = sc.shots
+
+
 def frame_fn(sc: Scene):
     bg = garage(sc.set_variant)
 
@@ -658,7 +778,7 @@ def frame_fn(sc: Scene):
         for f in sc.back:
             out += f(t, mobs)
         out += list(mobs.values())
-        for f in sc.front + sc.screen:
+        for f in sc.front + sc.screen + sc.top:
             out += f(t, mobs)
         out += transition_overlay(sc, t)
         return out

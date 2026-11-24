@@ -330,6 +330,54 @@
               }
             }
           }
+        },
+        "shots": {
+          "type": "array",
+          "maxItems": 12,
+          "description": "M05.1 layout segments over beat ranges (inclusive, indices into the expanded beat list): `stage` (default staging), `illustration` (full-bleed teaching visual, no characters or one small corner character), `solo` (exactly one character + a wide visual). Filled from template defaults when omitted.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "layout",
+              "fromBeat",
+              "toBeat"
+            ],
+            "properties": {
+              "layout": {
+                "enum": [
+                  "stage",
+                  "illustration",
+                  "solo"
+                ]
+              },
+              "fromBeat": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "toBeat": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "visual": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "character": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "corner": {
+                "enum": [
+                  "left",
+                  "right"
+                ]
+              },
+              "generated": {
+                "type": "boolean"
+              }
+            }
+          }
         }
       }
     },
@@ -367,6 +415,20 @@
             "target": {
               "type": "string",
               "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "explain": {
+              "type": "boolean",
+              "description": "M05.1 explanatory beat: must be shown in an illustration/solo shot"
+            },
+            "pose": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$",
+              "description": "M05.3 emotion pose from the pose library (auto-chosen from emotion/text when omitted)"
+            },
+            "react": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$",
+              "description": "M05.3 listener reaction pose (auto when omitted)"
             }
           }
         },

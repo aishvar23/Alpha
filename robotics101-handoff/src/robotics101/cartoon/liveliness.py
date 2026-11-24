@@ -62,7 +62,9 @@ def scene_liveliness(sc, presence_fn, heights: dict[str, float], scales: dict[st
             t = n / fps
             if ((sc.trans_in and n < k) or (sc.trans_out and n >= sc.n_frames - k)
                     or any(a <= t < b for a, b in excluded) or presence_fn(sc, t).get(cid, 0.0) < 0.5
-                    or t < sc.enter_at.get(cid, 0.0)):
+                    or t < sc.enter_at.get(cid, 0.0)
+                    or any(sh["start"] <= t < sh["end"] and sh.get("character") != cid
+                           for sh in getattr(sc, "shots", []) or [])):        # M05.1: hidden behind a shot
                 tracks.append(None)
                 continue
             tracks.append(key_points(perf.state(t), heights[cid] * perf.scale / scales[cid]))

@@ -202,8 +202,17 @@ Design: `cartoon/episode.py::expand_episode(spec, registry)` (idempotent) adds g
 | Step | Scope | Status |
 |---|---|---|
 | M04.1 | Official ElevenLabs SDK + .env key loading, `eleven_v4` with timestamps, cache + approval gate kept, candidate voices in the registry (unapproved), credit estimates; no speech generated | **done** (ADR-026) |
-| M04.2 | Owner says yes → `voices samples --yes` (Bolt + Maya, 179 credits) → owner approves → `approved: true` → re-render with `--tts auto` (≈ 3,850 credits) | waiting on the owner |
+| M04.2 | Owner says yes → `voices samples --yes` (Bolt + Maya, 179 credits) → owner approves → `approved: true` → re-render with `--tts auto` (≈ 3,850 credits) | **approved** 2026-11-23: registry `approved: true` (Horatius / Ember); full episode voiced once for M05.4 |
 - M04.1 notes: key verified with non-speech calls only (`voices account`): Creator plan, 0 / 131,000 credits used at setup, reset 2026-12-23. `eleven_v4` costs 1.0 credit/char. Episode 001: 77 lines, 3,850 characters (Maya 2,472, Bolt 1,378) ≈ 3,850 credits; samples 179 credits. Candidates: Bolt = Horatius (qXpMhyvQqiRxWQs4qSSB; alternates Little Dude II, Lawrence), Maya = Ember (WtA85syCrJwasGeHGH2p; alternates Emma, Jade); Nib is non-speaking. Library voices: if the API ever answers voice-not-found, add them to the account (non-speech; 2 of 30 voice slots). `npx @elevenlabs/cli onboard check --answered --env-path .env`: key in .env, SDK declared + imported, nothing to fix. Tests use a fake SDK client; conftest blocks real clients and hides .env.
+
+## M05 — owner feedback on the M03.6 cut (pipeline defaults for every episode)
+| Step | Scope | Status |
+|---|---|---|
+| M05.1 | Illustration-first layouts: scene `shots` (`stage` / `illustration` / `solo`) filled from per-template defaults, explanatory lines marked `explain`; ep1 robot families full-screen illustration, echo test Maya solo + wave diagram, STA walkthrough solo; QA `layout.illustration_first` | **done** (ADR-027) |
+| M05.2 | Subtitle safe area: reserved bottom caption band, nothing important in it; compact low-contrast caption box, 1 line preferred (max 2); QA band intrusions | in progress |
+| M05.3 | Acting: pose/emotion library + script cues (auto defaults), squash/stretch, hops, head tilts, brows, secondary motion, reactions, celebrations; QA motion energy; rig feasibility note | todo |
+| M05.4 | New 1080p cut with the approved ElevenLabs voices (voiced once, cache for re-renders), full QA + suite, samples m05.4-* | todo |
+- M05.1 notes: `cartoon/layout.py` (frame/band/shot rules), `cartoon/visuals.py` (`robot_families`, `echo_diagram`, `sense_think_act`, generic `concept_<icon>`), `episode.plan_shots` + `DEFAULT_SHOTS` (anchored on beats: page_flip → last example line; first line → line after the first echo; the "how it works" line), schema: scene `shots`, line `explain` (+ `pose`/`react` reserved for M05.3). Engine: `scenes.stage_shots` draws a top layer (backdrop + visual + the solo character from its live Performer, pop-in/shrink-out); characters hidden by a shot are excluded from liveliness; shot visuals are registered keep-outs and the family tiles as animated illustrations. Preview (EL timing): scene-002 illustration 72% of frame, scene-004 solo 45%, scene-005 solo 45%.
 
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.
