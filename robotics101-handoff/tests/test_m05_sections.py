@@ -29,7 +29,7 @@ def _expanded():
 
 def test_ep1_every_section_gets_its_own_background():
     s = _expanded()
-    assert s["schemaVersion"] == "1.2" and validate_episode(s).ok
+    assert s["schemaVersion"] == "1.3" and validate_episode(s).ok
     bg = {x["background"]["section"]: x["background"]["theme"] for x in s["scenes"]}
     assert bg == {"cold_open": "workshop", "intro": "studio", "robot_family": "museum", "checkup": "lab_bench",
                   "sensors": "sound_lab", "the_rule": "control_room", "servo": "blueprint", "rule_test": "test_track",
@@ -72,7 +72,7 @@ def test_v11_specs_still_valid_and_get_the_defaults():
         x.pop("background", None)
     assert validate_episode(s).ok
     e = expand_episode(s, load_registry())
-    assert e["schemaVersion"] == "1.2" and validate_episode(e).ok
+    assert e["schemaVersion"] == "1.3" and validate_episode(e).ok
     assert all(x["background"]["theme"] for x in e["scenes"])
 
 

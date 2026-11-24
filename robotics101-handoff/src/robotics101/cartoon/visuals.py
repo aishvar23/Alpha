@@ -220,22 +220,64 @@ def concept_visual(icon: str):
     return fn
 
 
+def _load_explainers():
+    from robotics101.cartoon.explainers import EXPLAINERS
+    return EXPLAINERS
+
+
 VISUALS = {"robot_families": (robot_families, ("illustration", "solo")),
-           "echo_diagram": (echo_diagram, ("solo", "illustration")),
-           "sense_think_act": (sense_think_act, ("solo", "illustration"))}
+           "echo_diagram": (echo_diagram, ("illustration", "solo")),
+           "sense_think_act": (sense_think_act, ("illustration", "solo"))}
+
+
+def all_visuals() -> dict:
+    """Built-in + M05.6 explainer visuals (lazy to avoid an import cycle)."""
+    return {**VISUALS, **_load_explainers()}
 
 
 def visual(name: str):
-    if name in VISUALS:
-        return VISUALS[name][0]
+    catalog = all_visuals()
+    if name in catalog:
+        return catalog[name][0]
     if name.startswith("concept_"):
         return concept_visual(name[len("concept_"):])
-    raise ValueError(f"unknown shot visual {name!r}; known: {sorted(VISUALS)} or concept_<icon>")
+    if name.startswith("example_"):
+        from robotics101.cartoon.explainers import one_example
+        kind = name[len("example_"):]
+        return lambda t, ctx, box=ILLUSTRATION_BOX, k=kind: one_example(t, {**ctx, "kind": ctx.get("kind") or k}, box)
+    if name.startswith("part_"):
+        from robotics101.cartoon.explainers import checkup_part
+        part = name[len("part_"):]
+        return lambda t, ctx, box=ILLUSTRATION_BOX, k=part: checkup_part(t, {**ctx, "part": ctx.get("part") or k}, box)
+    raise ValueError(f"unknown shot visual {name!r}; known: {sorted(catalog)} or concept_<icon> / example_<kind> / part_<name>")
+
+
+
+TEACHING_VISUALS = {"echo_diagram", "sense_think_act", "the_rule", "rule_test", "servo_cutaway", "servo_dial",
+                    "servo_head", "quiz_question", "sensor_range", "robot_families"}
+TEACHING_PREFIXES = ("example_", "part_", "concept_")
+EXAMPLE_PREFIXES = ("example_", "part_")
+EXAMPLE_VISUALS = {"echo_diagram", "sense_think_act", "the_rule", "rule_test", "servo_cutaway", "servo_dial",
+                   "servo_head", "quiz_question", "sensor_range"}
+
+
+def is_teaching_visual(name: str | None) -> bool:
+    """True for a full-screen teaching illustration (examples, parts, the Rule, servo steps, quiz, diagrams)."""
+    if not name:
+        return False
+    return name in TEACHING_VISUALS or name.startswith(TEACHING_PREFIXES)
+
+
+def is_example_visual(name: str | None) -> bool:
+    """True for a visual that should occupy its own one-example / one-idea frame."""
+    if not name:
+        return False
+    return name in EXAMPLE_VISUALS or name.startswith(EXAMPLE_PREFIXES)
 
 
 def default_box(layout: str) -> tuple[float, float, float, float]:
     return ILLUSTRATION_BOX if layout == "illustration" else SOLO_BOX
 
 
-__all__ = ["ILLUSTRATION_BOX", "SOLO_BOX", "SOLO_X", "VISUALS", "backdrop", "default_box", "visual",
-           "family_tile_boxes", "FRAME_X", "FRAME_Y", "ease_out"]
+__all__ = ["ILLUSTRATION_BOX", "SOLO_BOX", "SOLO_X", "VISUALS", "all_visuals", "backdrop", "default_box", "visual",
+           "is_teaching_visual", "is_example_visual", "family_tile_boxes", "FRAME_X", "FRAME_Y", "ease_out"]

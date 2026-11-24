@@ -16,31 +16,34 @@ the owner wants in every episode:
 * **concept title cards** (M03.2): each scene ``concepts`` marker gets a ``concept_sting`` music beat inserted before
   beat ``beforeBeat`` (default 0); the scene engine shows the animated card for exactly that beat.
 
-* **illustration-first shots** (M05.1): explanatory beats are shown as an ``illustration`` shot (full-bleed teaching
-  visual, no characters or one small corner character) or a ``solo`` shot (exactly one character + a wide visual)
-  instead of the crowded three-character stage. A scene's ``shots`` list is authored or filled from the per-template
-  defaults in ``DEFAULT_SHOTS`` (anchored on beats, so any episode using the template gets them); lines covered by an
-  illustration/solo shot are marked ``explain: true``. Generic rule: any line authored with ``explain: true`` that no
-  shot covers gets a ``solo`` shot of its speaker with the scene's concept visual. Shot beat indices refer to the
-  expanded beat list (they are shifted when concept stings are inserted).
+* **illustration-first shots** (M05.1 / M05.6): every teaching example or explanation beat gets its own full-screen
+  ``illustration`` shot (the visual fills the frame; no full-size characters, or at most a tiny corner cameo). One
+  example per frame — never a grid or album of several examples. Characters come back between explainers for reactions
+  and gags. A scene's ``shots`` list is authored or derived (``derive_examples``; optional per-line ``examples`` with
+  ``atWord`` / ``untilWord`` when one line names two examples). Lines covered by an illustration/solo shot are marked
+  ``explain: true``. Generic rule: any line authored with ``explain: true`` that no shot covers gets an illustration
+  of the scene's concept visual. Shot beat indices refer to the expanded beat list (they are shifted when concept
+  stings are inserted).
 
 * **section backgrounds** (M05.5, schema 1.2): every section gets its own background. A scene's ``section`` id
   groups consecutive scenes (default: each scene is its own section); ``background`` is ``auto`` (default) or
   ``{theme, palette}``. Auto picks the template's preferred theme (``TEMPLATE_THEMES``), never the previous section's
   theme and preferably one not used yet in the episode; a theme used again gets its next palette. Every scene ends
-  up with ``background = {theme, palette, section, auto}`` and the expanded spec is 1.2 (1.1 input is upgraded).
+  up with ``background = {theme, palette, section, auto}`` and the expanded spec is the latest cartoon schema
+  (1.1 / 1.2 input is upgraded to 1.3).
 * **card kickers** (M05.5): the small line above a concept card title comes from the concept's ``kicker``, else the
   section's ``kicker``, else the section type's default (``TEMPLATE_KICKERS``); null/empty hides it, and there is
   no global default. A section whose kicker isn't shown on a card gets a short section banner instead.
 
 Expansion is idempotent (an already-expanded spec is returned unchanged apart from a fresh copy), so every entry
 point (``render``, ``voice``, ``render-cartoon``) can call it. The expanded spec is valid against the 1.1 schema and
-is what the bundle stores as ``episode.json`` (valid against the 1.2 schema).
+is what the bundle stores as ``episode.json`` (valid against the 1.3 schema).
 """
 
 from __future__ import annotations
 
 import copy
+import re
 
 from robotics101.cartoon import BACKGROUND_THEMES, CARTOON_SCHEMA_VERSIONS, LATEST_CARTOON_SCHEMA
 
@@ -88,10 +91,18 @@ def insert_concept_stings(sc: dict) -> None:
                 sh["toBeat"] += 1
 
 
-# ------------------------------------------------------------------------------------------ M05.1 shots
+# ------------------------------------------------------------------------------------------ M05.1 / M05.6 shots
 
 LAYOUTS = ("stage", "illustration", "solo")
 EXPLAIN_LAYOUTS = ("illustration", "solo")
+
+# Known family-example phrases, in display order. Unknown names still get a labelled one-example frame.
+_FAMILY_KINDS = (
+    ("toaster", "Toaster", "example_toaster", ("toaster",)),
+    ("vacuum", "Robot vacuum", "example_vacuum", ("robot vacuum", "vacuum")),
+    ("arm", "Factory arm", "example_arm", ("factory arm", "factory")),
+    ("rover", "Space rover", "example_rover", ("space rover", "rover")),
+)
 
 
 def _first(beats: list[dict], pred, start: int = 0) -> int | None:
@@ -106,52 +117,244 @@ def _is_line(b: dict) -> bool:
     return b["type"] == "line"
 
 
-def shots_robot_family(beats: list[dict]) -> list[dict]:
-    """The robot families are a full-screen illustration from the album page-flip through the last example line."""
-    a = _first(beats, _is_sfx("page_flip"))
-    if a is None:
-        return []
-    end = _first(beats, _is_sfx("sparkle"), a)
-    lines = [i for i in range(a, end if end is not None else len(beats)) if _is_line(beats[i])]
-    if not lines:
-        return []
-    return [{"layout": "illustration", "fromBeat": a, "toBeat": lines[-1], "visual": "robot_families"}]
+def _line_has(b: dict, *needles: str) -> bool:
+    if b.get("type") != "line":
+        return False
+    text = b["text"].lower()
+    return any(re.search(rf"\b{re.escape(n.lower())}", text) for n in needles)
 
 
-def shots_sensor_ping(beats: list[dict]) -> list[dict]:
-    """The echo explanation (first line through the line after the first echo) is a solo of the explainer with a wide
-    sound-wave diagram."""
-    first = _first(beats, _is_line)
-    echo = _first(beats, _is_sfx("echo"))
-    if first is None or echo is None:
-        return []
-    last = _first(beats, _is_line, echo)
-    if last is None:
-        return []
-    who = beats[first]["speaker"]
-    return [{"layout": "solo", "fromBeat": first, "toBeat": last, "visual": "echo_diagram", "character": who}]
+def _word_in(text: str, word: str) -> int | None:
+    m = re.search(rf"\b{re.escape(word)}", text, re.I)
+    return m.start() if m else None
 
 
-def shots_rule_board(beats: list[dict]) -> list[dict]:
-    """The sense -> think -> act walkthrough line ("Here's how it works ...") is a solo with the STA loop diagram."""
-    i = _first(beats, lambda b: _is_line(b) and "how it works" in b["text"].lower())
-    if i is None:
-        return []
-    return [{"layout": "solo", "fromBeat": i, "toBeat": i, "visual": "sense_think_act",
-             "character": beats[i]["speaker"]}]
+def _slug(label: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_") or "example"
+
+
+def derive_examples(sc: dict) -> list[dict]:
+    """One teaching example / explanation per record. Authored beat ``examples`` win for those beats; the rest
+    are derived from the template and the lines (including a split when one line names two examples)."""
+    beats = sc["beats"]
+    authored, authored_beats = [], set()
+    for i, b in enumerate(beats):
+        if b.get("type") != "line" or not b.get("examples"):
+            continue
+        authored_beats.add(i)
+        for ex in b["examples"]:
+            rec = {"id": ex["id"], "label": ex.get("label") or ex["id"].replace("_", " ").title(),
+                   "visual": ex.get("visual") or f"example_{ex['id']}", "fromBeat": i, "toBeat": i}
+            if ex.get("atWord"):
+                rec["atWord"] = ex["atWord"]
+            if ex.get("untilWord"):
+                rec["untilWord"] = ex["untilWord"]
+            if ex.get("subtitle"):
+                rec["subtitle"] = ex["subtitle"]
+            authored.append(rec)
+    derived = [d for d in _derive_template_examples(sc) if d["fromBeat"] not in authored_beats]
+    return authored + derived
+
+
+def _mention(beats, words, start=0):
+    """First (beat index, matched word) after ``start`` whose line contains one of ``words`` (longest first)."""
+    ordered = sorted(words, key=len, reverse=True)
+    for i in range(start, len(beats)):
+        if beats[i].get("type") != "line":
+            continue
+        for w in ordered:
+            if _word_in(beats[i]["text"], w) is not None:
+                return i, w
+    return None
+
+
+def _split_same_line(beats, mentions):
+    """Attach atWord / untilWord so two examples named on the same line get sequential frames."""
+    mentions = sorted(mentions, key=lambda m: (m[0], _word_in(beats[m[0]]["text"], m[1]) or 0))
+    out = []
+    for n, (i, at, extra) in enumerate(mentions):
+        rec = {**extra, "fromBeat": i, "toBeat": i, "atWord": at}
+        if n + 1 < len(mentions) and mentions[n + 1][0] == i:
+            rec["untilWord"] = mentions[n + 1][1]
+        out.append(rec)
+    return out
+
+
+def _derive_template_examples(sc: dict) -> list[dict]:
+    tmpl, beats, params = sc.get("template", ""), sc["beats"], sc.get("parameters") or {}
+    out: list[dict] = []
+    if tmpl == "cartoon_robot_family":
+        hit = _mention(beats, ("toaster",))
+        if hit:
+            i, _ = hit
+            j = _first(beats, lambda b: _line_has(b, "doesn't think", "does not think"), i)
+            out.append({"id": "toaster", "label": "Toaster", "visual": "example_toaster",
+                        "fromBeat": i, "toBeat": j if j is not None else i,
+                        "subtitle": "Not a robot — it doesn't think"})
+        mentions = []
+        seen = set()
+        for eid, label, vis, words in _FAMILY_KINDS:
+            if eid == "toaster":
+                continue
+            hit = _mention(beats, words)
+            if hit:
+                mentions.append((hit[0], hit[1], {"id": eid, "label": label, "visual": vis}))
+                seen.add(eid)
+        # parameters.examples (and leftover lines after the page-flip) for template-wide / other families
+        named = [str(x) for x in (params.get("examples") or [])]
+        flip = _first(beats, _is_sfx("page_flip")) or 0
+        sparkle = _first(beats, _is_sfx("sparkle"), flip)
+        end = sparkle if sparkle is not None else len(beats)
+        for label in named:
+            eid = _slug(label.replace("robot ", "").replace("space ", "").replace("factory ", ""))
+            if eid in seen or eid == "toaster":
+                continue
+            words = (label, *tuple(w for w in label.split() if w.lower() not in {"a", "the", "an"}))
+            hit = _mention(beats, words, start=flip)
+            if hit and eid not in seen:
+                vis = f"example_{eid}"
+                mentions.append((hit[0], hit[1], {"id": eid, "label": label.title() if label.islower() else label,
+                                                  "visual": vis}))
+                seen.add(eid)
+        if not mentions:
+            for i in range(flip, end):
+                if not _is_line(beats[i]):
+                    continue
+                if _line_has(beats[i], "here's your", "here is your", "robot family"):
+                    continue
+                text = beats[i]["text"]
+                # "A drone flies" / "A robot dog walks" -> the noun phrase, not the verb that follows
+                m = re.search(r"\b(?:a|an|the)\s+((?:robot|space|factory)\s+)?([A-Za-z]+)", text, re.I)
+                if m:
+                    label = " ".join(part for part in (m.group(1), m.group(2)) if part).strip()
+                    at = m.group(2)
+                else:
+                    label, at = text.split(".")[0].strip(), text.split()[0]
+                eid = _slug(re.sub(r"^(a|an|the)\s+", "", label, flags=re.I))
+                if eid in seen:
+                    continue
+                mentions.append((i, at, {"id": eid, "label": label.title(), "visual": f"example_{eid}"}))
+                seen.add(eid)
+        out.extend(_split_same_line(beats, mentions))
+
+    elif tmpl == "cartoon_robot_checkup":
+        parts = params.get("parts") or ["structure", "sensors", "actuators", "power", "controller"]
+        labels = {"structure": "Structure", "sensors": "Sensors", "actuators": "Actuators", "power": "Power",
+                  "controller": "Controller"}
+        for p in parts:
+            i = _first(beats, lambda b, p=p: _line_has(b, p))
+            if i is not None:
+                out.append({"id": p, "label": labels.get(p, p.title()), "visual": f"part_{p}",
+                            "fromBeat": i, "toBeat": i})
+
+    elif tmpl == "cartoon_sensor_ping":
+        first = _first(beats, _is_line)
+        echo_line = _first(beats, lambda b: _line_has(b, "bounces", "echo comes back", "bats"))
+        if first is not None and echo_line is not None:
+            out.append({"id": "echo", "label": "Distance sensor", "visual": "echo_diagram",
+                        "fromBeat": first, "toBeat": echo_line})
+        three = _first(beats, lambda b: _line_has(b, "3 meters", "three meters", "3 metres"))
+        oor = _first(beats, lambda b: _line_has(b, "out of range"))
+        if three is not None:
+            out.append({"id": "range", "label": "Sensor range", "visual": "sensor_range",
+                        "fromBeat": three, "toBeat": oor if oor is not None else three})
+
+    elif tmpl == "cartoon_rule_board":
+        # Maya's rule line, not Bolt's "Got it!" repeat.
+        i = _first(beats, lambda b: _is_line(b) and "if the distance" in b["text"].lower())
+        if i is None:
+            i = _first(beats, lambda b: _line_has(b, "stop and turn") and "got it" not in b["text"].lower())
+        if i is not None:
+            out.append({"id": "the_rule", "label": "The Rule", "visual": "the_rule", "fromBeat": i, "toBeat": i})
+        j = _first(beats, lambda b: _is_line(b) and "how it works" in b["text"].lower())
+        if j is not None:
+            out.append({"id": "sta", "label": "Sense, think, act", "visual": "sense_think_act",
+                        "fromBeat": j, "toBeat": j})
+
+    elif tmpl == "cartoon_servo_highfive":
+        i = _first(beats, lambda b: _line_has(b, "servo motor", "exact angle") or _line_has(b, "actuators turn"))
+        if i is not None:
+            out.append({"id": "servo_what", "label": "What is a servo?", "visual": "servo_cutaway",
+                        "fromBeat": i, "toBeat": i})
+        a = _first(beats, lambda b: _line_has(b, "30 degrees", "only 30", "only thirty"))
+        b = _first(beats, lambda b: _is_line(b) and "high-five!" in b["text"].lower())
+        if a is not None:
+            out.append({"id": "servo_dial", "label": "Exact angle", "visual": "servo_dial",
+                        "fromBeat": a, "toBeat": b if b is not None else a})
+        k = _first(beats, lambda b: _line_has(b, "servos turn arms", "turn wheels"))
+        if k is not None:
+            out.append({"id": "servo_head", "label": "How Bolt uses a servo", "visual": "servo_head",
+                        "fromBeat": k, "toBeat": k})
+
+    elif tmpl == "cartoon_obstacle_rematch":
+        i = _first(beats, _is_line)
+        if i is not None:
+            out.append({"id": "rule_test", "label": "Test of the Rule", "visual": "rule_test",
+                        "fromBeat": i, "toBeat": i})
+
+    elif tmpl == "cartoon_recap_chant":
+        i = _first(beats, lambda b: _line_has(b, "which part") or (_line_has(b, "question") and "here's" in b["text"].lower()))
+        if i is not None:
+            j = _first(beats, lambda b: _line_has(b, "say your answer", "think about it"), i)
+            out.append({"id": "quiz", "label": "Quiz", "visual": "quiz_question",
+                        "fromBeat": i, "toBeat": j if j is not None else i})
+    return out
+
+
+def shots_from_examples(examples: list[dict]) -> list[dict]:
+    shots = []
+    for ex in examples:
+        sh = {"layout": "illustration", "fromBeat": ex["fromBeat"], "toBeat": ex["toBeat"],
+              "visual": ex["visual"], "example": ex["id"]}
+        if ex.get("atWord"):
+            sh["atWord"] = ex["atWord"]
+        if ex.get("untilWord"):
+            sh["untilWord"] = ex["untilWord"]
+        shots.append(sh)
+    return shots
+
+
+def shots_robot_family(beats: list[dict], params: dict | None = None) -> list[dict]:
+    return shots_from_examples(_derive_template_examples(
+        {"template": "cartoon_robot_family", "beats": beats, "parameters": params or {}}))
+
+
+def shots_sensor_ping(beats: list[dict], params: dict | None = None) -> list[dict]:
+    return shots_from_examples(_derive_template_examples(
+        {"template": "cartoon_sensor_ping", "beats": beats, "parameters": params or {}}))
+
+
+def shots_rule_board(beats: list[dict], params: dict | None = None) -> list[dict]:
+    return shots_from_examples(_derive_template_examples(
+        {"template": "cartoon_rule_board", "beats": beats, "parameters": params or {}}))
 
 
 DEFAULT_SHOTS = {"cartoon_robot_family": shots_robot_family, "cartoon_sensor_ping": shots_sensor_ping,
                  "cartoon_rule_board": shots_rule_board}
 
 
+def _stamp_examples(sc: dict, examples: list[dict]) -> None:
+    """Record derived examples on their starting line beat (authored lists are left as-is)."""
+    beats = sc["beats"]
+    for ex in examples:
+        b = beats[ex["fromBeat"]]
+        if b.get("type") != "line":
+            continue
+        existing = {e["id"] for e in b.get("examples") or []}
+        if ex["id"] in existing:
+            continue
+        rec = {k: ex[k] for k in ("id", "label", "visual", "atWord", "untilWord", "subtitle") if ex.get(k) is not None}
+        b.setdefault("examples", []).append(rec)
+
+
 def plan_shots(sc: dict) -> None:
-    """Fill ``sc['shots']`` from the template defaults (unless authored), add generic solo shots for uncovered
-    ``explain`` lines, and mark every line inside an illustration/solo shot ``explain: true``."""
+    """Fill ``sc['shots']`` from derived teaching examples (unless authored), add generic illustration shots for
+    uncovered ``explain`` lines, and mark every line inside an illustration/solo shot ``explain: true``."""
     beats = sc["beats"]
     if "shots" not in sc:
-        fn = DEFAULT_SHOTS.get(sc.get("template", ""))
-        sc["shots"] = fn(beats) if fn else []
+        examples = derive_examples(sc)
+        sc["shots"] = shots_from_examples(examples)
+        _stamp_examples(sc, examples)
     shots = sc["shots"]
 
     def covered(i: int) -> bool:
@@ -159,9 +362,9 @@ def plan_shots(sc: dict) -> None:
     icon = next((c.get("icon") for c in sc.get("concepts") or [] if c.get("icon")), "robot")
     for i, b in enumerate(beats):
         if _is_line(b) and b.get("explain") and not covered(i):
-            shots.append({"layout": "solo", "fromBeat": i, "toBeat": i, "visual": f"concept_{icon}",
-                          "character": b["speaker"], "generated": True})
-    shots.sort(key=lambda s: s["fromBeat"])
+            shots.append({"layout": "illustration", "fromBeat": i, "toBeat": i, "visual": f"concept_{icon}",
+                          "generated": True})
+    shots.sort(key=lambda s: (s["fromBeat"], _word_in(beats[s["fromBeat"]]["text"], s["atWord"]) if s.get("atWord") and _is_line(beats[s["fromBeat"]]) else -1))
     for i, b in enumerate(beats):
         if _is_line(b) and covered(i):
             b["explain"] = True

@@ -190,6 +190,53 @@ def cable(a: np.ndarray, b: np.ndarray, u: float = 1.0) -> VGroup:
     return VGroup(c, plug)
 
 
+def charge_port(at) -> VGroup:
+    """Visible charging jack. ``at`` is the centre of the opening on the socket-facing body wall."""
+    plate = _o(RoundedRectangle(width=0.48, height=0.62, corner_radius=0.08, fill_color="#2A2A2A", fill_opacity=1), 3)
+    hole = Rectangle(width=0.24, height=0.32, fill_color="#0B0B0B", fill_opacity=1, stroke_width=0)
+    g = VGroup(plate, hole).move_to(at)
+    g.port = plate
+    g.opening = hole
+    return g
+
+
+def bolt_charge_port(bolt) -> np.ndarray:
+    """World point of the jack on the *socket-facing* (screen-left) side of Bolt's body, after facing-flip."""
+    parts = getattr(bolt, "parts", {}) or {}
+    body = parts.get("belly") or parts.get("body") or bolt
+    y = float(body.get_center()[1]) - 0.02
+    x = float(body.get_left()[0]) + 0.10          # slightly inset so the jack sits in the body wall
+    return P(x, y)
+
+
+def charge_lead(socket, port_pos, u: float = 1.0) -> VGroup:
+    """Cable from the wall socket into ``port_pos``. At u=1 the plug is fully seated (overlaps the jack, no gap)
+    and a contact spark plays. The jack is drawn on top of the body at ``port_pos``."""
+    u = clamp01(u)
+    port = charge_port(port_pos)
+    # Fully seated: the plug overlaps the opening; its tip is past the jack's left lip (no visible gap).
+    plug_w, plug_h = 0.34, 0.22
+    seated_center = port_pos + LEFT * 0.08          # overlap the opening by ~0.08
+    end = socket + (seated_center - socket) * ease_out(u)
+    sag = P(0, -0.8 * (1 - abs(0.5 - u)))
+    # cable ends at the back of the plug (its left), so the plug body covers the last stretch into the jack
+    plug_center = end
+    c = CubicBezier(socket, socket + (end - socket) / 3 + sag, socket + 2 * (end - socket) / 3 + sag,
+                    plug_center + LEFT * (plug_w / 2 - 0.02)).set_stroke("#45505E", 10)
+    plug = _o(RoundedRectangle(width=plug_w, height=plug_h, corner_radius=0.04, fill_color="#FFD166",
+                               fill_opacity=1), 3).move_to(plug_center)
+    prongs = VGroup(*[Rectangle(width=0.10, height=0.04, fill_color="#C0C0C0", fill_opacity=1, stroke_width=0)
+                      .move_to(plug.get_right() + RIGHT * 0.02 + UP * dy) for dy in (0.05, -0.05)])
+    spark = VGroup()
+    if u >= 0.95:
+        k = 0.7 + 0.3 * abs(math.sin(18 * u))
+        spark = Star(5, outer_radius=0.28 * k, inner_radius=0.1 * k, fill_color="#FFE66D", fill_opacity=1,
+                     stroke_color=ink(), stroke_width=2).move_to(port_pos + LEFT * 0.05 + UP * 0.15)
+    g = VGroup(c, port, plug, prongs, spark)
+    g.port, g.plug, g.spark, g.seated = port, plug, spark, u >= 0.999
+    return g
+
+
 def glow_outline(mob, u: float = 1.0, color: str = "#FFE66D") -> VGroup:
     """Pulsing highlight around a rig part (copy of its outline, thick and bright)."""
     k = 0.5 + 0.5 * math.sin(2 * math.pi * 2 * u)

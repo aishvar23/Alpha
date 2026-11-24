@@ -10,9 +10,10 @@ MUSIC_CUES = frozenset({"theme_intro", "title_sting", "idea_sting", "chant_beat"
                         "concept_sting"})
 # Sets (backgrounds) the renderer can draw (M02.5); per-section themes live in ``cartoon.backgrounds`` (M05.5).
 SETS = frozenset({"garage"})
-# Cartoon (dialogue) spec versions: 1.1 (M02) and 1.2 (M05.5 section backgrounds; 1.1 specs get the defaults).
-CARTOON_SCHEMA_VERSIONS = ("1.1", "1.2")
-LATEST_CARTOON_SCHEMA = "1.2"
+# Cartoon (dialogue) spec versions: 1.1 (M02), 1.2 (M05.5 section backgrounds), 1.3 (M05.6 one-example-per-frame).
+# Older specs stay valid and get the defaults on expansion.
+CARTOON_SCHEMA_VERSIONS = ("1.1", "1.2", "1.3")
+LATEST_CARTOON_SCHEMA = "1.3"
 
 # M05.5 section background themes -> palettes (drawn by ``cartoon.backgrounds``; this manim-free catalogue is what
 # validation and expansion use). Order matters: the first palette is the default.

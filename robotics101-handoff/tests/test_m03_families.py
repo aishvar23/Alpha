@@ -96,7 +96,8 @@ def test_hold_detector_flags_frozen_picture_and_static_region(tmp_path):
 
 
 @needs_ffmpeg
-def test_family_scene_registers_its_animated_tiles(tmp_path):
+def test_family_scene_does_not_register_a_stage_album_grid(tmp_path):
+    """M05.6: family examples are full-screen one-example shots (see test_m05_layouts), not a stage album grid."""
     from robotics101.cartoon import scenes as S
     beats = [{"type": "sfx", "id": "toaster_pop", "start_s": 0.2, "end_s": 0.6},
              {"type": "sfx", "id": "page_flip", "start_s": 1.0, "end_s": 1.4},
@@ -105,8 +106,5 @@ def test_family_scene_registers_its_animated_tiles(tmp_path):
               "words": [{"w": "vacuum", "s": 2.0}, {"w": "arm", "s": 3.0}, {"w": "rover", "s": 4.0}]}]
     sc = S.Scene("scene-002", "cartoon_robot_family", {}, beats, 8.0, tmp_path)
     S.stage_robot_family(sc)
-    ids = [i["id"] for i in sc.illustrations]
-    assert ids == ["family-vacuum", "family-arm", "family-rover"]
-    for il in sc.illustrations:
-        x0, y0, x1, y1 = il["box"]
-        assert 0 <= x0 < x1 <= 1 and 0 <= y0 < y1 <= 1 and il["start"] < il["end"]
+    assert sc.illustrations == []
+    assert not any(i["id"].startswith("family-") for i in sc.illustrations)

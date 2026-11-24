@@ -27,28 +27,35 @@ def test_template_defaults_put_explanations_into_illustration_and_solo_shots():
     e = expand_episode(_spec(), load_registry())
     assert validate_episode(e).ok and expand_episode(e, load_registry()) == e        # valid + idempotent
     fam = _by(e)["scene-002"]["shots"]
-    assert [s["layout"] for s in fam] == ["illustration"] and fam[0]["visual"] == "robot_families"
+    assert all(s["layout"] == "illustration" and not s.get("character") for s in fam)
+    assert [s.get("example") for s in fam] == ["toaster", "vacuum", "arm", "rover"]
+    assert fam[1]["visual"] == "example_vacuum" and fam[1].get("atWord") and fam[1].get("untilWord")
+    assert fam[2]["visual"] == "example_arm" and fam[3]["visual"] == "example_rover"
     b = _by(e)["scene-002"]["beats"]
-    assert b[fam[0]["fromBeat"]] == {"type": "sfx", "id": "page_flip"}
-    covered = [x["text"] for x in b[fam[0]["fromBeat"]:fam[0]["toBeat"] + 1] if x["type"] == "line"]
-    assert any("vacuum" in t for t in covered) and any("rover" in t for t in covered)
-    echo = _by(e)["scene-004"]["shots"]
-    assert echo[0]["layout"] == "solo" and echo[0]["character"] == "maya" and echo[0]["visual"] == "echo_diagram"
+    assert "toaster" in b[fam[0]["fromBeat"]]["text"].lower()
+    assert "vacuum" in b[fam[1]["fromBeat"]]["text"].lower()
+    assert "rover" in b[fam[3]["fromBeat"]]["text"].lower()
+    echo = next(s for s in _by(e)["scene-004"]["shots"] if s["visual"] == "echo_diagram")
+    assert echo["layout"] == "illustration" and not echo.get("character")
     eb = _by(e)["scene-004"]["beats"]
-    assert eb[echo[0]["fromBeat"]]["type"] == "line"           # starts on the first line (after the concept sting)
-    assert "bounces" in eb[echo[0]["toBeat"]]["text"]
-    assert all(x.get("explain") for x in eb[echo[0]["fromBeat"]:echo[0]["toBeat"] + 1] if x["type"] == "line")
+    assert eb[echo["fromBeat"]]["type"] == "line"           # starts on the first line (after the concept sting)
+    assert "bounces" in eb[echo["toBeat"]]["text"]
+    assert all(x.get("explain") for x in eb[echo["fromBeat"]:echo["toBeat"] + 1] if x["type"] == "line")
 
 
 def test_defaults_are_template_wide_not_episode_specific():
     beats = [{"type": "line", "speaker": "bolt", "text": "Hi"}, {"type": "sfx", "id": "page_flip"},
              {"type": "line", "speaker": "maya", "text": "A drone flies."},
              {"type": "line", "speaker": "maya", "text": "A robot dog walks."}, {"type": "sfx", "id": "sparkle"}]
-    assert DEFAULT_SHOTS["cartoon_robot_family"](beats) == [
-        {"layout": "illustration", "fromBeat": 1, "toBeat": 3, "visual": "robot_families"}]
-    ping = [{"type": "line", "speaker": "bolt", "text": "Watch!"}, {"type": "sfx", "id": "ping"},
-            {"type": "sfx", "id": "echo"}, {"type": "line", "speaker": "maya", "text": "Echo!"}]
-    assert DEFAULT_SHOTS["cartoon_sensor_ping"](ping)[0]["character"] == "bolt"
+    fam = DEFAULT_SHOTS["cartoon_robot_family"](beats)
+    assert [s["example"] for s in fam] == ["drone", "robot_dog"]
+    assert all(s["layout"] == "illustration" for s in fam)
+    assert fam[0]["fromBeat"] == 2 and fam[1]["fromBeat"] == 3
+    ping = [{"type": "line", "speaker": "bolt", "text": "Watch the sound bounce back!"}, {"type": "sfx", "id": "ping"},
+            {"type": "sfx", "id": "echo"}, {"type": "line", "speaker": "maya", "text": "The echo comes back. Bats do this too!"}]
+    ping_shots = DEFAULT_SHOTS["cartoon_sensor_ping"](ping)
+    assert ping_shots[0]["layout"] == "illustration" and ping_shots[0]["visual"] == "echo_diagram"
+    assert "character" not in ping_shots[0]
 
 
 def test_authored_explain_line_gets_a_generic_solo_and_authored_shots_win():
@@ -56,8 +63,8 @@ def test_authored_explain_line_gets_a_generic_solo_and_authored_shots_win():
           "beats": [{"type": "line", "speaker": "maya", "text": "A servo turns to an angle.", "explain": True},
                     {"type": "line", "speaker": "bolt", "text": "Cool!"}]}
     plan_shots(sc)
-    assert sc["shots"] == [{"layout": "solo", "fromBeat": 0, "toBeat": 0, "visual": "concept_servo",
-                            "character": "maya", "generated": True}]
+    assert sc["shots"] == [{"layout": "illustration", "fromBeat": 0, "toBeat": 0, "visual": "concept_servo",
+                            "generated": True}]
     sc2 = {"template": "cartoon_robot_family", "shots": [], "beats": [{"type": "sfx", "id": "page_flip"},
                                                                        {"type": "line", "speaker": "m", "text": "x"}]}
     plan_shots(sc2)
@@ -113,7 +120,7 @@ def test_qa_explanatory_line_must_be_inside_a_shot():
     {"areaShare": 0.2},                                                                  # visual too small
     {"characters": []},                                                                  # solo without its character
     {"characters": [{"id": "maya", "area": 0.1}, {"id": "bolt", "area": 0.1}]},          # solo with two
-    {"layout": "illustration", "areaShare": 0.5},                                        # < 55% for illustration
+    {"layout": "illustration", "areaShare": 0.5},                                        # < 60% for illustration
     {"layout": "illustration", "areaShare": 0.7, "characters": [{"id": "maya", "area": 0.2}]},   # corner too big
 ])
 def test_qa_shot_area_and_character_rules(patch):
@@ -144,46 +151,46 @@ def _scene(voiced, sid, monkeypatch):
     return S.build_scene(by[sid], t, d), t
 
 
-def test_engine_solo_shot_shows_only_the_explainer(voiced, monkeypatch):
+def test_engine_echo_illustration_covers_the_stage_with_no_characters(voiced, monkeypatch):
     import numpy as np
     from robotics101.cartoon import scenes as S
     from robotics101.cartoon.render2d import frame_rgb
     sc, t = _scene(voiced, "scene-004", monkeypatch)
-    [sh] = sc.shots
-    assert sh["layout"] == "solo" and [c["id"] for c in sh["characters"]] == ["maya"]
-    assert sh["areaShare"] >= SOLO_MIN_AREA
+    sh = next(s for s in sc.shots if s["visual"] == "echo_diagram")
+    assert sh["layout"] == "illustration" and sh["characters"] == []
+    assert sh["areaShare"] >= ILLUSTRATION_MIN_AREA
     mid = (sh["start"] + sh["end"]) / 2
     img = frame_rgb(S.frame_fn(sc)(mid), 320, 180, "#FFE8C2").astype(int)
-    # the stage (garage wall #FFE8C2, Bolt's body) is covered: the backdrop colour fills the frame corners
+    # the stage is covered: the illustration backdrop colour fills the frame corners
     for y, x in ((3, 3), (3, 316), (176, 3), (176, 316)):
-        assert np.abs(img[y, x, :3] - np.array([0xE9, 0xF7, 0xFF])).sum() < 40
-    # hidden stage characters don't count for liveliness while the shot covers them
+        assert np.abs(img[y, x, :3] - np.array([0xFF, 0xF1, 0xD0])).sum() < 40
     from robotics101.cartoon.liveliness import scene_liveliness
     live = scene_liveliness(sc, S.presence, S.HEIGHT, S.SCALES)
     full = round(sc.duration * 30)
-    assert live["bolt"]["frames"] < live["maya"]["frames"] < full
+    assert live["bolt"]["frames"] < full and live["maya"]["frames"] < full
 
 
-def test_engine_family_illustration_is_full_screen_with_animated_tiles(voiced, monkeypatch):
+def test_engine_family_examples_are_separate_full_screen_shots(voiced, monkeypatch):
     sc, t = _scene(voiced, "scene-002", monkeypatch)
-    [sh] = sc.shots
-    assert sh["layout"] == "illustration" and sh["characters"] == [] and sh["areaShare"] >= ILLUSTRATION_MIN_AREA
-    tiles = [i for i in sc.illustrations if i["id"].startswith("shot-family-")]
-    assert {i["kind"] for i in tiles} == {"vacuum", "arm", "rover"}
-    assert all(sh["start"] <= i["start"] < i["end"] <= sh["end"] for i in tiles)
+    shots = [s for s in sc.shots if s["layout"] == "illustration"]
+    assert [s.get("example") for s in shots] == ["toaster", "vacuum", "arm", "rover"]
+    assert all(s["characters"] == [] and s["areaShare"] >= ILLUSTRATION_MIN_AREA for s in shots)
+    for i, a in enumerate(shots):
+        for b in shots[i + 1:]:
+            assert a["end"] <= b["start"] or b["end"] <= a["start"]
 
 
-def test_stage_illustrations_not_measured_under_full_screen_shot(voiced, monkeypatch):
-    """M05.4: the stage album tiles are hidden by the full-screen family shot; their static-hold regions must skip
-    that span (the M05.4 render flagged a 7.1 s 'still' vacuum tile that was really the shot's board)."""
+def test_stage_album_grid_is_not_drawn_under_one_example_shots(voiced, monkeypatch):
+    """M05.6: the stage album grid is gone; each example is a full-screen shot illustration, and any leftover
+    stage illustration region is still hidden for the span a shot covers (M05.4 static-hold rule)."""
     from robotics101.cartoon import scenes as S
     sc, t = _scene(voiced, "scene-002", monkeypatch)
-    [sh] = sc.shots
-    c0, c1 = sh["start"] + S.SHOT_IN, sh["end"] - S.SHOT_OUT
+    assert not any(i["id"].startswith("family-") for i in sc.illustrations)
+    covers = [(sh["start"] + S.SHOT_IN, sh["end"] - S.SHOT_OUT) for sh in sc.shots if sh["layout"] != "stage"]
     stage = [i for i in sc.illustrations if not i["id"].startswith("shot-")]
-    assert stage, "stage tiles stay registered outside the shot"
     for il in stage:
-        assert il["end"] <= c0 + 1e-6 or il["start"] >= c1 - 1e-6, il
+        for c0, c1 in covers:
+            assert il["end"] <= c0 + 1e-6 or il["start"] >= c1 - 1e-6, il
     assert len({i["id"] for i in sc.illustrations}) == len(sc.illustrations)
 
 

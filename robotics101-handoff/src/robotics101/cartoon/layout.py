@@ -17,12 +17,15 @@ BAND_TOP_Y = FRAME_Y - (1 - CAPTION_BAND) * FRAME_H   # -2.56 world units
 CONTENT_FLOOR_Y = BAND_TOP_Y + 0.12                   # feet / lowest content line for overlays (shots)
 BAND_OVERLAP_TOL = 0.004                              # normalised slack (~4 px) for anti-aliased edges
 
-# M05.1 shot rules (QA)
-ILLUSTRATION_MIN_AREA = 0.55        # illustration visual covers >= 55% of the frame
+# M05.1 / M05.6 shot rules (QA)
+ILLUSTRATION_MIN_AREA = 0.60        # M05.6: a teaching visual covers >= 60% of the frame
 SOLO_MIN_AREA = 0.35                # solo shot's wide visual >= 35% of the frame
 MAX_CHARACTERS = {"illustration": 1, "solo": 1}
 MIN_CHARACTERS = {"illustration": 0, "solo": 1}
-CORNER_MAX_AREA = 0.10              # an illustration's corner character box <= 10% of the frame
+CORNER_MAX_AREA = 0.08              # M05.6: illustration corner cameo <= 8% of the frame
+TEACHING_CAMEO_MAX = 0.08           # teaching visuals may not share the frame with a full-size character
+CLUTTER_MAX_ITEMS = 8               # M05.6: labelled / overlapping extras on an explainer frame
+CLUTTER_MAX_COVER = 0.95
 
 
 def norm_box(x0: float, y0: float, x1: float, y1: float) -> list[float]:

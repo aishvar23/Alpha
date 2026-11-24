@@ -1,0 +1,644 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/episode.v1.3.schema.json",
+  "title": "Robotics101 EpisodeSpec v1.3 (cartoon: characters + dialogue beats)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "episodeId",
+    "episodeNumber",
+    "title",
+    "audience",
+    "durationTargetSeconds",
+    "scenes",
+    "characters",
+    "set"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.3"
+    },
+    "episodeId": {
+      "type": "string",
+      "pattern": "^ep-[0-9]{3,}$"
+    },
+    "episodeNumber": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 140
+    },
+    "audience": {
+      "enum": [
+        "beginner",
+        "intermediate",
+        "advanced"
+      ]
+    },
+    "durationTargetSeconds": {
+      "type": "integer",
+      "minimum": 120,
+      "maximum": 900
+    },
+    "learningObjectives": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "maxItems": 5
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claimId",
+          "sourceUrl",
+          "verificationStatus"
+        ],
+        "properties": {
+          "claimId": {
+            "type": "string"
+          },
+          "sourceUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "verificationStatus": {
+            "enum": [
+              "verified",
+              "unverified"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 25,
+      "items": {
+        "$ref": "#/$defs/scene"
+      }
+    },
+    "characters": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 6,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{1,31}$"
+      }
+    },
+    "set": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,31}$"
+    },
+    "music": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "theme": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,31}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "publishing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "madeForKids"
+      ],
+      "properties": {
+        "madeForKids": {
+          "type": "boolean"
+        },
+        "audienceNote": {
+          "type": "string",
+          "maxLength": 300
+        }
+      }
+    },
+    "intro": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "M03.1 character intro segment generated from the registry (default: enabled, after the cold open).",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "position": {
+          "enum": [
+            "start",
+            "after_cold_open"
+          ]
+        },
+        "characters": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,31}$"
+          },
+          "uniqueItems": true,
+          "maxItems": 6
+        }
+      }
+    },
+    "transitions": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "M03.2 scene-to-scene transitions (default: auto = rotating cartoon styles; 'cut' must be explicit per scene).",
+      "properties": {
+        "default": {
+          "enum": [
+            "auto",
+            "wipe",
+            "iris",
+            "slide",
+            "character",
+            "cut"
+          ]
+        },
+        "seconds": {
+          "type": "number",
+          "minimum": 0.2,
+          "maximum": 1.0
+        }
+      }
+    },
+    "subtitles": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "M03.5 burned-in kid subtitles (default on).",
+      "properties": {
+        "burnIn": {
+          "type": "boolean"
+        },
+        "fontSizePx": {
+          "type": "integer",
+          "minimum": 40,
+          "maximum": 80
+        }
+      }
+    }
+  },
+  "$defs": {
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sceneId",
+        "sequence",
+        "title",
+        "educationalObjective",
+        "engine",
+        "template",
+        "durationTargetSeconds",
+        "parameters",
+        "validation",
+        "beats"
+      ],
+      "properties": {
+        "sceneId": {
+          "type": "string",
+          "minLength": 4
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 3
+        },
+        "educationalObjective": {
+          "type": "string",
+          "minLength": 5
+        },
+        "engine": {
+          "enum": [
+            "cartoon"
+          ]
+        },
+        "template": {
+          "type": "string",
+          "minLength": 3
+        },
+        "durationTargetSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 180
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "requiredChecks"
+          ],
+          "properties": {
+            "requiredChecks": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "enum": [
+                  "render_success",
+                  "video_probe",
+                  "labels_visible",
+                  "kinematics_consistency",
+                  "joint_constraints",
+                  "duration_match",
+                  "sensor_geometry",
+                  "safe_asset"
+                ]
+              }
+            }
+          }
+        },
+        "beats": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 80,
+          "items": {
+            "$ref": "#/$defs/beat"
+          }
+        },
+        "generated": {
+          "enum": [
+            "intro"
+          ],
+          "description": "set by the pipeline for generated scenes"
+        },
+        "transitionIn": {
+          "enum": [
+            "auto",
+            "wipe",
+            "iris",
+            "slide",
+            "character",
+            "cut"
+          ]
+        },
+        "concepts": {
+          "type": "array",
+          "maxItems": 4,
+          "description": "M03.2 concept markers: a title card plays before beat `beforeBeat`",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "title"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 2,
+                "maxLength": 40
+              },
+              "subtitle": {
+                "type": "string",
+                "maxLength": 60
+              },
+              "icon": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "beforeBeat": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "kicker": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "maxLength": 28,
+                "description": "M05.5 card kicker (small line above the title). Omitted: section default; null/empty: hidden. There is no global default."
+              }
+            }
+          }
+        },
+        "shots": {
+          "type": "array",
+          "maxItems": 32,
+          "description": "M05.1/M05.6 layout segments over beat ranges (inclusive, indices into the expanded beat list): `stage` (character staging), `illustration` (full-bleed teaching visual, no characters or one tiny corner cameo), `solo` (exactly one character + a wide visual). Teaching examples default to illustration, one example per shot. Filled from template defaults / derived examples when omitted. Optional `example`, `atWord`, `untilWord` time a shot to a word inside its beat.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "layout",
+              "fromBeat",
+              "toBeat"
+            ],
+            "properties": {
+              "layout": {
+                "enum": [
+                  "stage",
+                  "illustration",
+                  "solo"
+                ]
+              },
+              "fromBeat": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "toBeat": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "visual": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "character": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$"
+              },
+              "corner": {
+                "enum": [
+                  "left",
+                  "right"
+                ]
+              },
+              "generated": {
+                "type": "boolean"
+              },
+              "example": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]{1,31}$",
+                "description": "M05.6 example id this shot shows (one example per frame)."
+              },
+              "atWord": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "description": "M05.6: shot starts when this word is spoken inside the beat range."
+              },
+              "untilWord": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40,
+                "description": "M05.6: shot ends when this word is spoken (the next example's atWord)."
+              }
+            }
+          }
+        },
+        "section": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,39}$",
+          "description": "M05.5 section id; consecutive scenes sharing it share one background. Default: the scene's own id."
+        },
+        "background": {
+          "description": "M05.5 section background: `auto` (default) or a theme + palette from cartoon.backgrounds. Expansion writes the resolved object (with `section` and `auto`).",
+          "oneOf": [
+            {
+              "const": "auto"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "theme": {
+                  "enum": [
+                    "workshop",
+                    "studio",
+                    "museum",
+                    "lab_bench",
+                    "sound_lab",
+                    "control_room",
+                    "blueprint",
+                    "test_track",
+                    "quiz_stage",
+                    "auto"
+                  ]
+                },
+                "palette": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{0,31}$"
+                },
+                "section": {
+                  "type": "string"
+                },
+                "auto": {
+                  "type": "boolean"
+                }
+              }
+            }
+          ]
+        },
+        "kicker": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 28,
+          "description": "M05.5 section kicker (first scene of a section): shown on the section's first concept card, or as a section banner when it has none. Omitted: default by section type; null/empty: hidden."
+        }
+      }
+    },
+    "beat": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "speaker",
+            "text"
+          ],
+          "properties": {
+            "type": {
+              "const": "line"
+            },
+            "speaker": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "emotion": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "action": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}(:[A-Za-z0-9_.\\-]{1,32})?$"
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "explain": {
+              "type": "boolean",
+              "description": "M05.1 explanatory beat: must be shown in an illustration/solo shot"
+            },
+            "pose": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$",
+              "description": "M05.3 emotion pose from the pose library (auto-chosen from emotion/text when omitted)"
+            },
+            "react": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$",
+              "description": "M05.3 listener reaction pose (auto when omitted)"
+            },
+            "examples": {
+              "type": "array",
+              "maxItems": 12,
+              "description": "M05.6 examples introduced on this line. Omitted: derived from the text / template. Each gets its own illustration shot, timed from atWord to untilWord (or the end of the line).",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "visual": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_]{1,31}$"
+                  },
+                  "atWord": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "untilWord": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 40
+                  },
+                  "subtitle": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "id"
+          ],
+          "properties": {
+            "type": {
+              "const": "sfx"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "who": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "who",
+            "do"
+          ],
+          "properties": {
+            "type": {
+              "const": "action"
+            },
+            "who": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "do": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}(:[A-Za-z0-9_.\\-]{1,32})?$"
+            },
+            "emotion": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            },
+            "seconds": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 8
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "seconds"
+          ],
+          "properties": {
+            "type": {
+              "const": "pause"
+            },
+            "seconds": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "maximum": 4
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "cue"
+          ],
+          "properties": {
+            "type": {
+              "const": "music"
+            },
+            "cue": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,31}$"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "description": "v1.3 (M05.6): every teaching example or explanation beat gets its own full-screen illustration-only shot (one example per frame; characters return between explanations). A line beat may carry `examples` (id, label, visual, atWord, untilWord); when omitted, expansion derives them from the lines. 1.1 and 1.2 specs remain valid and get the same defaults. v1.2 section/background/kicker rules still apply."
+}

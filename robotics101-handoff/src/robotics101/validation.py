@@ -29,7 +29,8 @@ from robotics101.templates.registry import get_template
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCHEMA_PATH = PROJECT_ROOT / "contracts" / "episode.schema.json"
 SCHEMA_PATHS = {"1.0": DEFAULT_SCHEMA_PATH, "1.1": PROJECT_ROOT / "contracts" / "episode.v1.1.schema.json",
-                "1.2": PROJECT_ROOT / "contracts" / "episode.v1.2.schema.json"}
+                "1.2": PROJECT_ROOT / "contracts" / "episode.v1.2.schema.json",
+                "1.3": PROJECT_ROOT / "contracts" / "episode.v1.3.schema.json"}
 DIALOGUE_WPS = 2.6            # planning estimate: words per second of cartoon dialogue
 MIN_DIALOGUE_COVERAGE = 0.6   # warn when estimated dialogue covers less of a scene's target
 
@@ -102,9 +103,9 @@ def validate_episode(spec: Any, schema: dict[str, Any] | None = None) -> Validat
     _check_sequences(scenes, report)
     _check_durations(spec, report)
     _check_templates(scenes, report)
-    if spec.get("schemaVersion") in ("1.1", "1.2"):
+    if spec.get("schemaVersion") in ("1.1", "1.2", "1.3"):
         _check_cartoon(spec, report)
-    if spec.get("schemaVersion") == "1.2":
+    if spec.get("schemaVersion") in ("1.2", "1.3"):
         _check_sections(spec, report)
     return report
 
@@ -223,10 +224,11 @@ def _check_cartoon(spec: dict, report: ValidationReport) -> None:
             if sh["layout"] == "solo" and not sh.get("character"):
                 report.error(where, "a solo shot needs its one `character`")
             vis = sh.get("visual")
-            if vis and not vis.startswith("concept_"):
-                from robotics101.cartoon.visuals import VISUALS
-                if vis not in VISUALS:
-                    report.error(where, f"unknown shot visual '{vis}' (known: {sorted(VISUALS)} or concept_<icon>)")
+            if vis and not vis.startswith(("concept_", "example_", "part_")):
+                from robotics101.cartoon.visuals import all_visuals
+                known = all_visuals()
+                if vis not in known:
+                    report.error(where, f"unknown shot visual '{vis}' (known: {sorted(known)} or concept_<icon>)")
         est = words / DIALOGUE_WPS
         if est < MIN_DIALOGUE_COVERAGE * scene["durationTargetSeconds"]:
             report.warn(f"$.scenes[{i}].beats",

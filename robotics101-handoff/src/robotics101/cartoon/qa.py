@@ -202,12 +202,12 @@ def check_liveliness(rep, by: dict) -> None:
 
 
 def check_shots(rep, spec: dict, timing: dict, by: dict) -> None:
-    """M05.1 illustration-first layouts: every explanatory line (``explain: true``, set by the template defaults or
-    the author) is on screen inside an ``illustration`` / ``solo`` shot; illustration visuals cover >= 55% of the
-    frame and solo visuals >= 35%; character counts per layout (illustration 0-1 small corner character, solo
-    exactly 1)."""
+    """M05.1 / M05.6 illustration-first layouts: every explanatory line is inside an illustration/solo shot;
+    illustration visuals cover >= 60% of the frame and solo visuals >= 35%; a teaching visual may not share the
+    frame with a full-size character (corner cameo <= 8%) and must itself cover >= 60%."""
     from robotics101.cartoon.layout import (CORNER_MAX_AREA, ILLUSTRATION_MIN_AREA, MAX_CHARACTERS, MIN_CHARACTERS,
                                             SOLO_MIN_AREA)
+    from robotics101.cartoon.visuals import is_teaching_visual
     tim = {s["sceneId"]: s for s in timing["scenes"]}
     bad, rows, n_explain = [], [], 0
     for sc in spec["scenes"]:
@@ -225,6 +225,12 @@ def check_shots(rep, spec: dict, timing: dict, by: dict) -> None:
                 bad.append(f"{sid} {lay} shot has {n} characters")
             if lay == "illustration" and any(c.get("area", 0) > CORNER_MAX_AREA for c in sh.get("characters") or []):
                 bad.append(f"{sid} illustration corner character too big")
+            if is_teaching_visual(sh.get("visual")):
+                if (sh.get("areaShare") or 0) < ILLUSTRATION_MIN_AREA:
+                    bad.append(f"{sid} teaching visual {sh.get('visual')} covers {sh.get('areaShare')} "
+                               f"of the frame (< {ILLUSTRATION_MIN_AREA})")
+                if any(c.get("area", 0) > CORNER_MAX_AREA for c in sh.get("characters") or []):
+                    bad.append(f"{sid} teaching visual {sh.get('visual')} shares the frame with a full-size character")
         beats = {b["index"]: b for b in (tim.get(sid) or {}).get("beats", [])}
         for i, b in enumerate(sc["beats"]):
             if b["type"] != "line" or not b.get("explain"):
@@ -244,6 +250,76 @@ def check_shots(rep, spec: dict, timing: dict, by: dict) -> None:
              f"{n_explain} explanatory lines in {len(rows)} illustration/solo shots "
              f"({', '.join(f'{r['scene']}:{r['layout']}/{r['visual']} {r['areaShare']:.0%}' for r in rows)}); "
              f"problems: {bad or 'none'}", rows)
+
+
+
+def check_one_example_per_frame(rep, spec: dict, timing: dict, by: dict) -> None:
+    """M05.6: each teaching example has its own frame; two example illustrations are never on screen at once,
+    and a multi-example grid (``robot_families``) is not used."""
+    from robotics101.cartoon.visuals import is_example_visual
+    bad, rows = [], []
+    for sc in spec["scenes"]:
+        sid = sc["sceneId"]
+        shots = ((by.get(sid) or {}).get("facts") or {}).get("shots") or sc.get("shots") or []
+        examples = []
+        for sh in shots:
+            vis = sh.get("visual") or ""
+            if vis == "robot_families":
+                bad.append(f"{sid}: robot_families grid shows several examples on one frame")
+            if is_example_visual(vis) or sh.get("example"):
+                examples.append(sh)
+                rows.append({"scene": sid, "example": sh.get("example") or vis, "visual": vis,
+                             "start": sh.get("start"), "end": sh.get("end")})
+        # authored / expanded beat examples must each have a shot
+        for i, b in enumerate(sc.get("beats") or []):
+            for ex in b.get("examples") or []:
+                if not any((sh.get("example") == ex["id"]) or sh.get("visual") == ex.get("visual") for sh in shots):
+                    bad.append(f"{sid}: example {ex['id']} has no frame of its own")
+        for i, a in enumerate(examples):
+            for b in examples[i + 1:]:
+                a0, a1 = a.get("start"), a.get("end")
+                b0, b1 = b.get("start"), b.get("end")
+                if a0 is None or b0 is None:
+                    if a.get("fromBeat") == b.get("fromBeat") and not (a.get("untilWord") or b.get("atWord")):
+                        bad.append(f"{sid}: examples {a.get('example')} and {b.get('example')} share a beat with no split")
+                    continue
+                if a0 < b1 and b0 < a1:
+                    bad.append(f"{sid}: {a.get('example') or a.get('visual')} and {b.get('example') or b.get('visual')} "
+                               f"visible together ({a0}–{a1} overlaps {b0}–{b1})")
+    rep.hard("layout.one_example_per_frame", not bad,
+             f"{len(rows)} one-example frames; problems: {bad or 'none'}", rows)
+
+
+def check_clutter(rep, spec: dict, by: dict) -> None:
+    """M05.6: explainer / illustration frames stay uncluttered — the teaching visual dominates, at most one small
+    cameo, and no pile of overlapping extras."""
+    from robotics101.cartoon.layout import CLUTTER_MAX_COVER, CLUTTER_MAX_ITEMS, CORNER_MAX_AREA, ILLUSTRATION_MIN_AREA
+    from robotics101.cartoon.visuals import is_teaching_visual
+    bad, rows = [], []
+    for sc in spec["scenes"]:
+        sid = sc["sceneId"]
+        shots = ((by.get(sid) or {}).get("facts") or {}).get("shots") or []
+        illustrations = (by.get(sid) or {}).get("illustrations") or []
+        for sh in shots:
+            if sh.get("layout") != "illustration" and not is_teaching_visual(sh.get("visual")):
+                continue
+            chars = sh.get("characters") or []
+            mid = ((sh.get("start") or 0) + (sh.get("end") or 0)) / 2
+            visible_il = [i for i in illustrations if i.get("start", 0) <= mid < i.get("end", 0)]
+            n = len(chars) + max(0, len(visible_il))
+            rows.append({"scene": sid, "visual": sh.get("visual"), "items": n, "areaShare": sh.get("areaShare")})
+            if (sh.get("areaShare") or 1) < ILLUSTRATION_MIN_AREA:
+                bad.append(f"{sid} {sh.get('visual')} is cluttered / too small ({sh.get('areaShare')})")
+            if any(c.get("area", 0) > CORNER_MAX_AREA for c in chars):
+                bad.append(f"{sid} {sh.get('visual')} has a full-size character on the explainer")
+            if n > CLUTTER_MAX_ITEMS:
+                bad.append(f"{sid} {sh.get('visual')} has {n} overlapping items (max {CLUTTER_MAX_ITEMS})")
+            if (sh.get("areaShare") or 0) > CLUTTER_MAX_COVER and len(chars) > 1:
+                bad.append(f"{sid} {sh.get('visual')} coverage is overcrowded")
+    if not rows:
+        rep.soft("layout.clutter", True, "no explainer frames to score for clutter")
+        return
+    rep.hard("layout.clutter", not bad, f"{len(rows)} explainer frames; problems: {bad or 'none'}", rows)
 
 
 def check_acting(rep, spec: dict, by: dict) -> None:
@@ -571,6 +647,8 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     check_kicker_variety(rep, spec, by)
     check_liveliness(rep, by)
     check_shots(rep, spec, timing, by)
+    check_one_example_per_frame(rep, spec, timing, by)
+    check_clutter(rep, spec, by)
     check_caption_band(rep, by)
     check_acting(rep, spec, by)
     if video_s:

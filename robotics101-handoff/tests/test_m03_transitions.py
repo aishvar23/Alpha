@@ -47,7 +47,7 @@ def test_concept_markers_insert_one_sting_before_the_marked_beat():
         stings = [i for i, x in enumerate(b["beats"]) if x["type"] == "music" and x["cue"] == CONCEPT_CUE]
         assert len(stings) == len(cs)
         for c, i in zip(sorted(cs, key=lambda c: c.get("beforeBeat", 0)), stings):
-            got = {k: v for k, v in b["beats"][i + 1].items() if k != "explain"}      # M05.1 marks explain lines
+            got = {k: v for k, v in b["beats"][i + 1].items() if k not in ("explain", "examples")}  # M05.1 explain; M05.6 examples
             assert got == a["beats"][c.get("beforeBeat", 0)]
     assert sum(len(s.get("concepts") or []) for s in src["scenes"]) == 5
 

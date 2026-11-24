@@ -233,24 +233,8 @@ def stage_robot_family(sc: Scene) -> None:
                      if chips[0][1] and chips[0][1] <= t < chips[0][1] + 12 else [])
     flip = sc.beat("sfx", "id", "page_flip")
     examples = ["vacuum", "arm", "rover"]
-    reveal = [sc.word_time(w, after=flip["start_s"]) for w in examples]
     sc.facts["examples"] = examples
-
-    def album(t, m):
-        if t < flip["start_s"]:
-            return []
-        g = PR.album(examples, [_u(t, r, r + 0.5) if r else 0 for r in reveal], _u(t, flip["start_s"], flip["start_s"] + 0.5),
-                     t=t)
-        return [g.scale(ALBUM_SCALE).move_to(PR.P(*ALBUM_AT))]
-    sc.front.append(album)
-    n = len(examples)
-    for i, (name, r) in enumerate(zip(examples, reveal)):     # M03.4: animated robot-family tiles (static-hold QA)
-        if r:
-            cx = -(2.1 * n + 0.6) / 2 + 0.3 + 2.1 * (i + 0.5)
-            x, y = ALBUM_AT[0] + ALBUM_SCALE * cx, ALBUM_AT[1] + ALBUM_SCALE * 0.1
-            sc.illustrations.append({"id": f"family-{name}", "kind": name, "start": round(r + 0.5, 3),
-                                     "end": round(sc.duration, 3),
-                                     "box": world_box(x, y, ALBUM_SCALE * 1.5, ALBUM_SCALE * 1.2)})
+    # M05.6: the family examples are full-screen one-example illustration shots, not a stage album grid.
     generic_sfx_lettering(sc, {"toaster_pop": PR.P(4.9, 1.6)})
 
 
@@ -294,7 +278,9 @@ def stage_checkup(sc: Scene) -> None:
         out = [PR.battery(lvl, charging).scale(1.4).move_to(PR.P(2.6, -0.95))]
         b = m.get("bolt")
         if t >= plug["start_s"] and b is not None:
-            out.insert(0, PR.cable(SOCKET_POS, b.get_left() + PR.P(0.25, -1.05), _u(t, plug["start_s"], plug["end_s"])))
+            port = PR.bolt_charge_port(b)
+            lead = PR.charge_lead(SOCKET_POS, port, _u(t, plug["start_s"], plug["end_s"]))
+            out.insert(0, lead)
         return out
     sc.back.append(lambda t, m: [])
     sc.front.append(batt)
@@ -742,7 +728,61 @@ def _ctx_sta(sc: Scene, sh: dict) -> dict:
     return out
 
 
-SHOT_CONTEXT = {"robot_families": _ctx_robot_families, "echo_diagram": _ctx_echo, "sense_think_act": _ctx_sta}
+
+def _ctx_rule(sc: Scene, sh: dict) -> dict:
+    thr = sc.params.get("thresholdMeters")
+    out = {"threshold": float(thr) if thr is not None else 0.5}
+    if thr is not None:
+        sc.facts["shotThresholdMeters"] = float(thr)
+    return out
+
+
+def _ctx_servo_dial(sc: Scene, sh: dict) -> dict:
+    t30 = sc.word_time("30", after=sh["start"]) or sc.word_time("thirty", after=sh["start"])
+    t60 = sc.word_time("60", after=sh["start"]) or sc.word_time("sixty", after=sh["start"])
+    return {"t30": t30, "t60": t60, "t0": sh["start"]}
+
+
+def _ctx_quiz(sc: Scene, sh: dict) -> dict:
+    line = next((b for b in sc.lines() if "which part" in b["text"].lower()), None)
+    return {"question": line["text"] if line else "Which part of a robot measures distance?"}
+
+
+def _ctx_part(sc: Scene, sh: dict) -> dict:
+    vis = sh.get("visual") or ""
+    part = vis[len("part_"):] if vis.startswith("part_") else sh.get("example")
+    plug = sc.beat("action", "do", "plug_in")
+    fill = None
+    if plug and part == "power":
+        # illustration is on the power *line*; show a filling battery and a seated plug
+        fill = 0.25 + 0.75 * 0.85
+    return {"part": part, "seated": True, "fill": fill if part == "power" else None}
+
+
+def _ctx_example(sc: Scene, sh: dict) -> dict:
+    vis = sh.get("visual") or ""
+    kind = vis[len("example_"):] if vis.startswith("example_") else sh.get("example")
+    return {"kind": kind, "example": kind, "label": (sh.get("example") or kind or "").replace("_", " ").title()}
+
+
+def _ctx_range(sc: Scene, sh: dict) -> dict:
+    return {"range": 3.0, "oor": sc.word_time("out", after=sh["start"])}
+
+
+def shot_context(sc: Scene, sh: dict) -> dict:
+    vis = sh.get("visual") or ""
+    if vis in SHOT_CONTEXT:
+        return SHOT_CONTEXT[vis](sc, sh)
+    if vis.startswith("part_"):
+        return _ctx_part(sc, sh)
+    if vis.startswith("example_"):
+        return _ctx_example(sc, sh)
+    return {}
+
+
+SHOT_CONTEXT = {"robot_families": _ctx_robot_families, "echo_diagram": _ctx_echo, "sense_think_act": _ctx_sta,
+                "the_rule": _ctx_rule, "rule_test": _ctx_rule, "servo_dial": _ctx_servo_dial,
+                "quiz_question": _ctx_quiz, "sensor_range": _ctx_range, "part_power": _ctx_part}
 
 
 def shot_at(sc: Scene, t: float) -> dict | None:
@@ -760,6 +800,20 @@ def shot_character_place(sh: dict) -> tuple[float, float, float, int]:
     return (-5.9 if left else 5.9), CONTENT_FLOOR_Y + 0.05, SCALES[cid] * CORNER_GAIN, 1 if left else -1
 
 
+def _clip_overlapping_shots(sc: Scene) -> None:
+    """Consecutive illustration/solo shots must not share the screen (one example per frame)."""
+    ordered = sorted((sh for sh in sc.shots if sh["layout"] != "stage"), key=lambda s: s["start"])
+    for a, b in zip(ordered, ordered[1:]):
+        if a["end"] > b["start"]:
+            a["end"] = b["start"]
+    by_id = {f"shot-{sh.get('example') or sh['visual']}": sh for sh in sc.shots}
+    for il in sc.illustrations:
+        sh = by_id.get(il["id"])
+        if sh is not None:
+            il["end"] = min(il["end"], max(il["start"], sh["end"] - SHOT_OUT))
+            il["start"] = max(il["start"], sh["start"] + SHOT_IN)
+
+
 def stage_shots(sc: Scene, shots: list[dict]) -> None:
     """M05.1: illustration / solo shots cover the stage over their beat ranges with a full-frame backdrop, the wide
     teaching visual and (solo) the one character, who keeps performing (lip sync, gestures) from its Performer."""
@@ -773,9 +827,28 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
         start = max(b0["start_s"] - SHOT_LEAD, k if sc.trans_in else 0.0,
                     max((c["end"] for c in sc.concepts if c["start"] <= b0["start_s"]), default=0.0))
         end = min(b1["end_s"] + SHOT_TAIL, sc.duration - (k if sc.trans_out else 0.0))
+        if spec.get("atWord"):
+            wt = sc.word_time(spec["atWord"], after=max(0.0, b0["start_s"] - 0.05))
+            if wt is not None:
+                start = max(wt, k if sc.trans_in else 0.0,
+                            max((c["end"] for c in sc.concepts if c["start"] <= b0["start_s"]), default=0.0))
+        if spec.get("untilWord"):
+            wt = sc.word_time(spec["untilWord"], after=start)
+            if wt is not None:
+                end = min(wt, sc.duration - (k if sc.trans_out else 0.0))
+        plug = sc.beat("action", "do", "plug_in")
+        if plug and start < plug["end_s"] + 0.8 < end:
+            # keep the seated charger visible (spark + battery) before the next teaching frame
+            start = plug["end_s"] + 0.8
         sh = {"layout": spec["layout"], "visual": spec.get("visual") or "concept_robot",
               "character": spec.get("character"), "corner": spec.get("corner", "left"),
               "fromBeat": spec["fromBeat"], "toBeat": spec["toBeat"], "start": round(start, 3), "end": round(end, 3)}
+        if spec.get("example"):
+            sh["example"] = spec["example"]
+        if spec.get("atWord"):
+            sh["atWord"] = spec["atWord"]
+        if spec.get("untilWord"):
+            sh["untilWord"] = spec["untilWord"]
         if sh["character"] and sh["character"] not in sc.perf:
             sh["character"] = None
         box = VZ.default_box(sh["layout"])
@@ -808,7 +881,7 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
         def draw(t, m, sh=sh, fn=fn, ctx=ctx):
             if not (sh["start"] <= t < sh["end"]):
                 return []
-            g = [VZ.backdrop(sh["layout"], t), fn(t, ctx)]
+            g = [VZ.backdrop(sh["layout"], t), fn(t, ctx, box)]
             if sh["character"]:
                 x, fy, scale, facing = shot_character_place(sh)
                 st = sc.perf[sh["character"]].state(t)
@@ -827,6 +900,7 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
                 grp.scale(kk, about_point=np.zeros(3))
             return [grp]
         sc.top.append(draw)
+    _clip_overlapping_shots(sc)
     sc.facts["shots"] = sc.shots
     hide_covered_illustrations(sc)
 
