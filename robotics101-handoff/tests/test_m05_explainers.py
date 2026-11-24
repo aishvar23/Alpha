@@ -280,12 +280,28 @@ def test_teaching_shots_register_illustration_regions(tmp_path, monkeypatch):
         assert ctrl["start"] >= plug["end_s"] - 0.05
 
 
+def _gray(mob, w=384, h=216):
+    from robotics101.cartoon.render2d import frame_rgb
+    import numpy as np
+    return frame_rgb([mob], w, h, "#FFFFFF").mean(axis=2).astype(np.int16)
+
+
+def _longest_hold_s(frames, dt, min_diff=1.0):
+    """Longest run whose mean |grey| vs the run's first frame stays below ``min_diff`` (QA metric)."""
+    import numpy as np
+    best = start = 0
+    anchor = frames[0]
+    for i, f in enumerate(frames):
+        if float(np.abs(f - anchor).mean()) >= min_diff:
+            best = max(best, i - start)
+            anchor, start = f, i
+    return max(best, len(frames) - 1 - start) * dt
+
+
 def test_structure_and_rule_boards_keep_moving():
     pytest.importorskip("manim")
-    from robotics101.cartoon.explainers import _part_structure, the_rule
+    from robotics101.cartoon.explainers import checkup_part, the_rule
     from robotics101.cartoon.visuals import ILLUSTRATION_BOX
-
-    assert abs(float(_part_structure(0.0).width) - float(_part_structure(0.7).width)) > 0.05
 
     def centers(t):
         g = the_rule(t, {"threshold": 0.5}, ILLUSTRATION_BOX)
@@ -297,3 +313,29 @@ def test_structure_and_rule_boards_keep_moving():
         walk(g)
         return out
     assert centers(0.0) != centers(0.8)
+    # structure motion must survive fit-to-box (a uniform scale pulse does not)
+    a = checkup_part(0.0, {"part": "structure"}, ILLUSTRATION_BOX)
+    b = checkup_part(0.7, {"part": "structure"}, ILLUSTRATION_BOX)
+    assert (_gray(a) != _gray(b)).mean() > 0  # smoke; the span test below is the real gate
+
+
+def test_teaching_shots_keep_moving_through_holds():
+    """Pipeline default: every full-screen teaching shot stays in motion, including the cases
+    that failed QA on the first M05.6 cut (pre-ping echo, in-range bar, STA, fit structure, held dial)."""
+    pytest.importorskip("manim")
+    from robotics101.cartoon.explainers import checkup_part, sensor_range, servo_dial
+    from robotics101.cartoon.visuals import ILLUSTRATION_BOX, echo_diagram, sense_think_act
+
+    dt = 0.25
+    cases = {
+        "structure": lambda t: checkup_part(t, {"part": "structure"}, ILLUSTRATION_BOX),
+        "echo": lambda t: echo_diagram(t, {"ping": 5.0}, ILLUSTRATION_BOX),  # ping late in the shot
+        "range": lambda t: sensor_range(t, {"oor": 8.0}, ILLUSTRATION_BOX),  # long in-range stretch
+        "sta": lambda t: sense_think_act(t, {"sense": 3.0, "think": 6.0, "act": 9.0, "threshold": 0.5},
+                                         ILLUSTRATION_BOX),
+        "dial": lambda t: servo_dial(t, {"t0": 0.0, "t30": 2.0, "t60": 4.0}, ILLUSTRATION_BOX),
+    }
+    for name, fn in cases.items():
+        frames = [_gray(fn(i * dt)) for i in range(int(8.0 / dt) + 1)]
+        hold = _longest_hold_s(frames, dt)
+        assert hold <= 1.75, f"{name} held still for {hold:.2f}s (limit 2.0s, sampled every {dt}s)"

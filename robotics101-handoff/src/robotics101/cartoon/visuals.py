@@ -62,7 +62,7 @@ def robot_families(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     x0, y0, x1, y1 = box
     examples = ctx.get("examples") or ["vacuum", "arm", "rover"]
     reveal = ctx.get("reveal") or [None] * len(examples)
-    g = VGroup(board(box, "#FFFDF6"))
+    g = VGroup(board(box, "#FFFDF6"), PR.highlight_sweep(box, t))
     title = PR.txt("MEET THE ROBOT FAMILY!", 56, color="#6C4AB6", font="Luckiest Guy", weight="NORMAL", stroke=4)
     title.move_to(P((x0 + x1) / 2, y1 - 0.5 + 0.06 * math.sin(2 * PI * 0.8 * t)))
     g.add(title)
@@ -120,10 +120,14 @@ def _bat(at: np.ndarray, t: float, k: float) -> VGroup:
 
 
 def echo_diagram(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
-    """Sound-wave diagram: a sensor sends a ping, it bounces off a wall and the echo comes back. The first ping is
-    synced to the scene's ``ping`` sfx, later pings loop; a 'faster echo = closer' strip and a bat appear on cue."""
+    """Sound-wave diagram: a sensor sends a ping, it bounces off a wall and the echo comes back.
+
+    Pings loop for the whole shot (even before the first sfx) so the board never sits still; a cycle still
+    starts on the scene's ``ping`` cue so the wave stays in sync with the narration. A 'faster echo = closer'
+    strip and a bat appear on cue.
+    """
     x0, y0, x1, y1 = box
-    g = VGroup(board(box, "#FFFFFF"))
+    g = VGroup(board(box, "#FFFFFF"), PR.highlight_sweep(box, t))
     head = PR.txt("HOW A DISTANCE SENSOR WORKS", 40, color="#6C4AB6", font="Luckiest Guy", weight="NORMAL")
     g.add(head.move_to(P((x0 + x1) / 2, y1 - 0.42)))
     cy = (y0 + y1) / 2 + 0.25
@@ -131,27 +135,34 @@ def echo_diagram(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
     sensor = VGroup(_o(RoundedRectangle(width=1.1, height=0.75, corner_radius=0.12, fill_color="#2EC4B6",
                                         fill_opacity=1), 5),
                     *[_o(Circle(0.22, fill_color="#DDE3EA", fill_opacity=1), 4).move_to(P(dx, 0)) for dx in (-0.25, 0.25)])
-    g.add(sensor.move_to(P(sx, cy)))
+    g.add(sensor.move_to(P(sx, cy + 0.06 * math.sin(2.4 * t))))
     wall = VGroup(_o(Rectangle(width=0.7, height=2.6, fill_color="#E76F51", fill_opacity=1), 5),
                   *[Line(P(-0.35, y), P(0.35, y), stroke_width=3, color="#B4513A") for y in (-0.65, 0.0, 0.65)])
     g.add(wall.move_to(P(wx, cy)))
     reach = wx - 0.35 - (sx + 0.55)
     ping0 = ctx.get("ping")
-    period = 2.4
+    period = 2.0
+    # Python modulo keeps a cycle running before the cue; u == 0 exactly when t == ping0.
     tt = t - (ping0 if ping0 is not None else 0.0)
-    if tt >= 0:
-        u = (tt % period) / period
-        if u < 0.42:
-            g.add(PR.ping_waves(P(sx + 0.55, cy), u / 0.42, reach / 1.6).scale(1.6, about_point=P(sx + 0.55, cy)))
-        elif u < 0.84:
-            g.add(PR.ping_waves(P(sx + 0.55, cy), (u - 0.42) / 0.42, reach / 1.6, back=True)
-                  .scale(1.6, about_point=P(sx + 0.55, cy)))
-        if u < 0.2:
-            g.add(PR.txt("PING!", 44, color="#4CC9F0", font="Luckiest Guy", weight="NORMAL", stroke=3)
-                  .move_to(P(sx + 0.1, cy + 1.05)).scale(1 + 0.15 * bump(u / 0.2)))
-        elif 0.7 < u < 0.95:
-            g.add(PR.txt("echo!", 40, color="#F72585", font="Luckiest Guy", weight="NORMAL", stroke=3)
-                  .move_to(P(sx + 1.6, cy + 1.05)))
+    u = (tt % period) / period
+    origin = P(sx + 0.55, cy)
+    if u < 0.5:
+        frac = u / 0.5
+        g.add(PR.ping_waves(origin, frac, reach / 1.6).scale(1.6, about_point=origin))
+        ping_d = reach * frac
+        col = "#4CC9F0"
+    else:
+        frac = (u - 0.5) / 0.5
+        g.add(PR.ping_waves(origin, frac, reach / 1.6, back=True).scale(1.6, about_point=origin))
+        ping_d = reach * (1 - frac)
+        col = "#F72585"
+    g.add(Circle(0.16, fill_color=col, fill_opacity=1, stroke_width=0).move_to(origin + P(0.1 + ping_d, 0.0)))
+    if u < 0.22:
+        g.add(PR.txt("PING!", 44, color="#4CC9F0", font="Luckiest Guy", weight="NORMAL", stroke=3)
+              .move_to(P(sx + 0.1, cy + 1.05)).scale(1 + 0.15 * bump(u / 0.22)))
+    elif 0.72 < u < 0.98:
+        g.add(PR.txt("echo!", 40, color="#F72585", font="Luckiest Guy", weight="NORMAL", stroke=3)
+              .move_to(P(sx + 1.6, cy + 1.05)))
     # distance arrow + 'faster echo = closer'
     ay = y0 + 0.95
     arr = VGroup(Line(P(sx + 0.6, ay), P(wx - 0.4, ay), stroke_width=6, color=ink()),
@@ -176,11 +187,12 @@ def echo_diagram(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
 # ------------------------------------------------------------------------------------------ sense think act
 
 def sense_think_act(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
-    """SENSE -> THINK -> ACT loop with icons; each step lights up as it is said (``ctx['sense'|'think'|'act']``)."""
+    """SENSE -> THINK -> ACT loop with icons; each step lights up as it is said (``ctx['sense'|'think'|'act']``),
+    and a highlight token cycles around the loop for the whole shot so the board never sits still."""
     x0, y0, x1, y1 = box
-    g = VGroup(board(box, "#FFFFFF"))
+    g = VGroup(board(box, "#FFFFFF"), PR.highlight_sweep(box, t))
     g.add(PR.txt("HOW YOUR ROBOT BRAIN WORKS", 40, color="#6C4AB6", font="Luckiest Guy", weight="NORMAL")
-          .move_to(P((x0 + x1) / 2, y1 - 0.42)))
+          .move_to(P((x0 + x1) / 2, y1 - 0.42 + 0.05 * math.sin(2 * PI * 0.8 * t))))
     thr = ctx.get("threshold")
     steps = [("SENSE", "#4CC9F0", "measure\ndistance"),
              ("THINK", "#FFD166", f"closer than\n{thr:g} m?" if thr else "check\nthe rule"),
@@ -189,12 +201,19 @@ def sense_think_act(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
     active = max((i for i, a in enumerate(times) if a is not None and t >= a), default=-1)
     w = (x1 - x0 - 1.0) / 3
     cy = (y0 + y1) / 2 + 0.1
+    cycle_i = int((t * 1.15) % 3)
+    centers = []
     for i, (name, col, sub) in enumerate(steps):
         cx = x0 + 0.5 + w * (i + 0.5)
+        centers.append(P(cx, cy + 0.3))
         on = i <= active
-        pulse = 1 + (0.08 * abs(math.sin(PI * 1.6 * t)) if i == active else 0.0)
-        c = _o(Circle(0.95, fill_color=col if on else "#F1F1F1", fill_opacity=1), 6).move_to(P(cx, cy + 0.3))
-        lab = PR.txt(name, 36, color=ink() if on else "#9A8C98").move_to(c)
+        lit = i == cycle_i
+        pulse = 1 + (0.12 * abs(math.sin(PI * 1.6 * t)) if lit else 0.0)
+        fill = col if on or lit else "#F1F1F1"
+        c = _o(Circle(0.95, fill_color=fill, fill_opacity=1), 6).move_to(P(cx, cy + 0.3))
+        if lit:
+            c.set_stroke("#EF476F", 8)
+        lab = PR.txt(name, 36, color=ink() if (on or lit) else "#9A8C98").move_to(c)
         cap = VGroup(*[PR.txt(line, 26, color=ink() if on else "#9A8C98") for line in sub.split("\n")]) \
             .arrange(np.array([0.0, -1.0, 0.0]), buff=0.08).move_to(P(cx, cy - 1.25))
         g.add(VGroup(c, lab).scale(pulse, about_point=P(cx, cy + 0.3)), cap)
@@ -202,6 +221,16 @@ def sense_think_act(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
             ax = cx + w / 2
             g.add(Polygon(P(ax - 0.28, cy + 0.5), P(ax - 0.28, cy + 0.1), P(ax + 0.12, cy + 0.3), fill_color=ink(),
                           fill_opacity=1, stroke_width=0))
+    # traveling token SENSE -> THINK -> ACT -> SENSE
+    path = centers + [centers[0]]
+    uu = (t / 2.2) % 1.0
+    seg = min(3, int(uu * 3))
+    if seg >= 3:
+        seg = 2
+    f = (uu * 3) - seg
+    pos = path[seg] + (path[seg + 1] - path[seg]) * f
+    g.add(Star(5, outer_radius=0.28, inner_radius=0.12, fill_color="#EF476F", fill_opacity=1,
+               stroke_width=0).move_to(pos).rotate(t * 3))
     return g
 
 
@@ -210,7 +239,7 @@ def sense_think_act(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
 def concept_visual(icon: str):
     def fn(t: float, ctx: dict, box=SOLO_BOX) -> VGroup:
         x0, y0, x1, y1 = box
-        g = VGroup(board(box, "#FFFFFF"))
+        g = VGroup(board(box, "#FFFFFF"), PR.highlight_sweep(box, t))
         if ctx.get("title"):
             g.add(PR.txt(ctx["title"].upper(), 40, color="#6C4AB6", font="Luckiest Guy", weight="NORMAL")
                   .move_to(P((x0 + x1) / 2, y1 - 0.42)))

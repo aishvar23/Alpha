@@ -317,6 +317,24 @@ def ping_waves(origin: np.ndarray, u: float, reach: float, back: bool = False, c
     return g
 
 
+def highlight_sweep(box, t: float, period: float = 2.6, color: str = "#FFD166",
+                    opacity: float = 0.32) -> VGroup:
+    """Soft diagonal sheen that travels across a teaching board so the frame never freezes.
+
+    Pipeline default for every full-screen teaching shot: idle highlight sweeps keep
+    ``illustrations.animated`` and ``video.no_long_holds`` under the 2 s still limit.
+    ``box`` is world corners ``(x0, y0, x1, y1)`` and the bar stays inside it. Gold, not white:
+    a white bar is invisible on the cream teaching boards.
+    """
+    x0, y0, x1, y1 = box
+    w, h = x1 - x0, y1 - y0
+    u = (t / max(period, 1e-6)) % 1.0
+    x = x0 - 0.5 + u * (w + 1.0)
+    bar = Rectangle(width=1.15, height=max(0.4, h - 0.15), fill_color=color, fill_opacity=opacity,
+                    stroke_width=0)
+    return VGroup(bar.move_to(P(x, (y0 + y1) / 2)).rotate(0.22))
+
+
 RULER_Y = GROUND + 0.25          # M05.2: on the floor just behind the characters' feet, clear of the caption band
 
 

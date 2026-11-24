@@ -37,12 +37,18 @@ def board(box, color: str = "#FFFFFF") -> RoundedRectangle:
                             fill_opacity=1, stroke_width=0).move_to(P((x0 + x1) / 2, (y0 + y1) / 2))
 
 
-def title(text: str, box, y_off: float = 0.0, size: int = 64) -> VGroup:
+def title(text: str, box, y_off: float = 0.0, size: int = 64, t: float | None = None) -> VGroup:
     x0, y0, x1, y1 = box
-    t = PR.txt(text, size, color="#6C4AB6", font="Luckiest Guy", weight="NORMAL", stroke=5)
-    if t.width > (x1 - x0) - 0.6:
-        t.scale(((x1 - x0) - 0.6) / t.width)
-    return t.move_to(P((x0 + x1) / 2, y1 - 0.48 + y_off))
+    bob = 0.05 * math.sin(2 * PI * 0.8 * t) if t is not None else 0.0
+    lab = PR.txt(text, size, color="#6C4AB6", font="Luckiest Guy", weight="NORMAL", stroke=5)
+    if lab.width > (x1 - x0) - 0.6:
+        lab.scale(((x1 - x0) - 0.6) / lab.width)
+    return lab.move_to(P((x0 + x1) / 2, y1 - 0.48 + y_off + bob))
+
+
+def live_board(box, t: float, color: str = "#FFFFFF") -> VGroup:
+    """Flush teaching board plus the pipeline-default highlight sweep."""
+    return VGroup(board(box, color), PR.highlight_sweep(box, t))
 
 
 def caption(text: str, box, size: int = 36, color: str = ink()) -> VGroup:
@@ -187,7 +193,7 @@ def one_example(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     kind = (ctx.get("kind") or ctx.get("example") or "robot").lower()
     label = ctx.get("label") or kind.replace("_", " ").title()
     sub = ctx.get("subtitle") or ""
-    g = VGroup(board(box, "#FFFDF6"))
+    g = VGroup(live_board(box, t, "#FFFDF6"))
     area = box  # full-bleed into the teaching box; title and caption sit on top of the scene
     if kind == "toaster":
         g.add(_fit(_toaster_art(t), box, margin=0.4, top=1.1, bottom=1.0))
@@ -202,7 +208,7 @@ def one_example(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
         g.add(_fit(vignette(kind, t), box))
     else:
         g.add(_fit(PR.icon(kind), box))
-    g.add(title(label.upper() + "!", box))
+    g.add(title(label.upper() + "!", box, t=t))
     if sub:
         g.add(caption(sub, box))
     else:
@@ -222,14 +228,30 @@ _PART_SUB = {
 
 
 def _part_structure(t: float) -> VGroup:
-    """A wide robot frame that breathes so the board never freezes."""
-    pulse = 1.0 + 0.045 * math.sin(2.4 * t)
+    """A wide robot frame that gently assembles, with parts highlighted in turn.
+
+    Motion is *inside* the group (a traveling sheen, growing ribs, cycling rivets) so it still
+    reads after ``checkup_part`` fits the art to the teaching box (a uniform scale pulse would
+    be undone by ``_fit``).
+    """
     body = _o(RoundedRectangle(width=5.6, height=3.1, corner_radius=0.9, fill_color="#2EC4B6", fill_opacity=1), 8)
+    ribs = VGroup()
+    for i, x in enumerate((-1.5, 0.0, 1.5)):
+        grow = 0.55 + 0.45 * abs(math.sin(1.3 * t + i * 0.8))
+        ribs.add(Line(P(x, -1.2 * grow), P(x, 1.2 * grow), stroke_width=8, color="#1B7A72"))
+    span = 1.4 + 0.8 * abs(math.sin(1.1 * t + 0.4))
+    ribs.add(Line(P(-span, 0), P(span, 0), stroke_width=8, color="#1B7A72"))
+    u = (0.35 * t) % 1.0
+    sheen = Rectangle(width=0.75, height=2.9, fill_color="#FFFFFF", fill_opacity=0.34, stroke_width=0)
+    sheen.move_to(P(-2.5 + 5.0 * u, 0)).rotate(0.18)
     riv = VGroup()
-    for x, y in ((-1.85, 0.95), (1.85, 0.95), (-1.85, -0.95), (1.85, -0.95)):
-        tw = 0.12 + 0.04 * math.sin(3.1 * t + x + y)
-        riv.add(Circle(tw, fill_color=ink(), fill_opacity=1, stroke_width=0).move_to(P(x, y)))
-    return VGroup(body, riv, PR.txt("FRAME", 52, color="#FFFFFF", font="Luckiest Guy", stroke=3)).scale(pulse)
+    corners = ((-1.85, 0.95), (1.85, 0.95), (1.85, -0.95), (-1.85, -0.95))
+    hi = int((t * 1.4) % 4)
+    for i, (x, y) in enumerate(corners):
+        on = i == hi
+        tw = 0.18 + (0.10 if on else 0.0) + 0.03 * math.sin(3.1 * t + i)
+        riv.add(Circle(tw, fill_color="#FFD166" if on else ink(), fill_opacity=1, stroke_width=0).move_to(P(x, y)))
+    return VGroup(body, sheen, ribs, riv, PR.txt("FRAME", 52, color="#FFFFFF", font="Luckiest Guy", stroke=3))
 
 
 def _part_sensors(t: float) -> VGroup:
@@ -327,7 +349,7 @@ _PART_ART = {
 
 def checkup_part(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     part = (ctx.get("part") or ctx.get("example") or "structure").lower()
-    g = VGroup(board(box, "#F4FBFF"), title((ctx.get("label") or part).upper(), box))
+    g = VGroup(live_board(box, t, "#F4FBFF"), title((ctx.get("label") or part).upper(), box, t=t))
     art = _part_power(t, ctx) if part == "power" else _PART_ART.get(part, _part_structure)(t)
     g.add(_fit(art, box, margin=0.2, top=1.05, bottom=1.0))
     g.add(caption(_PART_SUB.get(part, part), box))
@@ -338,7 +360,7 @@ def checkup_part(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
 
 def the_rule(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     x0, y0, x1, y1 = box
-    g = VGroup(board(box, "#F7FFF4"), title("THE RULE", box))
+    g = VGroup(live_board(box, t, "#F7FFF4"), title("THE RULE", box, t=t))
     thr = ctx.get("threshold")
     thr_s = f"{thr:g} m" if thr is not None else "0.5 m"
     words = [("IF", "#FFFFFF"), ("distance", "#4CC9F0"), ("<", "#FFFFFF"), (thr_s, "#FFD166"),
@@ -368,7 +390,7 @@ def the_rule(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
 def rule_test(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     """Side-view diagram of the rematch: drive, the 0.5 m line, stop & turn, then go."""
     x0, y0, x1, y1 = box
-    g = VGroup(board(box, "#EAF7FF"), title("LET'S TEST THE RULE", box))
+    g = VGroup(live_board(box, t, "#EAF7FF"), title("LET'S TEST THE RULE", box, t=t))
     # ground + 0.5 m mark + boxes on the right
     gy = (y0 + y1) / 2 - 0.4
     ground = Line(P(x0 + 0.8, gy), P(x1 - 0.8, gy), stroke_width=10, color=ink())
@@ -402,7 +424,7 @@ def rule_test(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
 def servo_cutaway(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     """A labelled cutaway: motor + gears + a position sensor that knows the angle, and the output horn."""
     x0, y0, x1, y1 = box
-    g = VGroup(board(box, "#F4F7FF"), title("WHAT IS A SERVO?", box))
+    g = VGroup(live_board(box, t, "#F4F7FF"), title("WHAT IS A SERVO?", box, t=t))
     cy = (y0 + y1) / 2 + 0.15
     # housing
     house = _o(RoundedRectangle(width=8.2, height=2.8, corner_radius=0.3, fill_color="#EEF2F7", fill_opacity=1), 7)
@@ -443,11 +465,11 @@ def servo_cutaway(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
 
 
 def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
-    """A big 0–180° dial. The horn rotates to the angle in ``ctx['angle']`` (degrees), with 0, 90 and 180 labelled.
-    Narrated practice angles (30°, 60°) are highlighted when active; 0/90/180 stay on the scale."""
+    """A big 0–180° dial. The horn eases to the spoken angle (30°, then 60°) and keeps a small idle wobble
+    at holds so the board never freezes. 0, 90 and 180 stay labelled on the scale."""
     x0, y0, x1, y1 = box
-    g = VGroup(board(box, "#FFFDF6"))
-    ttl = title("EXACT ANGLE", box, size=42)
+    g = VGroup(live_board(box, t, "#FFFDF6"))
+    ttl = title("EXACT ANGLE", box, size=42, t=t)
     # park the title at the top-left so 60°/90° labels stay clear
     ttl.move_to(P(x0 + ttl.width / 2 + 0.45, y1 - 0.55))
     g.add(ttl)
@@ -466,7 +488,19 @@ def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
                 u = clamp01((t - marks[i][0]) / max(0.35, marks[i + 1][0] - marks[i][0]))
                 return marks[i][1] + (marks[i + 1][1] - marks[i][1]) * ease_in_out(u)
         return marks[-1][1]
-    ang = _ang()
+    target = _ang()
+    # Subtle idle wobble at holds; keep it small during an ease so the horn still tracks the line.
+    marks = [(ctx[k], d) for k, d in (("t0", 0), ("t30", 30), ("t60", 60), ("t90", 90), ("t180", 180))
+             if ctx.get(k) is not None]
+    marks.sort()
+    easing = False
+    if ctx.get("angle") is None and len(marks) >= 2:
+        for i in range(len(marks) - 1):
+            if marks[i][0] < t < marks[i + 1][0]:
+                easing = True
+                break
+    wobble = (2.0 if easing else 7.0) * math.sin(2.8 * t)
+    ang = target + wobble
     if ctx.get("spoken") is None:
         if ctx.get("t60") is not None and t >= ctx["t60"]:
             ctx = {**ctx, "spoken": 60}
@@ -500,11 +534,14 @@ def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
                                       fill_color="#EF476F", fill_opacity=1), 5).shift(RIGHT * ((r - 0.15) / 2)))
     horn.move_to(P(cx, cy)).rotate(math.radians(ang), about_point=P(cx, cy))
     readout = _o(RoundedRectangle(width=2.0, height=0.78, corner_radius=0.16, fill_color="#1E1633", fill_opacity=1), 4)
-    rt = PR.txt(f"{ang:.0f}°", 48, color="#FFD166", font="Luckiest Guy", stroke=3)
+    rt = PR.txt(f"{target:.0f}°", 48, color="#FFD166", font="Luckiest Guy", stroke=3)
     readout.move_to(P(cx, cy - 0.7))
     rt.move_to(readout)
     face = _o(Circle(r - 0.18, fill_color="#FFFFFF", fill_opacity=1), 6).move_to(P(cx, cy))
-    g.add(dial, face, ticks, horn, readout, rt)
+    # a bright tick at the live horn angle so the wobble (and the ease) reads clearly
+    tip = pt(ang, r + 0.12)
+    glow = Circle(0.22 + 0.05 * math.sin(4.0 * t), fill_color="#EF476F", fill_opacity=0.85, stroke_width=0).move_to(tip)
+    g.add(dial, face, ticks, horn, glow, readout, rt)
     g.add(caption(ctx.get("subtitle") or "The horn turns exactly as far as the brain tells it", box))
     return g
 
@@ -512,7 +549,7 @@ def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
 def servo_head(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     """How Bolt uses a servo: a sensor head / turret that turns to an exact angle."""
     x0, y0, x1, y1 = box
-    g = VGroup(board(box, "#F4FBFF"), title("HOW BOLT USES A SERVO", box, size=48))
+    g = VGroup(live_board(box, t, "#F4FBFF"), title("HOW BOLT USES A SERVO", box, size=48, t=t))
     ang = 25 * math.sin(1.2 * t)   # gentle scan
     # body
     body = _o(RoundedRectangle(width=3.4, height=2.4, corner_radius=0.8, fill_color="#2EC4B6", fill_opacity=1), 8)
@@ -540,8 +577,8 @@ def servo_head(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
 
 
 def sensor_range(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
-    """A 0–3 m range bar: in range vs out of range, timed to the narration."""
-    g = VGroup(board(box, "#F4FBFF"), title("SENSOR RANGE", box))
+    """A 0–3 m range bar: a pip travels between in-range and out-of-range, timed to the narration."""
+    g = VGroup(live_board(box, t, "#F4FBFF"), title("SENSOR RANGE", box, t=t))
     x0, y0, x1, y1 = box
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     bar_w = min(10.0, x1 - x0 - 2.0)
@@ -554,20 +591,27 @@ def sensor_range(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
         ticks.add(Line(P(x, cy - 0.45), P(x, cy + 0.45), stroke_width=4, color=ink()))
         ticks.add(PR.txt(lab, 28, color=ink(), font="Luckiest Guy", stroke=3).move_to(P(x, cy - 1.0)))
     oor_t = ctx.get("oor")
-    out = bool(oor_t is not None and t >= oor_t)
-    # in-range fill 0-3m; a pip at ~1.2 m then jumps past 3 m
-    u = 0.4 + 0.0
-    if out:
-        pip_x = cx + bar_w / 2 + 0.7
-        tag = "OUT OF RANGE"
-        col = "#E76F51"
+    period = 3.2
+    if oor_t is None or t < oor_t:
+        # stay in range, but keep the pip moving so a long "in range" line never freezes
+        u = 0.5 + 0.5 * math.sin(2 * PI * t / period)
+        meters = 0.25 + 2.35 * u
     else:
-        pip_x = cx - bar_w / 2 + bar_w * (1.2 / 3)
-        tag = "IN RANGE"
-        col = "#06D6A0"
-    pulse = 1.0 + 0.18 * math.sin(3.4 * t)
-    pip = _o(Circle(0.28 * pulse, fill_color=col, fill_opacity=1), 5).move_to(P(pip_x, cy))
-    g.add(bar, ticks, pip, caption(tag, box, color=col))
+        # first crossing is synced to "out": ease past 3 m, then roam in the out-of-range zone
+        elapsed = t - oor_t
+        if elapsed < 0.85:
+            meters = 1.2 + (3.45 - 1.2) * ease_in_out(elapsed / 0.85)
+        else:
+            meters = 3.28 + 0.32 * math.sin(1.8 * (elapsed - 0.85))
+    out = meters > 3.0
+    tag = "OUT OF RANGE" if out else "IN RANGE"
+    col = "#E76F51" if out else "#06D6A0"
+    pip_x = cx - bar_w / 2 + bar_w * (meters / 3.0)
+    pulse = 1.0 + 0.12 * math.sin(3.4 * t)
+    pip = _o(Circle(0.38 * pulse, fill_color=col, fill_opacity=1), 6).move_to(P(pip_x, cy))
+    # a short trail so the travel reads clearly
+    trail = Circle(0.18, fill_color=col, fill_opacity=0.35, stroke_width=0).move_to(P(pip_x - 0.35, cy))
+    g.add(bar, ticks, trail, pip, caption(tag, box, color=col))
     return g
 
 
@@ -577,7 +621,7 @@ def quiz_question(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     q = ctx.get("question") or "Which part of a robot measures distance?"
     # drop the leading "Here's your question." so the cards have room
     q = q.replace("Here's your question. ", "").replace("Here's your question.", "").strip() or q
-    g = VGroup(board(box, "#F8F1FF"), title("QUIZ TIME!", box))
+    g = VGroup(live_board(box, t, "#F8F1FF"), title("QUIZ TIME!", box, t=t))
     qx = PR.txt(q, 40, color=ink(), font="Fredoka", weight="BOLD", stroke=3)
     if qx.width > (x1 - x0) - 1.0:
         qx.scale(((x1 - x0) - 1.0) / qx.width)
