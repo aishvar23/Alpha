@@ -120,7 +120,7 @@ def test_qa_explanatory_line_must_be_inside_a_shot():
     {"areaShare": 0.2},                                                                  # visual too small
     {"characters": []},                                                                  # solo without its character
     {"characters": [{"id": "maya", "area": 0.1}, {"id": "bolt", "area": 0.1}]},          # solo with two
-    {"layout": "illustration", "areaShare": 0.5},                                        # < 60% for illustration
+    {"layout": "illustration", "areaShare": 0.5},                                        # < 75% for illustration
     {"layout": "illustration", "areaShare": 0.7, "characters": [{"id": "maya", "area": 0.2}]},   # corner too big
 ])
 def test_qa_shot_area_and_character_rules(patch):
@@ -161,9 +161,12 @@ def test_engine_echo_illustration_covers_the_stage_with_no_characters(voiced, mo
     assert sh["areaShare"] >= ILLUSTRATION_MIN_AREA
     mid = (sh["start"] + sh["end"]) / 2
     img = frame_rgb(S.frame_fn(sc)(mid), 320, 180, "#FFE8C2").astype(int)
-    # the stage is covered: the illustration backdrop colour fills the frame corners
+    # flush board reaches the top corners; caption-band corners stay on the quiet backdrop. Neither is the apartment.
+    paper = [np.array([0xF7, 0xF4, 0xEA]), np.array([0xFF, 0xFF, 0xFF]), np.array([0xFA, 0xF6, 0xEE])]
     for y, x in ((3, 3), (3, 316), (176, 3), (176, 316)):
-        assert np.abs(img[y, x, :3] - np.array([0xFF, 0xF1, 0xD0])).sum() < 40
+        pix = img[y, x, :3]
+        assert min(np.abs(pix - c).sum() for c in paper) < 50, pix
+        assert np.abs(pix - np.array([0xFF, 0xE8, 0xC2])).sum() > 40
     from robotics101.cartoon.liveliness import scene_liveliness
     live = scene_liveliness(sc, S.presence, S.HEIGHT, S.SCALES)
     full = round(sc.duration * 30)

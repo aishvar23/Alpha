@@ -237,7 +237,13 @@ def test_engine_draws_the_section_background_and_records_it(voiced, monkeypatch)
     assert sc.background["theme"] == "lab_bench"
     rec = S.background_record(sc)
     assert rec["theme"] == "lab_bench" and rec["section"] == "checkup" and len(rec["swatch"]) == 12
-    img = frame_rgb(S.frame_fn(sc)(sc.duration / 2), 320, 180, "#000000")[..., :3].astype(int)
+    # Sample a character beat after the opening kicker and outside any teaching illustration
+    # (flush boards cover the stage, and the kicker paints the top of the frame purple).
+    t_bg = next(x for x in (4.5, 5.0, 5.5, 6.0, sc.duration - 1.5, sc.duration - 0.8)
+                if 0 < x < sc.duration
+                and not any(sh["start"] <= x < sh["end"] and sh.get("layout") == "illustration"
+                            for sh in sc.shots))
+    img = frame_rgb(S.frame_fn(sc)(t_bg), 320, 180, "#000000")[..., :3].astype(int)
     assert np.abs(img[4, 160] - np.array([0xE0, 0xFB, 0xFC])).sum() < 60          # clinic wall, not the garage
 
 

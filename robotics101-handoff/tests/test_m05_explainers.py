@@ -101,7 +101,7 @@ def test_qa_illustration_first_rejects_small_teaching_visual_or_full_size_charac
                                                     "text": "A robot vacuum.", "explain": True}]}]}
     timing = {"scenes": [{"sceneId": "s1", "beats": [{"index": 0, "start_s": 1.0, "end_s": 3.0}]}]}
     good = {"layout": "illustration", "visual": "example_vacuum", "example": "vacuum",
-            "areaShare": 0.70, "characters": [], "start": 0.9, "end": 3.2}
+            "areaShare": 0.80, "characters": [], "start": 0.9, "end": 3.2}
 
     def run(sh):
         rep = QaReport("ep", "full", "x")
@@ -113,7 +113,7 @@ def test_qa_illustration_first_rejects_small_teaching_visual_or_full_size_charac
     assert not run({**good, "characters": [{"id": "maya", "area": 0.20}]}).ok
     # a tiny cameo is allowed
     assert run({**good, "characters": [{"id": "maya", "area": 0.05}]}).ok
-    assert CORNER_MAX_AREA == 0.08 and ILLUSTRATION_MIN_AREA == 0.60
+    assert CORNER_MAX_AREA == 0.08 and ILLUSTRATION_MIN_AREA == 0.75
 
 
 def test_qa_one_example_per_frame_and_clutter():
@@ -125,12 +125,12 @@ def test_qa_one_example_per_frame_and_clutter():
     timing = {"scenes": [{"sceneId": "s1", "beats": [{"index": 0, "start_s": 1.0, "end_s": 5.0}]}]}
     split = [
         {"layout": "illustration", "visual": "example_vacuum", "example": "vacuum",
-         "areaShare": 0.7, "characters": [], "start": 1.0, "end": 3.0},
+         "areaShare": 0.80, "characters": [], "start": 1.0, "end": 3.0},
         {"layout": "illustration", "visual": "example_arm", "example": "arm",
-         "areaShare": 0.7, "characters": [], "start": 3.0, "end": 5.0},
+         "areaShare": 0.80, "characters": [], "start": 3.0, "end": 5.0},
     ]
     overlap = [{**split[1], "start": 2.5}]
-    grid = [{"layout": "illustration", "visual": "robot_families", "areaShare": 0.7,
+    grid = [{"layout": "illustration", "visual": "robot_families", "areaShare": 0.80,
              "characters": [], "start": 1.0, "end": 5.0}]
 
     def ex(shots):
@@ -148,3 +148,152 @@ def test_qa_one_example_per_frame_and_clutter():
     check_clutter(rep, {"scenes": [{"sceneId": "s1", "beats": []}]},
                   {"s1": {"facts": {"shots": [split[0]]}}})
     assert {c.id: c for c in rep.checks}["layout.clutter"].ok
+
+
+
+def test_illustration_box_fills_most_of_the_frame_and_clears_the_caption_band():
+    from robotics101.cartoon.layout import band_overlap, box_area, norm_box
+    from robotics101.cartoon.visuals import ILLUSTRATION_BOX
+    share = box_area(norm_box(*ILLUSTRATION_BOX))
+    assert share >= ILLUSTRATION_MIN_AREA
+    assert band_overlap(norm_box(*ILLUSTRATION_BOX)) == 0
+
+
+def test_quiz_shows_picture_choices():
+    pytest.importorskip("manim")
+    from robotics101.cartoon.explainers import quiz_question
+    from robotics101.cartoon.visuals import ILLUSTRATION_BOX
+    g = quiz_question(0.5, {"question": "Which part of a robot measures distance?"}, ILLUSTRATION_BOX)
+    # three labelled choice cards are in the mobject tree
+    blob = " ".join(getattr(m, "text", "") for m in g.family_members_with_points() if hasattr(m, "text"))
+    # Text may store as manim Text; also search submobject texts via str
+    texts = []
+    def walk(m):
+        if hasattr(m, "original_text"):
+            texts.append(m.original_text)
+        elif hasattr(m, "text"):
+            texts.append(str(m.text))
+        for c in getattr(m, "submobjects", []):
+            walk(c)
+    walk(g)
+    joined = " ".join(texts).upper()
+    assert "SENSOR" in joined and "WHEEL" in joined and "BATTERY" in joined
+
+
+def test_servo_dial_fixed_labels_sit_outside_the_ring():
+    pytest.importorskip("manim")
+    import math
+    from robotics101.cartoon.explainers import servo_dial
+    from robotics101.cartoon.visuals import ILLUSTRATION_BOX
+    g = servo_dial(1.0, {"angle": 30, "spoken": 30}, ILLUSTRATION_BOX)
+    texts = {}
+    def walk(m):
+        tx = getattr(m, "original_text", None) or (str(m.text) if hasattr(m, "text") else None)
+        if tx and "°" in str(tx):
+            texts[str(tx)] = m.get_center()
+        for c in getattr(m, "submobjects", []):
+            walk(c)
+    walk(g)
+    assert "0°" in texts and "90°" in texts and "180°" in texts
+    # 90 at the top, 0 to the right, 180 to the left
+    assert texts["90°"][1] > texts["0°"][1] and texts["90°"][1] > texts["180°"][1]
+    assert texts["0°"][0] > texts["90°"][0] > texts["180°"][0]
+
+
+def test_charge_cable_hugs_the_floor_and_misses_a_mid_stage_body():
+    pytest.importorskip("manim")
+    from robotics101.cartoon import props as PR
+    from robotics101.cartoon.sets import FLOOR_Y, SOCKET_POS
+    lead = PR.charge_lead(SOCKET_POS, PR.P(0.0, 0.8), 1.0)
+    assert lead.seated and lead.plug.get_right()[0] >= lead.port.get_left()[0] + 0.02
+    # A mid-stage torso (Maya's old stand, from shin up) must stay clear of the floor run.
+    old_torso = [-3.9, FLOOR_Y + 0.55, -2.5, 1.8]
+    assert not PR.cable_crosses_box(lead.cable_points, old_torso, pad=0.05)
+    ys = [float(p[1]) for p in lead.cable_points]
+    mid_ys = ys[6:18]
+    assert max(mid_ys) <= FLOOR_Y + 0.20 + 1e-6
+
+
+def test_battery_fill_goes_red_to_green():
+    from robotics101.cartoon.props import ALERT, OK_GREEN, _lerp_hex
+    assert _lerp_hex(ALERT, OK_GREEN, 0.0).lower() == ALERT.lower()
+    assert _lerp_hex(ALERT, OK_GREEN, 1.0).lower() == OK_GREEN.lower()
+    mid = _lerp_hex(ALERT, OK_GREEN, 0.5)
+    assert mid.lower() not in {ALERT.lower(), OK_GREEN.lower()}
+
+
+def test_qa_illustration_first_accepts_split_shots_and_a_short_held_prefix():
+    """A line split across two example shots is covered, and a late start (charger hold) is allowed
+    as long as the end of the line and most of its duration stay inside an illustration shot."""
+    from robotics101.cartoon.qa import check_shots
+    spec = {"scenes": [{"sceneId": "s1", "beats": [
+        {"type": "line", "speaker": "maya", "text": "A robot vacuum. A factory arm.", "explain": True},
+        {"type": "line", "speaker": "maya", "text": "And last, the controller.", "explain": True},
+    ]}]}
+    timing = {"scenes": [{"sceneId": "s1", "beats": [
+        {"index": 0, "start_s": 1.0, "end_s": 5.0},
+        {"index": 1, "start_s": 5.2, "end_s": 10.0},
+    ]}]}
+
+    def run(shots):
+        rep = QaReport("ep", "full", "x")
+        check_shots(rep, spec, timing, {"s1": {"facts": {"shots": shots}}})
+        return {c.id: c for c in rep.checks}["layout.illustration_first"]
+
+    split = [
+        {"layout": "illustration", "visual": "example_vacuum", "example": "vacuum",
+         "areaShare": 0.80, "characters": [], "start": 1.0, "end": 3.0},
+        {"layout": "illustration", "visual": "example_arm", "example": "arm",
+         "areaShare": 0.80, "characters": [], "start": 3.0, "end": 5.1},
+        {"layout": "illustration", "visual": "part_controller", "example": "controller",
+         "areaShare": 0.80, "characters": [], "start": 7.2, "end": 10.2},
+    ]
+    assert run(split).ok
+    # line 0 spills out the end
+    early = [split[0], {**split[1], "end": 4.0}, split[2]]
+    assert not run(early).ok
+    # controller starts so late that less than half the line is shown
+    late = [split[0], split[1], {**split[2], "start": 9.5}]
+    assert not run(late).ok
+
+
+def test_teaching_shots_register_illustration_regions(tmp_path, monkeypatch):
+    pytest.importorskip("manim")
+    from robotics101.cartoon import lipsync
+    from robotics101.cartoon import scenes as S
+    from robotics101.voice import VoiceCache, voice_episode
+    from robotics101.voice import backends as B
+    spec = expand_episode(_spec(), load_registry())
+    timing = voice_episode(spec, load_registry(), tmp_path, B.FixtureBackend(), VoiceCache(tmp_path / "cache"),
+                           log=lambda m: None)
+    monkeypatch.setattr(S, "line_cues", lambda wav, text: lipsync.line_cues(wav, text, prefer_rhubarb=False))
+    sc3_t = next(x for x in timing["scenes"] if x["sceneId"] == "scene-003")
+    sc = S.build_scene({s["sceneId"]: s for s in spec["scenes"]}["scene-003"], sc3_t, tmp_path)
+    ids = [i["id"] for i in sc.illustrations]
+    for name in ("structure", "sensors", "actuators", "power", "controller"):
+        assert f"shot-{name}" in ids
+    # sole-example shots (controller) start at the line, except a charger hold may push them later
+    ctrl = next(s for s in sc.shots if s.get("example") == "controller")
+    plug = next((b for b in sc.beats if b.get("type") == "action" and b.get("do") == "plug_in"), None)
+    assert ctrl["end"] >= sc3_t["beats"][ctrl["fromBeat"]]["end_s"] - 0.05
+    if plug:
+        assert ctrl["start"] >= plug["end_s"] - 0.05
+
+
+def test_structure_and_rule_boards_keep_moving():
+    pytest.importorskip("manim")
+    from robotics101.cartoon.explainers import _part_structure, the_rule
+    from robotics101.cartoon.visuals import ILLUSTRATION_BOX
+
+    assert abs(float(_part_structure(0.0).width) - float(_part_structure(0.7).width)) > 0.05
+
+    def centers(t):
+        g = the_rule(t, {"threshold": 0.5}, ILLUSTRATION_BOX)
+        out = []
+        def walk(m):
+            out.append(tuple(round(float(x), 3) for x in m.get_center()))
+            for c in getattr(m, "submobjects", []):
+                walk(c)
+        walk(g)
+        return out
+    assert centers(0.0) != centers(0.8)

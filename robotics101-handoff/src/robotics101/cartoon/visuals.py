@@ -22,10 +22,10 @@ from robotics101.cartoon.sets import ink
 from robotics101.cartoon.vignettes import KINDS, vignette
 
 P = PR.P
-ILLUSTRATION_BOX = (-6.65, CONTENT_FLOOR_Y + 0.1, 6.65, 3.85)       # full-bleed board (above the caption band)
+ILLUSTRATION_BOX = (-7.05, CONTENT_FLOOR_Y, 7.05, 3.95)             # flush above the caption band (~79% of the frame)
 SOLO_BOX = (-2.0, CONTENT_FLOOR_Y + 0.15, 6.8, 3.55)                # wide visual right of the solo character
 SOLO_X = -4.75                                                      # solo character stands left, facing the visual
-BACKDROPS = {"illustration": "#FFF1D0", "solo": "#E9F7FF"}
+BACKDROPS = {"illustration": "#F7F4EA", "solo": "#E9F7FF"}
 
 
 def _o(m, w=5):
@@ -48,9 +48,10 @@ def backdrop(layout: str, t: float) -> VGroup:
 
 
 def board(box, color: str = "#FFFFFF") -> RoundedRectangle:
+    """Flush fill of ``box`` — no inset card and no wide cream border around the teaching art."""
     x0, y0, x1, y1 = box
-    return _o(RoundedRectangle(width=x1 - x0, height=y1 - y0, corner_radius=0.35, fill_color=color,
-                               fill_opacity=1), 7).move_to(P((x0 + x1) / 2, (y0 + y1) / 2))
+    return RoundedRectangle(width=x1 - x0, height=y1 - y0, corner_radius=0.08, fill_color=color,
+                            fill_opacity=1, stroke_width=0).move_to(P((x0 + x1) / 2, (y0 + y1) / 2))
 
 
 # ------------------------------------------------------------------------------------------ robot families

@@ -166,12 +166,25 @@ def checklist(parts: list[str], ticks: list[float]) -> VGroup:
     return g
 
 
+def _lerp_hex(a: str, b: str, u: float) -> str:
+    """Blend two #RRGGBB colours; ``u`` 0 = ``a`` (red), 1 = ``b`` (green)."""
+    u = clamp01(u)
+    def rgb(h):
+        h = h.lstrip("#")
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    ar, ag, ab = rgb(a)
+    br, bg, bb = rgb(b)
+    return f"#{int(ar + (br - ar) * u):02x}{int(ag + (bg - ag) * u):02x}{int(ab + (bb - ab) * u):02x}"
+
+
 def battery(level: float, charging: bool = False) -> VGroup:
+
     shell = _o(RoundedRectangle(width=1.0, height=0.45, corner_radius=0.08, fill_color="#FFFFFF", fill_opacity=1), 4)
     tip = Rectangle(width=0.08, height=0.2, fill_color=ink(), fill_opacity=1, stroke_width=0) \
         .next_to(shell, RIGHT, buff=0)
     lv = clamp01(level)
-    color = ALERT if lv < 0.3 else "#FFD166" if lv < 0.7 else OK_GREEN
+    # Continuous red → green as the cell fills (a charging battery should never stay red).
+    color = _lerp_hex(ALERT, OK_GREEN, lv)
     fill = Rectangle(width=max(0.02, 0.86 * lv), height=0.31, fill_color=color, fill_opacity=1, stroke_width=0)
     fill.move_to(shell.get_left() + RIGHT * (0.07 + fill.width / 2))
     g = VGroup(shell, tip, fill)
@@ -191,50 +204,84 @@ def cable(a: np.ndarray, b: np.ndarray, u: float = 1.0) -> VGroup:
 
 
 def charge_port(at) -> VGroup:
-    """Visible charging jack. ``at`` is the centre of the opening on the socket-facing body wall."""
-    plate = _o(RoundedRectangle(width=0.48, height=0.62, corner_radius=0.08, fill_color="#2A2A2A", fill_opacity=1), 3)
-    hole = Rectangle(width=0.24, height=0.32, fill_color="#0B0B0B", fill_opacity=1, stroke_width=0)
-    g = VGroup(plate, hole).move_to(at)
+    """Big, high-contrast charging jack. ``at`` is the centre of the opening on the socket-facing body wall."""
+    ring = _o(RoundedRectangle(width=0.85, height=1.05, corner_radius=0.12, fill_color="#FFFFFF", fill_opacity=1), 6)
+    plate = _o(RoundedRectangle(width=0.68, height=0.86, corner_radius=0.1, fill_color="#1A1A1A", fill_opacity=1), 4)
+    hole = Rectangle(width=0.34, height=0.46, fill_color="#0B0B0B", fill_opacity=1, stroke_width=0)
+    g = VGroup(ring, plate, hole).move_to(at)
     g.port = plate
     g.opening = hole
     return g
 
 
 def bolt_charge_port(bolt) -> np.ndarray:
-    """World point of the jack on the *socket-facing* (screen-left) side of Bolt's body, after facing-flip."""
+    """World point of the jack on the *socket-facing* (screen-left) side of Bolt's body, after facing-flip.
+
+    Uses the main ``body`` (not the small belly badge) so the jack sits mid-torso, slightly proud of the
+    left wall, where a close-up can read the plug seated in the port.
+    """
     parts = getattr(bolt, "parts", {}) or {}
-    body = parts.get("belly") or parts.get("body") or bolt
-    y = float(body.get_center()[1]) - 0.02
-    x = float(body.get_left()[0]) + 0.10          # slightly inset so the jack sits in the body wall
+    body = parts.get("body") or parts.get("belly") or bolt
+    # Sit the jack in the open, just left of the torso and above the left hand, so it never hides
+    # behind the chest badge or the arm. The plug approaches from the wall and seats in the opening.
+    y = float(body.get_center()[1]) + 0.28
+    x = float(body.get_left()[0]) - 0.42
     return P(x, y)
 
 
 def charge_lead(socket, port_pos, u: float = 1.0) -> VGroup:
-    """Cable from the wall socket into ``port_pos``. At u=1 the plug is fully seated (overlaps the jack, no gap)
-    and a contact spark plays. The jack is drawn on top of the body at ``port_pos``."""
+    """Cable from the wall socket into ``port_pos``, routed along the floor so it stays under standing characters.
+
+    At u=1 the (larger, high-contrast) plug is fully seated in the jack, with a contact spark. The jack is drawn
+    on top of the body at ``port_pos``. ``g.cable`` is the bezier; ``g.cable_points`` are sampled path points.
+    """
     u = clamp01(u)
     port = charge_port(port_pos)
-    # Fully seated: the plug overlaps the opening; its tip is past the jack's left lip (no visible gap).
-    plug_w, plug_h = 0.34, 0.22
-    seated_center = port_pos + LEFT * 0.08          # overlap the opening by ~0.08
+    plug_w, plug_h = 0.62, 0.40
+    seated_center = np.array(port_pos, dtype=float) + LEFT * 0.12          # overlap the opening, no gap
     end = socket + (seated_center - socket) * ease_out(u)
-    sag = P(0, -0.8 * (1 - abs(0.5 - u)))
-    # cable ends at the back of the plug (its left), so the plug body covers the last stretch into the jack
     plug_center = end
-    c = CubicBezier(socket, socket + (end - socket) / 3 + sag, socket + 2 * (end - socket) / 3 + sag,
-                    plug_center + LEFT * (plug_w / 2 - 0.02)).set_stroke("#45505E", 10)
-    plug = _o(RoundedRectangle(width=plug_w, height=plug_h, corner_radius=0.04, fill_color="#FFD166",
-                               fill_opacity=1), 3).move_to(plug_center)
-    prongs = VGroup(*[Rectangle(width=0.10, height=0.04, fill_color="#C0C0C0", fill_opacity=1, stroke_width=0)
-                      .move_to(plug.get_right() + RIGHT * 0.02 + UP * dy) for dy in (0.05, -0.05)])
+    cable_end = plug_center + LEFT * (plug_w / 2 - 0.04)
+    fy = FLOOR_Y + 0.16
+    # Floor polyline (not a single cubic — those bulge up between high endpoints and low controls):
+    # down the wall, along the floor, then up into the port. Mid-stage bodies stay above the run.
+    down = P(float(socket[0]), fy)
+    along = P(float(cable_end[0]), fy)
+    c = VMobject()
+    c.set_points_as_corners([np.array(socket, dtype=float), down, along, np.array(cable_end, dtype=float)])
+    c.set_stroke("#1A1A1A", 14)
+    plug = _o(RoundedRectangle(width=plug_w, height=plug_h, corner_radius=0.06, fill_color="#FFD166",
+                               fill_opacity=1), 6).move_to(plug_center)
+    prongs = VGroup(*[Rectangle(width=0.16, height=0.07, fill_color="#F4F1DE", fill_opacity=1, stroke_width=0)
+                      .move_to(plug.get_right() + RIGHT * 0.04 + UP * dy) for dy in (0.08, -0.08)])
     spark = VGroup()
     if u >= 0.95:
-        k = 0.7 + 0.3 * abs(math.sin(18 * u))
-        spark = Star(5, outer_radius=0.28 * k, inner_radius=0.1 * k, fill_color="#FFE66D", fill_opacity=1,
-                     stroke_color=ink(), stroke_width=2).move_to(port_pos + LEFT * 0.05 + UP * 0.15)
+        # Small contact sparks ABOVE the jack, never covering the seated plug.
+        origin = np.array(port_pos, dtype=float) + UP * 0.62 + LEFT * 0.05
+        k = 0.85 + 0.25 * abs(math.sin(18 * u))
+        bits = []
+        for ang, length in ((95, 0.28), (70, 0.22), (120, 0.20), (50, 0.16), (140, 0.16)):
+            rad = math.radians(ang)
+            tip = origin + k * length * P(math.cos(rad), math.sin(rad))
+            bits.append(Line(origin, tip, stroke_color="#FFE66D", stroke_width=8, stroke_opacity=1))
+            bits.append(Line(origin + 0.02 * P(math.cos(rad+0.4), math.sin(rad+0.4)),
+                             tip, stroke_color="#FFFFFF", stroke_width=3))
+        spark = VGroup(*bits)
     g = VGroup(c, port, plug, prongs, spark)
-    g.port, g.plug, g.spark, g.seated = port, plug, spark, u >= 0.999
+    g.port, g.plug, g.spark, g.seated, g.cable = port, plug, spark, u >= 0.999, c
+    g.cable_points = [c.point_from_proportion(i / 24) for i in range(25)]
     return g
+
+
+def cable_crosses_box(points, box, pad: float = 0.05) -> bool:
+    """True if any sampled cable point lies inside the axis-aligned box ``[x0, y0, x1, y1]`` (world, y up), padded."""
+    x0, y0, x1, y1 = box
+    x0, x1 = min(x0, x1) - pad, max(x0, x1) + pad
+    y0, y1 = min(y0, y1) - pad, max(y0, y1) + pad
+    for p in points:
+        if x0 <= float(p[0]) <= x1 and y0 <= float(p[1]) <= y1:
+            return True
+    return False
 
 
 def glow_outline(mob, u: float = 1.0, color: str = "#FFE66D") -> VGroup:

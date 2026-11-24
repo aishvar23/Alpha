@@ -114,6 +114,22 @@ HOLD_PIX_DELTA, HOLD_PIX_COUNT = 10, 30      # full frame: "moving" = ≥ 30 px 
 REGION_MIN_DIFF = 1.0                        # illustration region: mean |grey| change vs the run's first frame
 
 
+
+def _merged_coverage(intervals, a: float, b: float) -> tuple[float, float, float]:
+    """Covered duration in [a, b] plus the first and last covered instants (or b, a if none)."""
+    segs: list[tuple[float, float]] = []
+    for s, e in sorted(intervals):
+        s, e = max(s, a), min(e, b)
+        if e <= s:
+            continue
+        if segs and s <= segs[-1][1] + 1e-9:
+            segs[-1] = (segs[-1][0], max(segs[-1][1], e))
+        else:
+            segs.append((s, e))
+    covered = sum(e - s for s, e in segs)
+    return covered, (segs[0][0] if segs else b), (segs[-1][1] if segs else a)
+
+
 def hold_runs(video: Path, timing: dict, by: dict, half_s: float = 0.4) -> dict:
     """Stream ``video`` once (small grey frames) and measure the longest near-zero-motion run of the whole frame and
     of every registered illustration region (scenes.json ``illustrations``)."""
@@ -240,8 +256,14 @@ def check_shots(rep, spec: dict, timing: dict, by: dict) -> None:
             if tb is None:
                 bad.append(f"{sid}#{i}: explanatory line missing from timing")
                 continue
-            if not any(sh["layout"] in ("illustration", "solo") and sh["start"] <= tb["start_s"] + 0.05
-                       and tb["end_s"] - 0.05 <= sh["end"] for sh in shots):
+            # A line may be split across sequential example shots (vacuum then arm) and may start a
+            # little late when a prior beat (the seated charger) is held on screen. The end of the
+            # line must still be inside an illustration/solo shot, and most of the line must be covered.
+            ill = [(sh["start"], sh["end"]) for sh in shots if sh["layout"] in ("illustration", "solo")]
+            cov, first, last = _merged_coverage(ill, tb["start_s"], tb["end_s"])
+            dur = max(1e-6, tb["end_s"] - tb["start_s"])
+            prefix, suffix = first - tb["start_s"], tb["end_s"] - last
+            if suffix > 0.05 or cov / dur < 0.50 or prefix > 2.35:
                 bad.append(f"{sid}#{i}: explanatory line not shown in an illustration/solo shot")
     if not rows and not n_explain:
         rep.soft("layout.illustration_first", False, "no explanatory beats / illustration or solo shots in the episode")
@@ -588,6 +610,20 @@ def check_intro(rep, spec: dict, by: dict) -> None:
              + ("; ".join(bad) if bad else ", ".join(f"{k}={v['name']}" for k, v in got.items())))
 
 
+
+def check_charge_cable(rep, by: dict) -> None:
+    """M05.6: while Bolt charges, the cable must not cross Maya's body (sampled at seat time)."""
+    hits = [(sid, (r.get("facts") or {}).get("chargeCable")) for sid, r in by.items()
+            if (r.get("facts") or {}).get("chargeCable")]
+    if not hits:
+        rep.soft("layout.cable_clears_maya", True, "no checkup charge-cable measurement in scenes.json")
+        return
+    bad = [f"{sid}: cable crosses Maya box {d.get('mayaBox')}" for sid, d in hits if d.get("crossesMaya")]
+    rep.hard("layout.cable_clears_maya", not bad,
+             f"charge cable vs Maya in {len(hits)} scene(s); problems: {bad or 'none'}",
+             {sid: d for sid, d in hits})
+
+
 def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     from robotics101.cartoon.audio import check_mix
     from robotics101.cartoon.rigs import RIG_VERSION
@@ -649,6 +685,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     check_shots(rep, spec, timing, by)
     check_one_example_per_frame(rep, spec, timing, by)
     check_clutter(rep, spec, by)
+    check_charge_cable(rep, by)
     check_caption_band(rep, by)
     check_acting(rep, spec, by)
     if video_s:

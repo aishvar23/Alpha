@@ -18,7 +18,7 @@ CONTENT_FLOOR_Y = BAND_TOP_Y + 0.12                   # feet / lowest content li
 BAND_OVERLAP_TOL = 0.004                              # normalised slack (~4 px) for anti-aliased edges
 
 # M05.1 / M05.6 shot rules (QA)
-ILLUSTRATION_MIN_AREA = 0.60        # M05.6: a teaching visual covers >= 60% of the frame
+ILLUSTRATION_MIN_AREA = 0.75        # M05.6: a teaching visual fills most of the frame (above the caption band)
 SOLO_MIN_AREA = 0.35                # solo shot's wide visual >= 35% of the frame
 MAX_CHARACTERS = {"illustration": 1, "solo": 1}
 MIN_CHARACTERS = {"illustration": 0, "solo": 1}

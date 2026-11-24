@@ -266,21 +266,30 @@ def stage_checkup(sc: Scene) -> None:
     sc.front.append(glow)
     plug = sc.beat("action", "do", "plug_in")
     low_t = sc.word_time("battery") or plug["start_s"] - 4
-    maya.move(plug["start_s"] - 0.6, plug["start_s"], x=-3.2)
+    # Maya steps to Bolt's RIGHT before the cable appears, facing him, so the floor-routed lead never crosses her.
+    maya.face(plug["start_s"] - 0.8, -1)
+    maya.move(plug["start_s"] - 0.8, plug["start_s"] - 0.05, x=3.15)
     maya.act(plug["start_s"], plug["end_s"], "point")
-    maya.move(plug["end_s"] + 0.3, plug["end_s"] + 1.0, x=-4.4)
 
     def batt(t, m):
         if t < low_t:
             return []
         charging = t >= plug["end_s"]
-        lvl = 0.18 + 0.82 * _u(t, plug["end_s"], plug["end_s"] + 4.0)
-        out = [PR.battery(lvl, charging).scale(1.4).move_to(PR.P(2.6, -0.95))]
-        b = m.get("bolt")
+        lvl = 0.18 + 0.82 * _u(t, plug["end_s"], plug["end_s"] + CHARGE_FILL_S)
+        # Big HUD battery, left of the stage (above the floor cable, clear of Maya on the right)
+        out = [PR.battery(lvl, charging).scale(2.2).move_to(PR.P(-3.6, 1.55))]
+        b, may = m.get("bolt"), m.get("maya")
         if t >= plug["start_s"] and b is not None:
             port = PR.bolt_charge_port(b)
             lead = PR.charge_lead(SOCKET_POS, port, _u(t, plug["start_s"], plug["end_s"]))
             out.insert(0, lead)
+            if may is not None and t >= plug["end_s"] - 0.05:
+                box = [float(may.get_left()[0]), float(may.get_bottom()[1]),
+                       float(may.get_right()[0]), float(may.get_top()[1])]
+                pts = [[float(p[0]), float(p[1])] for p in lead.cable_points]
+                sc.facts["chargeCable"] = {"points": pts, "mayaBox": [round(v, 3) for v in box],
+                                           "crossesMaya": PR.cable_crosses_box(lead.cable_points, box),
+                                           "level": round(lvl, 3), "charging": charging}
         return out
     sc.back.append(lambda t, m: [])
     sc.front.append(batt)
@@ -703,6 +712,9 @@ def stage_section_banner(sc: Scene, kicker: str | None) -> None:
 
 SHOT_IN, SHOT_OUT = 0.4, 0.35          # seconds of the pop-in / shrink-out animation
 SHOT_LEAD, SHOT_TAIL = 0.15, 0.35      # shot starts a little before its first beat, ends after its last
+# Keep the seated charger + filling battery visible this long after the plug seats.
+CHARGE_HOLD_S = 2.2
+CHARGE_FILL_S = 2.0
 SOLO_GAIN = 1.2                         # solo character drawn a bit bigger than on stage
 CORNER_GAIN = 0.55                      # illustration corner character
 
@@ -827,7 +839,10 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
         start = max(b0["start_s"] - SHOT_LEAD, k if sc.trans_in else 0.0,
                     max((c["end"] for c in sc.concepts if c["start"] <= b0["start_s"]), default=0.0))
         end = min(b1["end_s"] + SHOT_TAIL, sc.duration - (k if sc.trans_out else 0.0))
-        if spec.get("atWord"):
+        # atWord only splits a shared line; a sole example on a line starts at the line, not mid-phrase.
+        siblings = [s for s in shots if s.get("fromBeat") == spec["fromBeat"] and s is not spec]
+        use_at = spec.get("atWord") and (spec.get("untilWord") or any(s.get("atWord") or s.get("untilWord") for s in siblings))
+        if use_at:
             wt = sc.word_time(spec["atWord"], after=max(0.0, b0["start_s"] - 0.05))
             if wt is not None:
                 start = max(wt, k if sc.trans_in else 0.0,
@@ -837,9 +852,9 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
             if wt is not None:
                 end = min(wt, sc.duration - (k if sc.trans_out else 0.0))
         plug = sc.beat("action", "do", "plug_in")
-        if plug and start < plug["end_s"] + 0.8 < end:
+        if plug and start < plug["end_s"] + CHARGE_HOLD_S < end:
             # keep the seated charger visible (spark + battery) before the next teaching frame
-            start = plug["end_s"] + 0.8
+            start = plug["end_s"] + CHARGE_HOLD_S
         sh = {"layout": spec["layout"], "visual": spec.get("visual") or "concept_robot",
               "character": spec.get("character"), "corner": spec.get("corner", "left"),
               "fromBeat": spec["fromBeat"], "toBeat": spec["toBeat"], "start": round(start, 3), "end": round(end, 3)}
@@ -877,6 +892,13 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
         x0, y0, x1, y1 = box
         sc.keepouts.append({"id": f"shot-{sh['visual']}", "box": norm_box(*box), "start": sh["start"],
                             "end": sh["end"], "shot": sh["layout"]})
+        # Register the teaching board itself so illustrations.animated measures the new full-screen shots
+        # (the old robot_families tile regions are gone).
+        sc.illustrations.append({"id": f"shot-{sh.get('example') or sh['visual']}",
+                                 "kind": sh.get("example") or sh["visual"],
+                                 "start": round(sh["start"] + SHOT_IN, 3),
+                                 "end": round(max(sh["start"] + SHOT_IN, sh["end"] - SHOT_OUT), 3),
+                                 "box": list(sh["visualBox"])})
 
         def draw(t, m, sh=sh, fn=fn, ctx=ctx):
             if not (sh["start"] <= t < sh["end"]):
