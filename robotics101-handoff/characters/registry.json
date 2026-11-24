@@ -57,15 +57,14 @@
       "speaks": true,
       "voice": {
         "elevenlabs": {
-          "voiceId": "ktkP7Nsj67dw2zcplQYt",
-          "voiceName": "Lawrence - Bright and Informative (provisional; audition pending)",
-          "modelId": "eleven_multilingual_v2",
+          "voiceId": "qXpMhyvQqiRxWQs4qSSB",
+          "voiceName": "Horatius - Energetic Character Voice (candidate; owner approval pending)",
+          "source": "ElevenLabs Voice Library (characters_animation, young, American, gender-neutral)",
+          "why": "over-the-top, precocious, self-assured: Bolt's over-confident rush; gender-neutral timbre suits a robot and the sox chorus fx adds the metallic edge",
+          "modelId": "eleven_v4",
           "settings": {
-            "stability": 0.35,
-            "similarity_boost": 0.75,
-            "style": 0.45,
-            "use_speaker_boost": true,
-            "speed": 1.05
+            "stability": 0.3,
+            "similarity_boost": 0.8
           },
           "fx": [
             "chorus",
@@ -76,6 +75,18 @@
             "0.2",
             "2",
             "-t"
+          ],
+          "alternates": [
+            {
+              "voiceId": "fBD19tfE58bkETeiwUoC",
+              "voiceName": "Little Dude II - Cartoon Character",
+              "why": "high-pitched, mischievous cartoon sidekick; light Southern drawl"
+            },
+            {
+              "voiceId": "ktkP7Nsj67dw2zcplQYt",
+              "voiceName": "Lawrence - Bright and Informative",
+              "why": "previous provisional pick; crisp and energetic but more presenter than cartoon"
+            }
           ],
           "approved": false
         },
@@ -162,16 +173,27 @@
       "speaks": true,
       "voice": {
         "elevenlabs": {
-          "voiceId": "g7LVvkPWALzPxOQbF6OE",
-          "voiceName": "Jade - Upbeat and Natural (provisional; audition pending)",
-          "modelId": "eleven_multilingual_v2",
+          "voiceId": "WtA85syCrJwasGeHGH2p",
+          "voiceName": "Ember - Energetic, Confident Protagonist (candidate; owner approval pending)",
+          "source": "ElevenLabs Voice Library (characters_animation, young, American, female)",
+          "why": "confident, upbeat animated-protagonist voice with a playful edge: Maya's clever big-sister energy, steady enough to explain",
+          "modelId": "eleven_v4",
           "settings": {
             "stability": 0.4,
-            "similarity_boost": 0.75,
-            "style": 0.35,
-            "use_speaker_boost": true,
-            "speed": 1.0
+            "similarity_boost": 0.8
           },
+          "alternates": [
+            {
+              "voiceId": "pPdl9cQBQq4p6mRkZy2Z",
+              "voiceName": "Emma - Adorable and Upbeat",
+              "why": "younger and cuter; less authority when explaining"
+            },
+            {
+              "voiceId": "g7LVvkPWALzPxOQbF6OE",
+              "voiceName": "Jade - Upbeat and Natural",
+              "why": "previous provisional pick; rapid, erratic Gen-Z cadence fights Maya's patience"
+            }
+          ],
           "approved": false
         },
         "kokoro": {

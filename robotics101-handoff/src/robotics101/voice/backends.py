@@ -1,16 +1,20 @@
-"""Character voice backends (M02.2): ElevenLabs (production) -> Kokoro (local) -> espeak-ng (local) [+ fixture].
+"""Character voice backends (M02.2, SDK in M04.1): ElevenLabs (production) -> Kokoro -> espeak-ng [+ fixture].
 
 Every backend turns (character voice config, text) into a deterministic ``VoiceRequest`` whose SHA-256 is the
 cache key; ``render`` writes the provider's raw audio. Raw output is cached by that key (``cache.py``), so a
-rerun never re-synthesizes — and never re-bills ElevenLabs — for a line whose text/voice/settings are unchanged.
+rerun never re-synthesizes — and never re-bills ElevenLabs — for a line whose text/voice/model/settings are unchanged.
 
-ElevenLabs security rules: the API key is read from ``ELEVENLABS_API_KEY`` at call time only. It is never
-stored on objects, written to disk, logged, put in a cache key/metadata/manifest, or echoed in an error
-(errors are passed through ``redact``). Only stdlib ``urllib`` is used; the transport is injectable for tests.
+ElevenLabs (M04.1): the official ``elevenlabs`` Python SDK, ``text_to_speech.convert_with_timestamps`` (audio +
+character alignment in one billed call) with ``eleven_v4`` by default. The API key comes from ``ELEVENLABS_API_KEY``;
+if it is not exported, ``load_env`` loads the project's gitignored ``.env`` with python-dotenv (path overridable
+with ``ROBOTICS101_DOTENV``; tests point it at a missing file). The key is read at call time only and is never
+stored on objects, written to disk, logged, put in a cache key/metadata/manifest, or echoed in an error (errors
+pass through ``redact``). The SDK client factory is injectable so tests never touch the network.
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import math
@@ -20,23 +24,44 @@ import struct
 import subprocess
 import tempfile
 import time
-import urllib.error
-import urllib.request
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from robotics101.characters import PROJECT_ROOT
 
 CACHE_FORMAT = 1
 KEY_ENV = "ELEVENLABS_API_KEY"
-API_BASE = "https://api.elevenlabs.io"
-EL_OUTPUT_FORMAT = "mp3_44100_128"
-EL_SEED = 101                       # ElevenLabs best-effort determinism
+DOTENV_ENV = "ROBOTICS101_DOTENV"
+DEFAULT_DOTENV = PROJECT_ROOT / ".env"
+EL_DEFAULT_MODEL = "eleven_v4"           # best-quality TTS model; supports /with-timestamps
+EL_OUTPUT_FORMAT = "mp3_44100_192"       # Creator+ plans
+EL_SEED = 101                            # ElevenLabs best-effort determinism
+# voice_settings each model family accepts (Eleven v4: stability + similarity_boost only; pace/emotion via text)
+EL_V4_SETTINGS = ("stability", "similarity_boost")
+EL_ALL_SETTINGS = ("stability", "similarity_boost", "style", "use_speaker_boost", "speed")
+EL_RETRY_STATUS = (429, 500, 502, 503, 504)
 KOKORO_DIR_ENV = "ROBOTICS101_KOKORO_DIR"
 DEFAULT_KOKORO_DIR = PROJECT_ROOT / "models" / "kokoro"
 KOKORO_MODEL, KOKORO_VOICES = "kokoro-v1.0.onnx", "voices-v1.0.bin"
+
+
+def load_env() -> bool:
+    """Load the project ``.env`` (never overriding an exported variable). Returns True if the key is now set."""
+    if not os.environ.get(KEY_ENV):
+        path = Path(os.environ.get(DOTENV_ENV) or DEFAULT_DOTENV)
+        if path.is_file():
+            try:
+                from dotenv import load_dotenv
+            except ImportError:            # pragma: no cover - dependency of the project
+                return False
+            load_dotenv(path, override=False)
+    return bool(os.environ.get(KEY_ENV))
+
+
+def el_settings_for(model_id: str) -> tuple[str, ...]:
+    return EL_V4_SETTINGS if str(model_id).startswith("eleven_v4") else EL_ALL_SETTINGS
 
 
 class VoiceError(RuntimeError):
@@ -98,12 +123,43 @@ class Backend:
 
 # ------------------------------------------------------------------------------------------ ElevenLabs
 
-Transport = Callable[[urllib.request.Request, float], bytes]
+ClientFactory = Callable[[], Any]
 
 
-def _urllib_transport(req: urllib.request.Request, timeout: float) -> bytes:
-    with urllib.request.urlopen(req, timeout=timeout) as resp:      # noqa: S310 (fixed https host)
-        return resp.read()
+def _sdk_client() -> Any:
+    """Official SDK client. The key is passed from the environment at call time and not kept anywhere else."""
+    from elevenlabs import ElevenLabs
+    return ElevenLabs(api_key=os.environ[KEY_ENV])
+
+
+def _status(e: Exception) -> int | None:
+    code = getattr(e, "status_code", None)
+    return int(code) if isinstance(code, int) else None
+
+
+def words_from_alignment(al: dict | None) -> list[dict]:
+    """Character alignment -> words [{text, start_s, end_s}] (audio tags like ``[laughs]`` are skipped)."""
+    if not al:
+        return []
+    chars = al.get("characters") or []
+    st, en = al.get("character_start_times_seconds") or [], al.get("character_end_times_seconds") or []
+    words, cur, t0, t1, tag = [], "", None, None, 0
+    for ch, a, b in zip(chars, st, en):
+        if ch == "[":
+            tag += 1
+        if tag or ch.isspace():
+            if cur:
+                words.append({"text": cur, "start_s": round(t0, 3), "end_s": round(t1, 3)})
+            cur, t0 = "", None
+            if ch == "]" and tag:
+                tag -= 1
+            continue
+        if t0 is None:
+            t0 = a
+        cur, t1 = cur + ch, b
+    if cur:
+        words.append({"text": cur, "start_s": round(t0, 3), "end_s": round(t1, 3)})
+    return words
 
 
 @dataclass
@@ -112,64 +168,87 @@ class ElevenLabsBackend(Backend):
     label: str = "ElevenLabs TTS (production voice)"
     is_production: bool = True
     billable: bool = True
-    transport: Transport | None = field(default=None, repr=False)   # None = stdlib urllib (looked up per call)
-    timeout_s: float = 60.0
+    client_factory: ClientFactory | None = field(default=None, repr=False)   # None = official SDK (per call)
+    timeout_s: float = 120.0
     retries: int = 3
 
     def available(self) -> tuple[bool, str]:
-        if not os.environ.get(KEY_ENV):
-            return False, f"{KEY_ENV} is not set"
-        return True, "API key present in environment"
+        if not load_env():
+            return False, f"{KEY_ENV} is not set (environment or project .env)"
+        return True, "API key present (environment or project .env)"
 
     def request(self, voice: dict, text: str) -> VoiceRequest:
         cfg = self.config(voice)
+        model = cfg.get("modelId") or EL_DEFAULT_MODEL
         s = cfg.get("settings") or {}
-        settings = {k: s[k] for k in ("stability", "similarity_boost", "style", "use_speaker_boost", "speed")
-                    if k in s}
-        return VoiceRequest(self.name, {"voiceId": cfg["voiceId"], "modelId": cfg["modelId"],
-                                        "settings": settings, "outputFormat": EL_OUTPUT_FORMAT, "seed": EL_SEED},
+        settings = {k: s[k] for k in el_settings_for(model) if k in s}
+        return VoiceRequest(self.name, {"voiceId": cfg["voiceId"], "modelId": model, "settings": settings,
+                                        "outputFormat": EL_OUTPUT_FORMAT, "seed": EL_SEED, "timestamps": True},
                             text, ext="mp3")
 
-    def _call(self, method: str, path: str, body: dict | None = None, accept: str = "application/json") -> bytes:
-        key = os.environ.get(KEY_ENV)
-        if not key:
+    def _client(self) -> Any:
+        if not load_env():
             raise VoiceError(f"{KEY_ENV} is not set; no ElevenLabs call was made")
-        data = json.dumps(body).encode("utf-8") if body is not None else None
+        return (self.client_factory or _sdk_client)()
+
+    def _call(self, what: str, fn: Callable[[Any], Any]) -> Any:
+        client = self._client()
         last = ""
         for attempt in range(self.retries):
-            req = urllib.request.Request(API_BASE + path, data=data, method=method,
-                                         headers={"xi-api-key": key, "Accept": accept,
-                                                  "Content-Type": "application/json"})
             try:
-                return (self.transport or _urllib_transport)(req, self.timeout_s)
-            except urllib.error.HTTPError as e:
-                try:
-                    detail = e.read()[:300].decode("utf-8", "replace")
-                except Exception:                                      # noqa: BLE001
-                    detail = ""
-                last = f"HTTP {e.code}: {detail}"
-                if e.code not in (429, 500, 502, 503, 504):
+                return fn(client)
+            except Exception as e:                                       # noqa: BLE001 - SDK/httpx errors
+                code = _status(e)
+                body = getattr(e, "body", None)
+                last = f"HTTP {code}: {str(body)[:300]}" if code else f"{type(e).__name__}: {str(e)[:300]}"
+                if code is not None and code not in EL_RETRY_STATUS:
                     break
-            except (urllib.error.URLError, TimeoutError, OSError) as e:
-                last = f"{type(e).__name__}: {e}"
             time.sleep(min(8.0, 1.5 * 2 ** attempt))
-        raise VoiceError(redact(f"ElevenLabs {method} {path.split('?')[0]} failed: {last}"))
+        raise VoiceError(redact(f"ElevenLabs {what} failed: {last}"))
 
-    def render(self, req: VoiceRequest, out_path: Path) -> None:
+    def render(self, req: VoiceRequest, out_path: Path) -> dict:
+        """One billed call: audio (written to ``out_path``) + character alignment (returned for the cache)."""
+        from elevenlabs import VoiceSettings
         p = req.params
-        body = {"text": req.text, "model_id": p["modelId"], "voice_settings": p["settings"], "seed": p["seed"]}
-        audio = self._call("POST", f"/v1/text-to-speech/{p['voiceId']}?output_format={p['outputFormat']}",
-                           body, accept="audio/mpeg")
+
+        def go(c):
+            return c.text_to_speech.convert_with_timestamps(
+                p["voiceId"], text=req.text, model_id=p["modelId"], output_format=p["outputFormat"],
+                voice_settings=VoiceSettings(**p["settings"]) if p["settings"] else None, seed=p["seed"],
+                request_options={"timeout_in_seconds": int(self.timeout_s), "max_retries": 0})
+        resp = self._call("text-to-speech/with-timestamps", go)
+        audio = base64.b64decode(getattr(resp, "audio_base_64", None) or getattr(resp, "audio_base64", "") or "")
         if len(audio) < 256:
             raise VoiceError(f"ElevenLabs returned {len(audio)} bytes of audio for {req.chars} chars")
         Path(out_path).write_bytes(audio)
+        al = getattr(resp, "alignment", None)
+        al = al.model_dump() if hasattr(al, "model_dump") else al
+        return {"alignment": al} if al else {}
 
+    # -- non-speech account calls (no character credits)
     def list_voices(self) -> list[dict]:
-        """GET /v1/voices (free: no character credits)."""
-        doc = json.loads(self._call("GET", "/v1/voices"))
-        return [{"voiceId": v.get("voice_id"), "name": v.get("name"), "category": v.get("category"),
-                 "labels": v.get("labels") or {}, "previewUrl": v.get("preview_url")}
-                for v in doc.get("voices", [])]
+        r = self._call("voices", lambda c: c.voices.get_all())
+        return [{"voiceId": v.voice_id, "name": v.name, "category": v.category, "labels": dict(v.labels or {}),
+                 "previewUrl": getattr(v, "preview_url", None)} for v in r.voices]
+
+    def subscription(self) -> dict:
+        s = self._call("user/subscription", lambda c: c.user.subscription.get())
+        d = s.model_dump() if hasattr(s, "model_dump") else dict(s)
+        keep = ("tier", "status", "character_count", "character_limit", "next_character_count_reset_unix")
+        out = {k: d.get(k) for k in keep}
+        if out["character_limit"] is not None and out["character_count"] is not None:
+            out["remaining"] = int(out["character_limit"]) - int(out["character_count"])
+        return out
+
+    def models(self) -> list[dict]:
+        ms = self._call("models", lambda c: c.models.list())
+        out = []
+        for m in ms:
+            d = m.model_dump() if hasattr(m, "model_dump") else dict(m)
+            if d.get("can_do_text_to_speech"):
+                out.append({"modelId": d.get("model_id"), "name": d.get("name"),
+                            "costMultiplier": (d.get("model_rates") or {}).get("character_cost_multiplier")})
+        return out
 
 
 # ------------------------------------------------------------------------------------------ Kokoro
@@ -300,8 +379,23 @@ def select_backend(choice: str | None = "auto") -> tuple[Backend, list[str]]:
     raise VoiceError("no voice backend available: " + "; ".join(skipped))
 
 
-def decode_to_wav(src: Path, dst: Path, fx: list[str], rate: int = 48_000) -> None:
-    """Raw provider audio -> 48 kHz mono s16 WAV: optional sox fx, edge-silence trim, -3 dBFS peak normalise."""
+TRIM_THRESHOLD_DBFS, TRIM_KEEP_S = -45.0, 0.03
+
+
+def leading_trim_s(wav: Path) -> float:
+    """Seconds the edge-silence trim removes from the start of ``wav`` (ffmpeg silenceremove keeps
+    ``TRIM_KEEP_S`` of the silence), so provider word timings can be shifted onto the trimmed line audio."""
+    import array
+    with wave.open(str(wav), "rb") as r:
+        rate, a = r.getframerate(), array.array("h", r.readframes(r.getnframes()))
+    lim = 32768 * 10 ** (TRIM_THRESHOLD_DBFS / 20)
+    first = next((i for i, x in enumerate(a) if abs(x) > lim), 0)
+    return max(0.0, first / rate - TRIM_KEEP_S)
+
+
+def decode_to_wav(src: Path, dst: Path, fx: list[str], rate: int = 48_000) -> float:
+    """Raw provider audio -> 48 kHz mono s16 WAV: optional sox fx, edge-silence trim, -3 dBFS peak normalise.
+    Returns the (approximate) seconds trimmed from the start."""
     ffmpeg = shutil.which("ffmpeg")
     if not ffmpeg:
         raise VoiceError("ffmpeg is required to decode voice audio")
@@ -321,6 +415,7 @@ def decode_to_wav(src: Path, dst: Path, fx: list[str], rate: int = 48_000) -> No
             if run.returncode != 0:
                 raise VoiceError(f"sox fx {fx} failed: {run.stderr.strip()[:300]}")
             mid = fxd
+        lead = leading_trim_s(mid)
         trim = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03,"
                 "areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.08,areverse")
         tmp = Path(td) / "trim.wav"
@@ -329,6 +424,7 @@ def decode_to_wav(src: Path, dst: Path, fx: list[str], rate: int = 48_000) -> No
         if run.returncode != 0:
             raise VoiceError(f"ffmpeg trim failed: {run.stderr.strip()[:300]}")
         _peak_normalise(tmp, Path(dst), target_dbfs=-3.0)
+        return round(lead, 4)
 
 
 def _peak_normalise(src: Path, dst: Path, target_dbfs: float) -> None:

@@ -275,7 +275,12 @@ def _cmd_voice(args: argparse.Namespace) -> int:
         registry = load_registry()
         from robotics101.cartoon.episode import expand_episode
         spec = expand_episode(spec, registry)          # M03 defaults (intro, ...) for every episode
-        backend, skipped = select_backend(args.tts)
+        from robotics101.cartoon.pipeline import CartoonPipelineError, pick_backend
+        try:                                            # ElevenLabs only once the registry voices are approved
+            backend, skipped = pick_backend(args.tts, registry) if args.tts != "fixture" else select_backend("fixture")
+        except CartoonPipelineError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return EXIT_INPUT
         cache = VoiceCache()
         for why in skipped:
             print(f"voice: skipping {why}")
@@ -312,10 +317,32 @@ def _cmd_voices(args: argparse.Namespace) -> int:
     from robotics101.voice.backends import KEY_ENV, decode_to_wav
 
     el = ElevenLabsBackend()
+    spend = args.voices_cmd in ("samples", "audition")
+    if spend and not getattr(args, "yes", False):
+        reg = load_registry()
+        if args.voices_cmd == "samples":
+            n = sum(len(AUDITION_LINES[c]) for c in ("bolt", "maya"))
+            what = "Bolt + Maya sample lines"
+        else:
+            n = len(args.text or AUDITION_LINES.get(args.character, "Hi! Welcome to Robotics 101."))
+            what = f"{args.character} audition"
+        model = ((reg.get("bolt").voice or {}).get("elevenlabs") or {}).get("modelId")
+        print(f"{what}: ~{n} characters (~{n} credits on {model}; cached lines are free). This generates speech "
+              "and spends ElevenLabs credits: re-run with --yes once the owner has agreed. Nothing was synthesized.",
+              file=sys.stderr)
+        return EXIT_INPUT
     if not el.available()[0]:
-        print(f"error: {KEY_ENV} is not set; no ElevenLabs call was made", file=sys.stderr)
+        print(f"error: {KEY_ENV} is not set (shell env or project .env); no ElevenLabs call was made",
+              file=sys.stderr)
         return EXIT_INPUT
     try:
+        if args.voices_cmd == "account":
+            sub = el.subscription()
+            print(f"plan {sub['tier']} ({sub['status']}): {sub['character_count']}/{sub['character_limit']} credits "
+                  f"used, {sub.get('remaining')} remaining; resets at unix {sub['next_character_count_reset_unix']}")
+            for m in el.models():
+                print(f"  model {m['modelId']}: {m['name']} (credit multiplier {m['costMultiplier']})")
+            return EXIT_OK
         if args.voices_cmd == "samples":
             reg = load_registry()
             args.out_dir.mkdir(parents=True, exist_ok=True)
@@ -490,22 +517,26 @@ def build_parser() -> argparse.ArgumentParser:
     vo.add_argument("episode", type=Path)
     vo.add_argument("--out", type=Path, required=True)
     vo.add_argument("--tts", choices=["auto", "elevenlabs", "kokoro", "espeak", "fixture"], default="auto",
-                    help="auto (default) = ElevenLabs if ELEVENLABS_API_KEY is set, else Kokoro, else espeak")
+                    help="auto (default) = ElevenLabs if the key is set (env or .env) AND the registry voices are "
+                         "approved, else Kokoro, else espeak")
     vo.add_argument("--plan-only", action="store_true",
                     help="print line/char counts and billable characters; synthesize nothing")
     vo.set_defaults(func=_cmd_voice)
 
-    vs = sub.add_parser("voices", help="ElevenLabs voice tools (need ELEVENLABS_API_KEY)")
+    vs = sub.add_parser("voices", help="ElevenLabs voice tools (need ELEVENLABS_API_KEY, exported or in .env)")
     vsub = vs.add_subparsers(dest="voices_cmd", required=True)
     vsub.add_parser("list", help="list voices available to the account (free; no credits)")
+    vsub.add_parser("account", help="plan, credits used/remaining and TTS models (free; no credits)")
     sm = vsub.add_parser("samples", help="one short sample line each for Bolt and Maya with the registry voices "
-                                         "(for owner approval; ~180 chars, cached)")
+                                         "(for owner approval; ~180 chars, cached). Spends credits: needs --yes")
+    sm.add_argument("--yes", action="store_true", help="confirm: the owner agreed to generate these samples")
     sm.add_argument("--out-dir", type=Path, default=Path("/workspace/robotics101-samples"))
     au = vsub.add_parser("audition", help="synthesize one short test line for a character (<=200 chars, cached)")
     au.add_argument("character")
     au.add_argument("--voice-id", help="try a different ElevenLabs voice id (registry unchanged)")
     au.add_argument("--text")
     au.add_argument("--out", type=Path, required=True, help="output .wav")
+    au.add_argument("--yes", action="store_true", help="confirm spending credits on this audition")
     vs.set_defaults(func=_cmd_voices)
 
     ms = sub.add_parser("model-sheet", help="render the cast model sheets (rigs, expressions, mouths, poses) to PNG")

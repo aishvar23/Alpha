@@ -1,11 +1,11 @@
 """M02.2: character voice layer — backends, content-hash cache, ElevenLabs key safety + budget, timeline, QA."""
 
-import io
+import base64
 import json
 import shutil
 import subprocess
-import urllib.error
 import wave
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -123,7 +123,7 @@ def test_select_backend_auto_order(monkeypatch):
 def test_no_key_means_no_network(monkeypatch, capsys):
     def boom(*a, **k):
         raise AssertionError("network used")
-    monkeypatch.setattr(B.urllib.request, "urlopen", boom)
+    monkeypatch.setattr(B, "_sdk_client", boom)
     assert main(["voices", "list"]) == 2
     assert "not set" in capsys.readouterr().err
     with pytest.raises(VoiceError, match="no ElevenLabs call"):
@@ -140,13 +140,41 @@ def mp3_bytes(tmp_path_factory):
     return p.read_bytes()
 
 
-class FakeTransport:
-    def __init__(self, payload: bytes):
-        self.payload, self.requests = payload, []
+def _alignment(text: str, per_char: float = 0.05) -> dict:
+    return {"characters": list(text), "character_start_times_seconds": [i * per_char for i in range(len(text))],
+            "character_end_times_seconds": [(i + 1) * per_char for i in range(len(text))]}
 
-    def __call__(self, req, timeout):
-        self.requests.append(req)
-        return self.payload
+
+class FakeClient:
+    """Stands in for ``elevenlabs.ElevenLabs``: records calls, returns audio + alignment, can fail first."""
+
+    def __init__(self, payload: bytes, fail: list | None = None):
+        self.payload, self.calls, self.fail = payload, [], list(fail or [])
+        self.text_to_speech = SimpleNamespace(convert_with_timestamps=self._tts, convert=self._no_plain_convert)
+        self.voices = SimpleNamespace(get_all=lambda: SimpleNamespace(voices=[SimpleNamespace(
+            voice_id="v1", name="Ember", category="professional", labels={"age": "young"}, preview_url=None)]))
+        self.user = SimpleNamespace(subscription=SimpleNamespace(get=lambda: SimpleNamespace(model_dump=lambda: {
+            "tier": "creator", "status": "active", "character_count": 1000, "character_limit": 131000,
+            "next_character_count_reset_unix": 1})))
+        self.models = SimpleNamespace(list=lambda: [SimpleNamespace(model_dump=lambda: {
+            "model_id": "eleven_v4", "name": "Eleven v4", "can_do_text_to_speech": True,
+            "model_rates": {"character_cost_multiplier": 1.0}})])
+
+    def _no_plain_convert(self, *a, **k):
+        raise AssertionError("use convert_with_timestamps (one billed call gives audio + timings)")
+
+    def _tts(self, voice_id, **kw):
+        self.calls.append((voice_id, kw))
+        if self.fail:
+            raise self.fail.pop(0)
+        al = _alignment(kw["text"])
+        return SimpleNamespace(audio_base_64=base64.b64encode(self.payload).decode(),
+                               alignment=SimpleNamespace(model_dump=lambda: al))
+
+
+def _api_error(code: int, body):
+    from elevenlabs.core.api_error import ApiError
+    return ApiError(status_code=code, body=body)
 
 
 def approved_registry():
@@ -158,44 +186,103 @@ def approved_registry():
 
 def test_unapproved_elevenlabs_voices_block_full_episode(small, tmp_path, monkeypatch, mp3_bytes):
     monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
-    fake = FakeTransport(mp3_bytes)
+    fake = FakeClient(mp3_bytes)
     with pytest.raises(VoiceError, match="not owner-approved"):
-        voice_episode(small, load_registry(), tmp_path / "o", ElevenLabsBackend(transport=fake),
+        voice_episode(small, load_registry(), tmp_path / "o", ElevenLabsBackend(client_factory=lambda: fake),
                       VoiceCache(tmp_path / "c"), log=lambda m: None)
-    assert fake.requests == []
+    assert fake.calls == []
 
 
-def test_voices_samples_writes_two_short_lines(tmp_path, monkeypatch, mp3_bytes):
+def test_voices_samples_need_explicit_yes_then_write_two_short_lines(tmp_path, monkeypatch, mp3_bytes, capsys):
     monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
-    fake = FakeTransport(mp3_bytes)
-    monkeypatch.setattr(B, "_urllib_transport", fake)
-    assert main(["voices", "samples", "--out-dir", str(tmp_path / "s")]) == 0
+    fake = FakeClient(mp3_bytes)
+    monkeypatch.setattr(B, "_sdk_client", lambda: fake)
+    assert main(["voices", "samples", "--out-dir", str(tmp_path / "s")]) == 2       # no --yes: nothing spent
+    assert fake.calls == [] and not (tmp_path / "s").exists() and "--yes" in capsys.readouterr().err
+    assert main(["voices", "audition", "bolt", "--out", str(tmp_path / "a.wav")]) == 2
+    assert fake.calls == []
+    assert main(["voices", "samples", "--out-dir", str(tmp_path / "s"), "--yes"]) == 0
     assert sorted(p.name for p in (tmp_path / "s").iterdir()) == ["elevenlabs-sample-bolt.wav",
                                                                   "elevenlabs-sample-maya.wav"]
-    assert len(fake.requests) == 2 and sum(len(json.loads(r.data)["text"]) for r in fake.requests) < 250
+    assert len(fake.calls) == 2 and sum(len(kw["text"]) for _, kw in fake.calls) < 250
 
 
-def test_elevenlabs_request_cache_ledger_and_key_never_persisted(small, tmp_path, monkeypatch, mp3_bytes):
+def test_voices_account_is_non_speech(monkeypatch, mp3_bytes, capsys):
     monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
-    fake = FakeTransport(mp3_bytes)
-    el = ElevenLabsBackend(transport=fake)
+    fake = FakeClient(mp3_bytes)
+    monkeypatch.setattr(B, "_sdk_client", lambda: fake)
+    assert main(["voices", "account"]) == 0
+    out = capsys.readouterr().out
+    assert "130000 remaining" in out and "eleven_v4" in out and fake.calls == []
+    assert FAKE_KEY not in out
+
+
+def test_key_is_loaded_from_project_dotenv_without_exporting_it_first(tmp_path, monkeypatch, mp3_bytes):
+    env = tmp_path / ".env"
+    env.write_text(f"{B.KEY_ENV}={FAKE_KEY}\n")
+    monkeypatch.setenv(B.DOTENV_ENV, str(env))
+    seen = {}
+
+    def factory():
+        import os
+        seen["key"] = os.environ.get(B.KEY_ENV)
+        return FakeClient(mp3_bytes)
+    el = ElevenLabsBackend(client_factory=factory)
+    assert el.available()[0] is True
+    el.list_voices()
+    assert seen["key"] == FAKE_KEY
+    assert FAKE_KEY not in repr(el)
+    monkeypatch.delenv(B.KEY_ENV)
+    monkeypatch.setenv(B.DOTENV_ENV, str(tmp_path / "missing.env"))
+    assert ElevenLabsBackend().available()[0] is False
+
+
+def test_v4_request_uses_only_supported_settings_and_default_model():
+    voice = {"elevenlabs": {"voiceId": "abc", "modelId": "eleven_v4",
+                            "settings": {"stability": 0.3, "similarity_boost": 0.8, "style": 0.5, "speed": 1.1}}}
+    r = ElevenLabsBackend().request(voice, "Hi!")
+    assert r.params["modelId"] == "eleven_v4" and r.params["settings"] == {"stability": 0.3, "similarity_boost": 0.8}
+    assert r.params["timestamps"] is True and r.params["outputFormat"] == "mp3_44100_192"
+    v2 = {"elevenlabs": {**voice["elevenlabs"], "modelId": "eleven_multilingual_v2"}}
+    assert ElevenLabsBackend().request(v2, "Hi!").params["settings"]["style"] == 0.5
+    nomodel = {"elevenlabs": {"voiceId": "abc", "settings": {}}}
+    assert ElevenLabsBackend().request(nomodel, "Hi!").params["modelId"] == B.EL_DEFAULT_MODEL == "eleven_v4"
+    for cid in ("bolt", "maya"):                                   # registry: v4 candidates, still unapproved
+        el = load_registry().get(cid).voice["elevenlabs"]
+        assert el["modelId"] == "eleven_v4" and el["voiceId"] and el["approved"] is False
+
+
+def test_words_from_alignment_skips_audio_tags():
+    w = B.words_from_alignment(_alignment("[excited] Hi Bolt!", 0.1))
+    assert [x["text"] for x in w] == ["Hi", "Bolt!"]
+    assert w[0]["start_s"] == pytest.approx(1.0) and w[1]["end_s"] == pytest.approx(1.8)
+    assert B.words_from_alignment(None) == []
+
+
+def test_elevenlabs_request_cache_ledger_timings_and_key_never_persisted(small, tmp_path, monkeypatch, mp3_bytes):
+    monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
+    fake = FakeClient(mp3_bytes)
+    el = ElevenLabsBackend(client_factory=lambda: fake)
     cache, reg = VoiceCache(tmp_path / "cache"), approved_registry()
     doc = voice_episode(small, reg, tmp_path / "o", el, cache, log=lambda m: None)
-    n = len(fake.requests)
+    n = len(fake.calls)
     assert n == doc["cost"]["lines"] > 0 and doc["isProductionVoice"] is True
-    r = fake.requests[0]
-    assert r.full_url.startswith("https://api.elevenlabs.io/v1/text-to-speech/")
-    assert "output_format=mp3_44100_128" in r.full_url and r.get_method() == "POST"
-    assert r.get_header("Xi-api-key") == FAKE_KEY
-    body = json.loads(r.data)
-    assert body["model_id"] == "eleven_multilingual_v2" and set(body) == {"text", "model_id", "voice_settings", "seed"}
+    voice_id, kw = fake.calls[0]
+    assert kw["model_id"] == "eleven_v4" and kw["output_format"] == "mp3_44100_192" and kw["seed"] == B.EL_SEED
+    assert set(kw["voice_settings"].model_dump(exclude_none=True)) <= {"stability", "similarity_boost"}
     voice_ids = {reg.get(c).voice["elevenlabs"]["voiceId"] for c in ("bolt", "maya")}
-    assert {q.full_url.split("/v1/text-to-speech/")[1].split("?")[0] for q in fake.requests} <= voice_ids
+    assert {v for v, _ in fake.calls} <= voice_ids
     assert cache.ledger_chars() == doc["cost"]["billableChars"] > 0
     assert doc["voices"]["bolt"]["voiceId"] in voice_ids
-    # rerun: zero new API calls, zero new billable chars
+    # word timings: cached with the audio, written next to each line, referenced from timing.json
+    line = next(b for s in doc["scenes"] for b in s["beats"] if b["type"] == "line")
+    words = json.loads((tmp_path / "o" / line["words"]).read_text())["words"]
+    assert [w["text"] for w in words] == line["text"].split()
+    assert all(0 <= w["start_s"] <= w["end_s"] <= line["audio_s"] + 1e-6 for w in words)
+    # rerun: zero new API calls, zero new billable chars, timings still there (from the cache)
     doc2 = voice_episode(small, reg, tmp_path / "o", el, cache, log=lambda m: None)
-    assert len(fake.requests) == n and doc2["cost"]["billableChars"] == 0
+    assert len(fake.calls) == n and doc2["cost"]["billableChars"] == 0
+    assert all("words" in b for s in doc2["scenes"] for b in s["beats"] if b["type"] == "line")
     # the key appears in no file anywhere (outputs, cache, ledger)
     for root in (tmp_path / "o", tmp_path / "cache"):
         for p in root.rglob("*"):
@@ -204,47 +291,43 @@ def test_elevenlabs_request_cache_ledger_and_key_never_persisted(small, tmp_path
     rep = QaReport("ep", "voice", str(tmp_path / "o"))
     check_dialogue(rep, tmp_path / "o", [tmp_path / "cache"])
     assert [c for c in rep.checks if c.id == "security.no_api_key"][0].ok
+    # a later offline (fixture) run in the same folder drops the stale ElevenLabs word timings
+    doc3 = voice_episode(small, reg, tmp_path / "o", B.FixtureBackend(), cache, log=lambda m: None)
+    assert not any("words" in b for s in doc3["scenes"] for b in s["beats"] if b["type"] == "line")
+    assert not list((tmp_path / "o").rglob("*.words.json"))
 
 
 def test_budget_blocks_before_any_call(small, tmp_path, monkeypatch, mp3_bytes):
     monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
     monkeypatch.setenv("ROBOTICS101_ELEVENLABS_MAX_CHARS", "50")
-    fake = FakeTransport(mp3_bytes)
+    fake = FakeClient(mp3_bytes)
     with pytest.raises(VoiceError, match="exceed the per-run budget"):
-        voice_episode(small, approved_registry(), tmp_path / "o", ElevenLabsBackend(transport=fake),
+        voice_episode(small, approved_registry(), tmp_path / "o", ElevenLabsBackend(client_factory=lambda: fake),
                       VoiceCache(tmp_path / "c"), log=lambda m: None)
-    assert fake.requests == []
+    assert fake.calls == []
 
 
-def test_http_errors_are_redacted_and_not_cached(tmp_path, monkeypatch):
+def test_http_errors_are_redacted_and_not_cached(tmp_path, monkeypatch, mp3_bytes):
     monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
-    calls = []
-
-    def unauthorized(req, timeout):
-        calls.append(req)
-        raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {},
-                                     io.BytesIO(f'{{"detail":"invalid key {FAKE_KEY}"}}'.encode()))
-    el, cache = ElevenLabsBackend(transport=unauthorized), VoiceCache(tmp_path / "c")
+    fake = FakeClient(mp3_bytes, fail=[_api_error(401, {"detail": f"invalid key {FAKE_KEY}"})])
+    el, cache = ElevenLabsBackend(client_factory=lambda: fake), VoiceCache(tmp_path / "c")
     req = el.request(load_registry().get("maya").voice, "Hello there!")
     with pytest.raises(VoiceError) as ei:
         cache.get_or_render(el, req)
     assert FAKE_KEY not in str(ei.value) and "[REDACTED]" in str(ei.value) and "401" in str(ei.value)
-    assert len(calls) == 1                                   # 4xx: no retry
+    assert len(fake.calls) == 1                                   # 4xx: no retry
     assert not cache.has(req) and cache.ledger_chars() == 0
 
 
 def test_retry_on_429_then_success(tmp_path, monkeypatch, mp3_bytes):
     monkeypatch.setenv(B.KEY_ENV, FAKE_KEY)
-    n = {"i": 0}
-
-    def flaky(req, timeout):
-        n["i"] += 1
-        if n["i"] == 1:
-            raise urllib.error.HTTPError(req.full_url, 429, "busy", {}, io.BytesIO(b"slow down"))
-        return mp3_bytes
-    el = ElevenLabsBackend(transport=flaky)
-    p, cached = VoiceCache(tmp_path / "c").get_or_render(el, el.request(load_registry().get("bolt").voice, "Hi!"))
-    assert n["i"] == 2 and not cached and p.stat().st_size == len(mp3_bytes)
+    fake = FakeClient(mp3_bytes, fail=[_api_error(429, "slow down")])
+    el = ElevenLabsBackend(client_factory=lambda: fake)
+    cache = VoiceCache(tmp_path / "c")
+    req = el.request(load_registry().get("bolt").voice, "Hi!")
+    p, cached = cache.get_or_render(el, req)
+    assert len(fake.calls) == 2 and not cached and p.stat().st_size == len(mp3_bytes)
+    assert cache.alignment(req)["characters"] == list("Hi!")
 
 
 def test_secret_scan_catches_leak(small, tmp_path, monkeypatch):

@@ -198,6 +198,13 @@ Each step: tests for the rule + a QA check enforcing it, verify real output, PRO
 - M03.6 notes: out/m03.6 (Kokoro, 1080p30): 9568 frames / 318.933 s (intro + 5 concept cards + 8 transitions), H.264 High/AAC 48 kHz, 83.3 MB, −16.0 LUFS, TP −1.4 dBFS, QA PASS_WITH_WARNINGS (118 checks, only warning: non-production voice); full render 548 s. Review of the first cut found and fixed (ADR-025): Nib static 1.07 s while listening in scene-005 (hard QA fail) → listener nods/sway scaled by `SMALL_CHARACTER_GAIN` (now ≤ 0.60 s); raised subtitles over characters were hard to read (yellow on Maya's shirt) → rounded dark backing panel for raised/top cues + QA. Samples: m03.6-{final.mp4,thumbnail.png,qa_report.json,manifest.json,contact.png,intro.png,transition.png,conceptcard.png,robotfamily.png,subtitles.png}, suite log m03.6-fullsuite.log.
 Design: `cartoon/episode.py::expand_episode(spec, registry)` (idempotent) adds generated parts (intro scene, transitions, concept stings) to the spec; the pipeline writes the expanded spec to `<out>/episode.json` and every later stage reads that.
 
+## M04 — production voices (ElevenLabs)
+| Step | Scope | Status |
+|---|---|---|
+| M04.1 | Official ElevenLabs SDK + .env key loading, `eleven_v4` with timestamps, cache + approval gate kept, candidate voices in the registry (unapproved), credit estimates; no speech generated | **done** (ADR-026) |
+| M04.2 | Owner says yes → `voices samples --yes` (Bolt + Maya, 179 credits) → owner approves → `approved: true` → re-render with `--tts auto` (≈ 3,850 credits) | waiting on the owner |
+- M04.1 notes: key verified with non-speech calls only (`voices account`): Creator plan, 0 / 131,000 credits used at setup, reset 2026-12-23. `eleven_v4` costs 1.0 credit/char. Episode 001: 77 lines, 3,850 characters (Maya 2,472, Bolt 1,378) ≈ 3,850 credits; samples 179 credits. Candidates: Bolt = Horatius (qXpMhyvQqiRxWQs4qSSB; alternates Little Dude II, Lawrence), Maya = Ember (WtA85syCrJwasGeHGH2p; alternates Emma, Jade); Nib is non-speaking. Library voices: if the API ever answers voice-not-found, add them to the account (non-speech; 2 of 30 voice slots). `npx @elevenlabs/cli onboard check --answered --env-path .env`: key in .env, SDK declared + imported, nothing to fix. Tests use a fake SDK client; conftest blocks real clients and hides .env.
+
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.
 - Not met by design / owner decisions pending: the sample narration is a short stub (66 s of speech in 300 s) so QA flags every scene for voice coverage and each scene animates ~10–20 s then holds; espeak is a robotic placeholder voice. Fuller narration + production voice (and then pacing animations to the narration window) are pending the owner's decision.
@@ -225,6 +232,6 @@ make demo-full                     # end-to-end 1920x1080@30 (~8 min)
 Environment notes: `.venv` is Python 3.12 with manim/jsonschema/pytest; add packages with `uv pip install --python .venv/bin/python <pkg>`. GNU `make` was installed via apt in the dev container (wasn't present by default). espeak-ng 1.52, ffmpeg/ffprobe and sox are installed in the dev container; Blender 4.3.2 is at /usr/bin/blender (headless, no GPU; EEVEE Next works via software GL but is slow; Cycles build lacks OpenImageDenoise).
 
 ## Next steps
-- ElevenLabs: once `ELEVENLABS_API_KEY` is set, `voices samples` for Bolt + Maya → owner approval → `approved: true` in the registry → re-render (`--tts auto`).
+- ElevenLabs (key now in the gitignored .env): owner says yes → `voices samples --yes` for Bolt + Maya → owner approval → `approved: true` in the registry → re-render (`--tts auto`).
 - (M01 narrator path) expanded narration superseded by the cartoon script (M02.1).
 - M02 AI authoring (fixture LLM mode), M03 template library + render sandbox, M04 Azure orchestration, M05 review dashboard (approval UI writing `approval.json`), M06 real YouTube private upload (needs owner OAuth + explicit approval bound to `finalVideoSha256`).

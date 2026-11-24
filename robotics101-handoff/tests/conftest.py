@@ -21,3 +21,15 @@ def spec(_sample_spec) -> dict:
 
 def scene_by_template(spec: dict, template: str) -> dict:
     return next(s for s in spec["scenes"] if s["template"] == template)
+
+
+@pytest.fixture(autouse=True)
+def _no_elevenlabs_network(monkeypatch, tmp_path):
+    """M04.1: tests never see the real key (project .env) and never build a real SDK client."""
+    monkeypatch.setenv("ROBOTICS101_DOTENV", str(tmp_path / "no-such.env"))
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+    from robotics101.voice import backends
+
+    def _blocked():
+        raise AssertionError("tests must not create a real ElevenLabs client (inject client_factory)")
+    monkeypatch.setattr(backends, "_sdk_client", _blocked)

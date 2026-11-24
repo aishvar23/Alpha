@@ -28,7 +28,7 @@ from pathlib import Path
 
 from robotics101.characters import Registry
 from robotics101.narration.captions import MAX_LINE, MAX_LINES, build_srt, split_cue_texts, wrap_cue
-from robotics101.voice.backends import Backend, VoiceError, VoiceRequest, decode_to_wav
+from robotics101.voice.backends import Backend, VoiceError, VoiceRequest, decode_to_wav, words_from_alignment
 from robotics101.voice.cache import VoiceCache
 
 TIMING_SCHEMA = "robotics101.timing/2"
@@ -167,7 +167,7 @@ def voice_episode(spec: dict, registry: Registry, out_dir: Path, backend: Backen
     for n, p in enumerate(plans, 1):
         raw, was_cached = cache.get_or_render(backend, p.request)
         dst = lines_dir / f"{p.sceneId}-{p.index:02d}-{p.speaker}.wav"
-        decode_to_wav(raw, dst, p.fx)
+        lead = decode_to_wav(raw, dst, p.fx)
         if backend.name == "kokoro":                 # local + free: re-voice rushed short lines a little slower
             words = len(p.text.split())
             wps = words / max(1e-6, _wav_seconds(dst))
@@ -179,6 +179,16 @@ def voice_episode(spec: dict, registry: Registry, out_dir: Path, backend: Backen
                 raw, _ = cache.get_or_render(backend, p.request)
                 decode_to_wav(raw, dst, p.fx)
                 log(f"  {p.sceneId}#{p.index} {p.speaker}: {wps:.1f} w/s -> kokoro speed {voice['kokoro']['speed']}")
+        al = cache.alignment(p.request)
+        if al:                                       # M04.1: provider word timings, shifted onto the trimmed line
+            dur = _wav_seconds(dst)
+            words = [{"text": w["text"], "start_s": _r(min(dur, max(0.0, w["start_s"] - lead))),
+                      "end_s": _r(min(dur, max(0.0, w["end_s"] - lead)))} for w in words_from_alignment(al)]
+            dst.with_suffix(".words.json").write_text(json.dumps({"source": f"{backend.name} alignment",
+                                                                  "words": words}, indent=1) + "\n",
+                                                      encoding="utf-8")
+        else:
+            dst.with_suffix(".words.json").unlink(missing_ok=True)     # never keep timings from another voice
         line_wavs[(p.sceneId, p.index)] = (dst, p)
         if not was_cached:
             log(f"  [{n}/{len(plans)}] synthesized {p.sceneId}#{p.index} {p.speaker} ({p.request.chars} chars)")
@@ -202,6 +212,8 @@ def voice_episode(spec: dict, registry: Registry, out_dir: Path, backend: Backen
                 entry.update(speaker=b["speaker"], text=b["text"], emotion=b.get("emotion"), action=b.get("action"),
                              target=b.get("target"), wav=str(wav.relative_to(out_dir)), cacheKey=p.request.key,
                              start_s=_r(t), end_s=_r(t + dur), audio_s=_r(dur))
+                if wav.with_suffix(".words.json").is_file():
+                    entry["words"] = str(wav.with_suffix(".words.json").relative_to(out_dir))
                 speech += dur
                 t += dur + gap
             elif kind == "action":
