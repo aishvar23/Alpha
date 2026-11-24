@@ -72,13 +72,29 @@ def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
 
 # ---------------------------------------------------------------- ffprobe
 
+PROBE_TIMEOUT_S = 300.0          # header-only probe
+DECODE_PROBE_TIMEOUT_S = 900.0   # -count_frames decodes every frame; ~3 s for a 1080p scene when idle
+
+
 def ffprobe_json(path: Path, ffprobe: str | None = None, count_frames: bool = False) -> dict:
+    """ffprobe as JSON. A ``count_frames`` (full decode) probe gets a longer budget and one retry on timeout:
+    on a box busy with an 8-worker render it was starved past the old fixed 300 s and failed QA spuriously
+    (M05.3 suite, ``test_cartoon_qa_catches_tampering[threshold-…]``). A second timeout still fails loudly."""
     ffprobe = ffprobe or find_ffmpeg()[1]
     cmd = [ffprobe, "-v", "error", "-show_streams", "-show_format", "-of", "json"]
     if count_frames:
         cmd.append("-count_frames")
     cmd.append(str(path))
-    proc = run(cmd, timeout=300, what="ffprobe")
+    if not count_frames:
+        proc = run(cmd, timeout=PROBE_TIMEOUT_S, what="ffprobe")
+    else:
+        try:
+            proc = run(cmd, timeout=DECODE_PROBE_TIMEOUT_S, what="ffprobe")
+        except MediaError as e:
+            if "timed out" not in str(e):
+                raise
+            print(f"warning: {e}; retrying once", file=sys.stderr)
+            proc = run(cmd, timeout=DECODE_PROBE_TIMEOUT_S, what="ffprobe")
     return json.loads(proc.stdout or "{}")
 
 

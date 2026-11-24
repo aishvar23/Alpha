@@ -598,10 +598,14 @@ def stage_character_intro(sc: Scene) -> None:
         else:
             p.move(t0, t1, x=x).act(t0, t1, "enter")
         p.face(t1 + 0.3, 1 if x < 0 else -1 if x > 0 else 1)
+        p.emote(t1 + 0.15, "excited")          # M05.4: "ta-da!" hop on arrival
         sc.perf[cid] = p
         sc.enter_at[cid] = round(t1, 3)
         segs.append((cid, c, x, t0, t1))
     sc.cast = tuple(c["id"] for c in cards)
+    for i, (cid, c, x, t0, t1) in enumerate(segs):   # M05.4: the lineup greets each newcomer (nobody waits idle)
+        for prev, *_ in segs[:i]:
+            sc.perf[prev].emote(t1 + 0.1, "giggle" if i % 2 else "curious", gain=0.7)
     intro_facts = []
     for i, (cid, c, x, t0, t1) in enumerate(segs):
         end = segs[i + 1][3] if i + 1 < len(segs) else sc.duration - 0.2
@@ -788,6 +792,39 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
             return [grp]
         sc.top.append(draw)
     sc.facts["shots"] = sc.shots
+    hide_covered_illustrations(sc)
+
+
+def uncovered_spans(a: float, b: float, covers: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Parts of [a, b) not inside any of ``covers`` (sorted, merged), dropping slivers < 0.1 s."""
+    out, t = [], a
+    for c0, c1 in sorted(covers):
+        if c1 <= t or c0 >= b:
+            continue
+        if c0 > t:
+            out.append((t, c0))
+        t = max(t, c1)
+    if t < b:
+        out.append((t, b))
+    return [(x, y) for x, y in out if y - x >= 0.1]
+
+
+def hide_covered_illustrations(sc: Scene) -> None:
+    """M05.4: a full-screen shot (its backdrop covers the stage) hides the stage's own illustration regions, so the
+    static-hold QA must not measure them while covered (it saw the shot's board as a 7 s 'still' vacuum tile).
+    Stage regions are cut to the uncovered spans (extra spans get ``#2``, ``#3`` ids); shot regions are kept."""
+    covers = [(sh["start"] + SHOT_IN, sh["end"] - SHOT_OUT) for sh in sc.shots if sh["layout"] != "stage"]
+    if not covers:
+        return
+    kept = []
+    for il in sc.illustrations:
+        if il["id"].startswith("shot-"):
+            kept.append(il)
+            continue
+        for j, (x, y) in enumerate(uncovered_spans(il["start"], il["end"], covers)):
+            kept.append({**il, "id": il["id"] if j == 0 else f"{il['id']}#{j + 1}", "start": round(x, 3),
+                         "end": round(y, 3)})
+    sc.illustrations[:] = kept
 
 
 def frame_layers(sc: Scene, t: float) -> tuple[dict, list, list]:

@@ -183,3 +183,19 @@ def test_qa_acting():
         r = _qa(spec, {"s1": {"acting": bad}})["characters.acting"]
         assert r.status == "fail" and needle in r.message
     assert _qa(spec, {"s1": {}})["characters.acting"].status == "warn"
+
+
+def test_intro_lineup_hops_on_arrival_and_greets_newcomers(voiced, monkeypatch):
+    """M05.4: in the cast intro every character does a ta-da hop on arrival and the ones already on stage react to
+    each newcomer, so the first-introduced character (Bolt, 74 px/s in the first EL cut) clears the energy floor."""
+    from robotics101.cartoon import scenes as S
+    from robotics101.cartoon.liveliness import ENERGY_MIN_BY_CHARACTER, ENERGY_MIN_PX_S, scene_acting
+    sc = _scene(voiced, "scene-intro", monkeypatch)
+    order = [f["id"] for f in sc.facts["introduced"]]
+    for cid in order:
+        assert any(a.name == "excited" and a.start > sc.enter_at[cid] for a in sc.perf[cid].poses)
+    first = sc.perf[order[0]]
+    assert sum(1 for a in first.poses if float(a.arg) < 1.0) >= len(order) - 1
+    act = scene_acting(sc, S.presence, S.HEIGHT, S.SCALES)
+    for cid, v in act.items():
+        assert v["energy"] >= ENERGY_MIN_BY_CHARACTER.get(cid, ENERGY_MIN_PX_S) * 1.2, (cid, v["energy"])

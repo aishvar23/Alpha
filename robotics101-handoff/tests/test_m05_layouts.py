@@ -171,3 +171,25 @@ def test_engine_family_illustration_is_full_screen_with_animated_tiles(voiced, m
     tiles = [i for i in sc.illustrations if i["id"].startswith("shot-family-")]
     assert {i["kind"] for i in tiles} == {"vacuum", "arm", "rover"}
     assert all(sh["start"] <= i["start"] < i["end"] <= sh["end"] for i in tiles)
+
+
+def test_stage_illustrations_not_measured_under_full_screen_shot(voiced, monkeypatch):
+    """M05.4: the stage album tiles are hidden by the full-screen family shot; their static-hold regions must skip
+    that span (the M05.4 render flagged a 7.1 s 'still' vacuum tile that was really the shot's board)."""
+    from robotics101.cartoon import scenes as S
+    sc, t = _scene(voiced, "scene-002", monkeypatch)
+    [sh] = sc.shots
+    c0, c1 = sh["start"] + S.SHOT_IN, sh["end"] - S.SHOT_OUT
+    stage = [i for i in sc.illustrations if not i["id"].startswith("shot-")]
+    assert stage, "stage tiles stay registered outside the shot"
+    for il in stage:
+        assert il["end"] <= c0 + 1e-6 or il["start"] >= c1 - 1e-6, il
+    assert len({i["id"] for i in sc.illustrations}) == len(sc.illustrations)
+
+
+def test_uncovered_spans():
+    from robotics101.cartoon import scenes as S
+    assert S.uncovered_spans(0, 10, [(2, 4), (3, 6)]) == [(0, 2), (6, 10)]
+    assert S.uncovered_spans(0, 10, [(0, 10)]) == []
+    assert S.uncovered_spans(5, 10, [(0, 2), (9.95, 12)]) == [(5, 9.95)]
+    assert S.uncovered_spans(0, 10, [(0.05, 10)]) == []          # sliver < 0.1 s dropped

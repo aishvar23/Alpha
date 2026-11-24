@@ -37,6 +37,32 @@ def frame_rgb(mobjects: list[Mobject], width: int, height: int, background: str)
 
 
 _FRAME_FN: FrameFn | None = None      # set before forking workers (closures can't be pickled)
+CHUNK_TIMEOUT_S = float(os.environ.get("ROBOTICS101_CHUNK_TIMEOUT_S", "0") or 0)   # 0 -> derived from frames
+
+
+def reset_pango_after_fork() -> None:
+    """Give a forked worker its own Pango font map (M05.4).
+
+    Pango >= 1.50 (pangoft2) resolves fonts through fontconfig on a helper thread owned by the font map, and the
+    default PangoCairo font map is cached per thread. A worker forked after the parent has laid out any text
+    inherits that font map but not its helper thread, so its first new layout waits forever in ``g_cond_wait``
+    inside ``manimpango.text2svg`` (the M05.4 render hung at 0 % CPU on scene-006). Dropping the inherited
+    default makes Pango build a fresh font map (with live threads) in the child.
+    """
+    import ctypes
+    import ctypes.util
+
+    name = ctypes.util.find_library("pangocairo-1.0") or "libpangocairo-1.0.so.0"
+    try:
+        lib = ctypes.CDLL(name)
+    except OSError:          # no system Pango (manimpango bundles its own) -> nothing inherited to reset
+        return
+    lib.pango_cairo_font_map_set_default.argtypes = [ctypes.c_void_p]
+    lib.pango_cairo_font_map_set_default(None)
+
+
+def _worker_init() -> None:
+    reset_pango_after_fork()
 
 
 def _encode_chunk(args) -> str:
@@ -81,8 +107,15 @@ def render_clip(frame_fn: FrameFn, n_frames: int, out_mp4: Path, *, fps: int = 3
         if len(jobs) == 1:
             parts = [_encode_chunk(jobs[0])]
         else:
-            with mp.get_context("fork").Pool(len(jobs)) as pool:
-                parts = pool.map(_encode_chunk, jobs)
+            # watchdog: a wedged worker must fail the render loudly instead of hanging it forever
+            timeout = CHUNK_TIMEOUT_S or max(1800.0, 2.0 * max(j[1] - j[0] for j in jobs))
+            with mp.get_context("fork").Pool(len(jobs), initializer=_worker_init) as pool:
+                try:
+                    parts = pool.map_async(_encode_chunk, jobs).get(timeout=timeout)
+                except mp.TimeoutError as e:
+                    pool.terminate()
+                    raise RuntimeError(f"render workers made no progress for {timeout:.0f}s "
+                                       f"({out_mp4.name}); aborted") from e
         lst = Path(td) / "list.txt"
         lst.write_text("".join(f"file '{p}'\n" for p in parts))
         video = Path(td) / "video.mp4"

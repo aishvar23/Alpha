@@ -164,3 +164,33 @@ def _tamper_and_check(b, tamper, check, run_cartoon_qa):
                 ["facts"].update(question="What is a robot?"))
     rep = run_cartoon_qa(b, "full")
     assert check in {c.id for c in rep.failures}
+
+
+@needs_ffmpeg
+def test_compose_final_reencodes_audio_when_aac_overshoots(tmp_path, monkeypatch):
+    """M05.4: an AAC frame that decodes at/over -0.1 dBFS triggers an audio-only re-encode at a higher bitrate."""
+    (tmp_path / "scenes").mkdir()
+    (tmp_path / "audio").mkdir()
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=red:s=320x180:r=30:d=1",
+                    "-pix_fmt", "yuv420p", str(tmp_path / "scenes" / "scene-001.mp4")], check=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=f=440:r=48000:d=1", "-ac", "2",
+                    str(tmp_path / "audio" / "mix.wav")], check=True)
+    peaks = iter([0.0, -1.2])
+    monkeypatch.setattr(P, "_aac_peak_db", lambda path: next(peaks))
+    msgs = []
+    doc = P.compose_final(tmp_path, {"scenes": [{"sceneId": "scene-001", "scene_duration_s": 1.0}]}, "T",
+                          log=msgs.append)
+    assert doc["audio"]["bitrate"] == "256k"
+    assert [c["bitrate"] for c in doc["audio"]["peakChecks"]] == ["192k", "256k"]
+    assert any("re-encoding audio" in m for m in msgs) and not (tmp_path / "final.aac-retry.mp4").exists()
+    probe = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_streams", "-of", "json",
+                                       str(tmp_path / "final.mp4")], capture_output=True, text=True).stdout)
+    a = next(s for s in probe["streams"] if s["codec_type"] == "audio")
+    v = next(s for s in probe["streams"] if s["codec_type"] == "video")
+    assert a["codec_name"] == "aac" and 230_000 < int(a["bit_rate"]) < 290_000 and v["nb_frames"] == "30"
+
+
+def test_aac_guard_keeps_default_when_clean(tmp_path):
+    tries = []
+    br, checks = P._guard_aac_peak(tmp_path, log=tries.append, peak_fn=lambda p: -1.6)
+    assert br == "192k" and checks == [{"bitrate": "192k", "maxDb": -1.6}] and tries == []

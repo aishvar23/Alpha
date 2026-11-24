@@ -20,6 +20,8 @@ ROOT = Path(__file__).resolve().parents[3]
 LICENSES = ROOT / "assets" / "LICENSES.json"
 FPS = 30
 CRF, PRESET, AUDIO_BITRATE = 20, "medium", "192k"
+AAC_FALLBACK_BITRATES = ("256k", "320k")   # re-encode audio only if the AAC decode overshoots (M05.4)
+AAC_PEAK_CEILING_DB = -0.1                 # same ceiling as QA final.no_clipping
 STALE = ("final.mp4", "compose.json", "manifest.json", "qa_report.json", "qa_report.md", "publish_plan.json",
          "thumbnail.png", "licenses.json", "scenes.json", "subtitles.ass", "subtitles.json")
 
@@ -66,14 +68,41 @@ def compose_final(out_dir: Path, timing: dict, title: str, log=print) -> dict:
             "-map_metadata", "-1", "-metadata", f"title={title}", "-movflags", "+faststart",
             str(out_dir / "final.mp4")]
     run(cmd, timeout=3600, what="ffmpeg final encode")
+    audio_bitrate, aac_tries = _guard_aac_peak(out_dir, log)
     doc = {"schemaVersion": "robotics101.compose/cartoon-1", "fps": FPS, "total_frames": frames,
            "total_duration_s": round(frames / FPS, 6), "segments": segs, "video": {"codec": "h264", "crf": CRF},
-           "audio": {"source": "audio/mix.wav", "codec": "aac", "bitrate": AUDIO_BITRATE},
+           "audio": {"source": "audio/mix.wav", "codec": "aac", "bitrate": audio_bitrate, "peakChecks": aac_tries},
            "subtitles": {"burnedIn": burn, "source": "subtitles.ass" if burn else None,
                          "cues": len(sub["cues"]) if sub else 0}}
     (out_dir / "compose.json").write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     log(f"  final.mp4: {frames} frames = {frames / FPS:.3f}s")
     return doc
+
+
+def _aac_peak_db(path: Path) -> float | None:
+    from robotics101.media import audio_levels
+    return audio_levels(path, ebur128=False).max_volume_db
+
+
+def _guard_aac_peak(out_dir: Path, log=print, peak_fn=None) -> tuple[str, list[dict]]:
+    """The mix is limited at -1.5 dBFS, but FFmpeg's native AAC encoder occasionally overshoots by several dB on
+    one frame (M05.4 ElevenLabs cut: a single 192k frame decoded at +2.9 dB over the mix, 0.0 dBFS sample peak,
+    while the same audio at 256k stayed at -1.2). Measure the decoded peak; if it reaches the ceiling, re-encode
+    only the audio track (video stream copied) at the next bitrate. Returns (bitrate used, checks)."""
+    peak_fn = peak_fn or _aac_peak_db
+    final = out_dir / "final.mp4"
+    tries = [{"bitrate": AUDIO_BITRATE, "maxDb": peak_fn(final)}]
+    for br in AAC_FALLBACK_BITRATES:
+        if tries[-1]["maxDb"] is None or tries[-1]["maxDb"] < AAC_PEAK_CEILING_DB:
+            break
+        log(f"  aac: decoded peak {tries[-1]['maxDb']} dBFS at {tries[-1]['bitrate']} -> re-encoding audio at {br}")
+        tmp = out_dir / "final.aac-retry.mp4"
+        run(["ffmpeg", "-y", "-hide_banner", "-v", "error", "-i", str(final), "-i", str(out_dir / "audio" / "mix.wav"),
+             "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", br, "-ar", "48000", "-ac", "2",
+             "-map_metadata", "0", "-movflags", "+faststart", str(tmp)], timeout=1800, what="ffmpeg aac re-encode")
+        tmp.replace(final)
+        tries.append({"bitrate": br, "maxDb": peak_fn(final)})
+    return tries[-1]["bitrate"], tries
 
 
 def collect_artifacts(out_dir: Path, timing: dict) -> list[tuple[str, str, str | None]]:
