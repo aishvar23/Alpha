@@ -37,7 +37,7 @@ def test_ep1_teaching_beats_are_illustration_only_one_example_each():
         "scene-003": ["structure", "sensors", "actuators", "power", "controller"],
         "scene-004": ["echo", "range", "out_of_range"],
         "scene-005": ["the_rule", "sta"],
-        "scene-006": ["servo_what", "servo_dial", "servo_head"],
+        "scene-006": ["actuators", "servo_what", "servo_split_30", "servo_cause", "servo_split_60"],
         "scene-007": ["rule_test"],
         "scene-008": ["quiz"],
     }
@@ -65,17 +65,21 @@ def test_derive_examples_is_template_wide():
     assert rec[0]["visual"] == "part_structure"
 
 
-def test_servo_steps_are_cutaway_then_dial_then_head():
+def test_servo_steps_are_cutaway_split_cause_split():
+    """M05.8: actuators -> what a servo is -> split screen (30) -> cause and effect -> split screen (60); no servo
+    frame on the closing joke line."""
     e = expand_episode(_spec(), load_registry())
     shots = _by(e)["scene-006"]["shots"]
-    assert [s["visual"] for s in shots] == ["servo_cutaway", "servo_dial", "servo_head"]
     beats = _by(e)["scene-006"]["beats"]
-    assert "exact angle" in beats[shots[0]["fromBeat"]]["text"].lower()
-    assert "30" in beats[shots[1]["fromBeat"]]["text"]
-    assert "high-five!" in beats[shots[1]["toBeat"]]["text"].lower()
-    assert "servos turn arms" in beats[shots[2]["fromBeat"]]["text"].lower()
-    # the "Easy peasy" challenge stays a character beat between cutaway and dial
-    assert shots[0]["toBeat"] < shots[1]["fromBeat"]
+    assert [s["visual"] for s in shots] == ["part_actuators", "servo_cutaway", "servo_split", "servo_cause",
+                                            "servo_split"]
+    assert shots[0]["atWord"] == "actuator" and shots[1]["atWord"] == "servo"
+    s30, cause, s60 = shots[2], shots[3], shots[4]
+    assert "sixty degrees" in beats[s30["fromBeat"]]["text"].lower()          # the split opens on the angle call
+    assert "30 degrees" in beats[s30["toBeat"]]["text"]
+    assert "brain tells" in beats[cause["fromBeat"]]["text"]
+    assert beats[s60["fromBeat"]]["do"] == "arm_to:60" and "high-five!" in beats[s60["toBeat"]]["text"].lower()
+    assert not any("servos turn arms" in beats[s["fromBeat"]].get("text", "").lower() for s in shots)
 
 
 def test_charger_plug_seats_fully_with_spark_and_battery_fill():

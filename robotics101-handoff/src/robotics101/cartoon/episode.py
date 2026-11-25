@@ -279,19 +279,40 @@ def _derive_template_examples(sc: dict) -> list[dict]:
                         "fromBeat": j, "toBeat": j})
 
     elif tmpl == "cartoon_servo_highfive":
+        # M05.8 (owner feedback, pipeline default): 1) what a servo is, on the line that introduces it (from its
+        # first word); 2) every arm_to gets a SPLIT SCREEN (Bolt's arm | the servo dial, one angle track) from the
+        # move to the line that names the angle; 3) "How Bolt uses a servo" is cause -> effect (brain sends the
+        # angle, the signal travels, the servo turns, the arm moves exactly that far) on the line that explains it
+        # ("...exactly as far as your brain tells it"), never on a joke line.
         i = _first(beats, lambda b: _line_has(b, "servo motor", "exact angle") or _line_has(b, "actuators turn"))
         if i is not None:
+            # "Actuators turn decisions into movement." gets the actuators frame, then the servo cutaway takes
+            # over on the word "servo" (one idea per frame, each on its own words)
+            txt = beats[i]["text"]
+            if re.search(r"\bactuator", txt, re.I) and re.search(r"\bservo", txt, re.I):
+                out.append({"id": "actuators", "label": "Actuators", "visual": "part_actuators",
+                            "fromBeat": i, "toBeat": i, "atWord": "actuator", "untilWord": "servo"})
             out.append({"id": "servo_what", "label": "What is a servo?", "visual": "servo_cutaway",
-                        "fromBeat": i, "toBeat": i})
-        a = _first(beats, lambda b: _line_has(b, "30 degrees", "only 30", "only thirty"))
-        b = _first(beats, lambda b: _is_line(b) and "high-five!" in b["text"].lower())
-        if a is not None:
-            out.append({"id": "servo_dial", "label": "Exact angle", "visual": "servo_dial",
-                        "fromBeat": a, "toBeat": b if b is not None else a})
-        k = _first(beats, lambda b: _line_has(b, "servos turn arms", "turn wheels"))
-        if k is not None:
-            out.append({"id": "servo_head", "label": "How Bolt uses a servo", "visual": "servo_head",
-                        "fromBeat": k, "toBeat": k})
+                        "fromBeat": i, "toBeat": i, "atWord": "servo"})
+        cause = _first(beats, lambda b: _line_has(b, "brain tells", "as far as your brain", "exactly as far"))
+        for k, b in enumerate(beats):
+            if not (b.get("type") == "action" and str(b.get("do", "")).startswith("arm_to:")):
+                continue
+            ang = str(b["do"]).split(":")[1].split(".")[0]
+            names = (f"{ang} degrees", f"{ang} degree")
+            j = _first(beats, lambda x, names=names: _line_has(x, *names), k + 1)
+            if j is None:
+                continue
+            # the split opens on the line that calls the angle right before the move ("Sixty degrees? ...
+            # Watch this!"), so the dial is up while the angle is spoken and the miss reads on both halves
+            p = next((q for q in range(k - 1, -1, -1) if _is_line(beats[q])), None)
+            lo = p if p is not None and _line_has(beats[p], "degree") and p not in (cause,) else k
+            out.append({"id": f"servo_split_{ang}", "label": f"Exact angle: {ang}\u00b0", "visual": "servo_split",
+                        "fromBeat": lo, "toBeat": j})
+        if cause is not None:
+            out.append({"id": "servo_cause", "label": "How Bolt uses a servo", "visual": "servo_cause",
+                        "fromBeat": cause, "toBeat": cause})
+        out.sort(key=lambda e: e["fromBeat"])
 
     elif tmpl == "cartoon_obstacle_rematch":
         i = _first(beats, _is_line)
@@ -356,7 +377,7 @@ def _stamp_examples(sc: dict, examples: list[dict]) -> None:
 
 # M05.8: actions a teaching visual itself depicts (they may sit inside its beat range); any other character
 # action / gag beat inside a derived shot's range ends the shot before it, so the gag plays on stage.
-SHOT_DEPICTS = {"echo_diagram": {"ping"}, "servo_split": {"arm_to"}, "servo_dial": {"arm_to"}}
+SHOT_DEPICTS = {"echo_diagram": {"ping"}, "servo_split": {"arm_to", "highfive"}, "servo_dial": {"arm_to"}}
 
 
 def trim_shots_at_gags(sc: dict) -> None:

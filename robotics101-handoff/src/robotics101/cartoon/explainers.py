@@ -551,10 +551,11 @@ def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     at holds so the board never freezes. 0, 90 and 180 stay labelled on the scale."""
     x0, y0, x1, y1 = box
     g = VGroup(live_board(box, t, "#FFFDF6"))
-    ttl = title("EXACT ANGLE", box, size=42, t=t)
-    # park the title at the top-left so 60°/90° labels stay clear
-    ttl.move_to(P(x0 + ttl.width / 2 + 0.45, y1 - 0.55))
-    g.add(ttl)
+    if ctx.get("title", "EXACT ANGLE"):
+        ttl = title(ctx.get("title", "EXACT ANGLE"), box, size=42, t=t)
+        # park the title at the top-left so 60°/90° labels stay clear
+        ttl.move_to(P(x0 + ttl.width / 2 + 0.45, y1 - 0.55))
+        g.add(ttl)
     def _ang():
         if ctx.get("angle") is not None:
             return float(ctx["angle"])
@@ -581,7 +582,7 @@ def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
             if marks[i][0] < t < marks[i + 1][0]:
                 easing = True
                 break
-    wobble = (2.0 if easing else 8.0) * math.sin(3.7 * t)
+    wobble = (2.0 if easing else 8.0) * math.sin(3.7 * t) if ctx.get("wobble", True) else 0.0
     ang = target + wobble
     if ctx.get("spoken") is None:
         if ctx.get("t60") is not None and t >= ctx["t60"]:
@@ -589,8 +590,8 @@ def servo_dial(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
         elif ctx.get("t30") is not None and t >= ctx["t30"]:
             ctx = {**ctx, "spoken": 30}
     # Dial sits lower so the 90° label can live OUTSIDE the ring at the top, clear of the title.
-    cx, cy = (x0 + x1) / 2 + 0.35, (y0 + y1) / 2 - 0.35
-    r = 2.15
+    cx, cy = (x0 + x1) / 2 + float(ctx.get("dx", 0.35)), (y0 + y1) / 2 - float(ctx.get("dy", 0.35))
+    r = float(ctx.get("radius", 2.15))
     # 0° = right (east), 90° = TOP, 180° = left — true servo-dial positions
     def pt(d, rr=r):
         a = math.radians(d)
@@ -664,6 +665,172 @@ def servo_head(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
     art = VGroup(body, screen, servo, sl, head, arc)
     g.add(_fit(art, box, top=1.2, bottom=1.2))
     g.add(caption("A servo turns his sensor head to an exact angle", box))
+    return g
+
+
+def _bolt_with_arm(pose, ang: float, height: float, at) -> VGroup:
+    """Bolt's real rig with his right arm on servo angle ``ang`` (0 = straight forward, 90 = up), facing right,
+    scaled to ``height`` with his feet at ``at``."""
+    from robotics101.cartoon.rigs import build
+    g = build("bolt", pose.with_(arm_r=90.0 + ang, facing=1))
+    parts = g.parts
+    k = height / max(g.height, 0.01)
+    g.scale(k)
+    g.shift(np.array([at[0], at[1], 0]) - np.array([g.get_center()[0], g.get_bottom()[1], 0]))
+    g.parts = parts
+    return g
+
+
+def _angle_fan(center, ang: float, radius: float, color: str, label: bool = True, size: int = 34) -> VGroup:
+    """Filled wedge from 0 deg (forward) to ``ang`` at a joint, with a 0 deg reference line and the angle label."""
+    from manim import VMobject
+    n = max(2, int(abs(ang) / 3) + 2)
+    pts = [center] + [center + radius * P(math.cos(math.radians(ang * j / (n - 1))),
+                                          math.sin(math.radians(ang * j / (n - 1)))) for j in range(n)] + [center]
+    fan = VMobject().set_points_as_corners(pts).set_fill(color, 0.35).set_stroke(color, 4)
+    ref = Line(center, center + RIGHT * (radius + 0.25), stroke_width=4, color=ink()).set_stroke(opacity=0.55)
+    g = VGroup(fan, ref)
+    if label:
+        mid = math.radians(max(ang, 8) / 2)
+        g.add(PR.txt(f"{ang:.0f}°", size, color="#E76F51", font="Luckiest Guy", stroke=4)
+              .move_to(center + (radius + 0.55) * P(math.cos(mid), math.sin(mid))))
+    return g
+
+
+def servo_split(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
+    """M05.8 split screen: LEFT = Bolt raising his arm on the servo track (the angle wedge drawn at his shoulder),
+    RIGHT = the servo dial at the very same angle (no idle wobble, so they can never disagree). A yellow '=' badge
+    joins the two numbers."""
+    from robotics101.cartoon.rigs import Pose
+    from robotics101.cartoon.scenes import servo_angle
+    x0, y0, x1, y1 = box
+    mid = (x0 + x1) / 2
+    ang = servo_angle(ctx.get("track") or [], t)
+    g = VGroup(live_board(box, t, "#FFFDF6"))
+    left = (x0, y0, mid - 0.05, y1)
+    right = (mid + 0.05, y0, x1, y1)
+    g.add(Rectangle(width=mid - x0, height=y1 - y0, fill_color="#EAF7FF", fill_opacity=1, stroke_width=0)
+          .move_to(P((x0 + mid) / 2, (y0 + y1) / 2)))
+    g.add(Line(P(mid, y0 + 0.2), P(mid, y1 - 0.2), stroke_width=8, color="#6C4AB6"))
+    hl = PR.txt("BOLT'S ARM", 40, color="#6C4AB6", font="Luckiest Guy", stroke=4)
+    hl.move_to(P((x0 + mid) / 2, y1 - 0.5 + 0.04 * math.sin(2 * PI * 0.8 * t)))
+    g.add(hl)
+    perf = ctx.get("perf")
+    pose = perf.state(t).pose if perf is not None else Pose(expression="happy")
+    h = (y1 - y0) * 0.55
+    bolt = _bolt_with_arm(pose.with_(lean=0.0), ang, h, ((x0 + mid) / 2 - 1.0, y0 + 0.95))
+    sh = bolt.parts["arm_r"].get_start()
+    g.add(_angle_fan(sh, ang, 1.85, "#FFD166", size=40), bolt)
+    hand = bolt.parts["arm_r"].get_end()
+    clap = ctx.get("clap")
+    if clap is not None and clap <= t < clap + 0.9:
+        u = (t - clap) / 0.9
+        star = PR.sfx_text("HIGH-FIVE!", "#06D6A0", u, hand + P(-0.2, 0.9), size=56)
+        burst = VGroup(*[Line(hand + 0.35 * P(math.cos(a), math.sin(a)), hand + (0.6 + 0.4 * u) * P(math.cos(a), math.sin(a)),
+                              stroke_width=8, color="#FFD166") for a in np.linspace(0, 2 * PI, 9)[:-1]])
+        g.add(burst, star)
+    # right half: the dial at the same angle
+    hr = PR.txt("SERVO DIAL", 40, color="#6C4AB6", font="Luckiest Guy", stroke=4)
+    hr.move_to(P((mid + x1) / 2, y1 - 0.5 + 0.04 * math.sin(2 * PI * 0.8 * t)))
+    g.add(servo_dial(t, {"angle": ang, "wobble": False, "title": "", "radius": 1.75, "dx": 0.0, "dy": 0.55,
+                         "spoken": 60 if ang >= 45 else 30 if ang >= 15 else None,
+                         "subtitle": "Same angle, same moment"}, (right[0], right[1], right[2], right[3] - 0.2)))
+    g.add(hr)
+    bc = P(mid, (y0 + y1) / 2 + 0.2)
+    badge = _o(Circle(0.42, fill_color="#FFD166", fill_opacity=1), 5).move_to(bc)
+    g.add(badge, *[Line(bc + P(-0.2, dy), bc + P(0.2, dy), stroke_width=9, color=ink()) for dy in (0.09, -0.09)])
+    return g
+
+
+def servo_cause(t: float, ctx: dict, box=ILLUSTRATION_BOX) -> VGroup:
+    """M05.8 'How Bolt uses a servo' as cause -> effect, left to right: (1) the brain sends '60°', (2) the signal
+    travels down the wire, (3) the servo in Bolt's shoulder turns, (4) his arm moves by exactly that angle. The
+    step strip at the top lights the current step."""
+    from robotics101.cartoon.rigs import Pose
+    x0, y0, x1, y1 = box
+    goal = float(ctx.get("goal", 60))
+    t0 = float(ctx.get("t0", 0.0))
+    send = float(ctx.get("send", t0 + 0.4))
+    end = float(ctx.get("end", send + 3.0))
+    span = max(1.6, end - send)
+    a_sig, b_sig = send + 0.25 * span, send + 0.55 * span          # signal travels
+    b_turn = send + 0.9 * span                                     # servo + arm reach the goal
+    step = 0 if t < send else 1 if t < a_sig else 2 if t < b_sig else 3
+    g = VGroup(live_board(box, t, "#F4FBFF"), title("HOW BOLT USES A SERVO", box, size=46, t=t))
+    labels = ["BRAIN SAYS " + f"{goal:.0f}°", "SIGNAL", "SERVO TURNS", "ARM MOVES " + f"{goal:.0f}°"]
+    sx = np.linspace(x0 + 2.0, x1 - 2.0, 4)
+    for k, (lab, cx) in enumerate(zip(labels, sx)):
+        on = k + 1 == step or (k == 3 and t >= b_sig)
+        done = k + 1 < step
+        chip = _o(RoundedRectangle(width=3.0, height=0.62, corner_radius=0.25,
+                                   fill_color="#FFD166" if on else "#C8F7E1" if done else "#FFFFFF", fill_opacity=1), 4)
+        chip.move_to(P(cx, y1 - 1.25))
+        if on:
+            chip.scale(1.0 + 0.05 * math.sin(6 * t))
+        g.add(chip, PR.txt(f"{k + 1}. {lab}", 22, color=ink(), font="Luckiest Guy", stroke=2).move_to(chip))
+        if k < 3:
+            g.add(PR.txt("→", 30, color="#6C4AB6").move_to(P((cx + sx[k + 1]) / 2, y1 - 1.25)))
+    # brain (controller chip) on the left with its command bubble
+    bx, by = x0 + 2.0, (y0 + y1) / 2 - 0.35
+    brain = _o(RoundedRectangle(width=2.0, height=1.6, corner_radius=0.2, fill_color="#1E1633", fill_opacity=1), 5)
+    brain.move_to(P(bx, by))
+    for j in range(5):
+        g.add(Line(P(bx - 0.8 + 0.4 * j, by + 0.8), P(bx - 0.8 + 0.4 * j, by + 1.0), stroke_width=5, color="#9AA5B1"))
+        g.add(Line(P(bx - 0.8 + 0.4 * j, by - 0.8), P(bx - 0.8 + 0.4 * j, by - 1.0), stroke_width=5, color="#9AA5B1"))
+    glow = 0.5 + 0.5 * math.sin(5 * t)
+    g.add(brain, PR.txt("BRAIN", 30, color="#06D6A0", font="Luckiest Guy", stroke=2).move_to(brain))
+    if t >= send:
+        u = ease_out(_u(t, send, 0.4))
+        bub = _o(RoundedRectangle(width=1.7, height=0.95, corner_radius=0.3, fill_color="#FFFFFF", fill_opacity=1), 5)
+        bub.move_to(P(bx + 2.25, by + 1.05))
+        tail = _o(Polygon(P(bx + 1.45, by + 0.85), P(bx + 1.45, by + 1.2), P(bx + 1.0, by + 0.65),
+                          fill_color="#FFFFFF", fill_opacity=1), 5)
+        num = PR.txt(f"{goal:.0f}°", 44, color="#E76F51", font="Luckiest Guy", stroke=3).move_to(bub)
+        bg = VGroup(tail, bub, num).scale(max(0.05, u), about_point=P(bx + 1.0, by + 0.65))
+        if step == 1:
+            bg.scale(1.0 + 0.06 * math.sin(8 * t), about_point=P(bx + 1.0, by + 0.65))
+        g.add(bg)
+    # Bolt on the right, servo at his shoulder
+    ang = 0.0 if t < b_sig else goal * ease_in_out(clamp01((t - b_sig) / max(0.3, b_turn - b_sig)))
+    pose = Pose(expression="happy", blink=1.0 if (t % 3.1) < 0.12 else 0.0, glow=0.5 + 0.5 * glow)
+    # Bolt (antenna included) stays below the step strip so the wire can pass over his head under the chips
+    bolt = _bolt_with_arm(pose, ang, min((y1 - y0) * 0.6, (y1 - 2.15) - (y0 + 0.95)), (x1 - 4.4, y0 + 0.95))
+    shp = bolt.parts["arm_r"].get_start()
+    # the wire runs from the brain, over Bolt's head, down to the servo in his shoulder (never across his face)
+    top_y = bolt.get_top()[1] + 0.2
+    w_pts = [brain.get_right() + RIGHT * 0.05, P(bolt.get_left()[0] - 0.4, by), P(bolt.get_left()[0] - 0.4, top_y),
+             P(shp[0] + 0.25, top_y), P(shp[0] + 0.25, shp[1] + 0.3)]
+    seg = [float(np.linalg.norm(w_pts[k + 1] - w_pts[k])) for k in range(len(w_pts) - 1)]
+
+    def along(u):
+        d = u * sum(seg)
+        for k, L in enumerate(seg):
+            if d <= L or k == len(seg) - 1:
+                return w_pts[k] + (w_pts[k + 1] - w_pts[k]) * clamp01(d / max(L, 1e-6))
+            d -= L
+    from manim import VMobject
+    g.add(VMobject().set_points_as_corners(w_pts).set_stroke("#9AA5B1", 8))
+    g.add(_angle_fan(shp, ang, 1.9, "#FFD166", label=t >= b_sig, size=40), bolt)
+    servo = _o(RoundedRectangle(width=0.62, height=0.46, corner_radius=0.08, fill_color="#FFD166", fill_opacity=1), 4)
+    servo.move_to(shp)
+    horn = Line(shp, shp + 0.32 * P(math.cos(math.radians(ang)), math.sin(math.radians(ang))), stroke_width=7,
+                color="#EF476F")
+    lab = PR.txt("SERVO", 22, color=ink(), font="Luckiest Guy", stroke=2)
+    chip = _o(RoundedRectangle(width=lab.width + 0.3, height=0.42, corner_radius=0.12, fill_color="#FFFFFF",
+                               fill_opacity=1), 3)
+    lab_at = shp + P(1.15, -0.55)
+    g.add(servo, horn, chip.move_to(lab_at), lab.move_to(lab_at),
+          Line(lab_at + LEFT * (chip.width / 2), shp + P(0.3, -0.15), stroke_width=3, color=ink()))
+    if a_sig <= t < b_sig + 0.2:
+        u = clamp01((t - a_sig) / max(0.2, b_sig - a_sig))
+        pos = along(ease_in_out(u))
+        g.add(Circle(0.28 + 0.06 * math.sin(14 * t), fill_color="#FFD166", fill_opacity=1, stroke_width=4,
+                     stroke_color=ink()).move_to(pos),
+              PR.txt(f"{goal:.0f}°", 24, color=ink(), font="Luckiest Guy", stroke=2).move_to(pos + UP * 0.5))
+    elif t >= b_sig + 0.2:      # after the move: a soft pulse keeps flowing so the board never freezes
+        u = ((t - b_sig) * 0.5) % 1.0
+        g.add(Circle(0.14, fill_color="#FFD166", fill_opacity=0.8, stroke_width=0).move_to(along(u)))
+    g.add(caption("The brain says how far. The servo turns exactly that far.", box))
     return g
 
 
@@ -827,10 +994,12 @@ EXPLAINERS = {
     "servo_cutaway": (servo_cutaway, ("illustration",)),
     "servo_dial": (servo_dial, ("illustration",)),
     "servo_head": (servo_head, ("illustration",)),
+    "servo_split": (servo_split, ("illustration",)),
+    "servo_cause": (servo_cause, ("illustration",)),
     "quiz_question": (quiz_question, ("illustration",)),
     "sensor_range": (sensor_range, ("illustration",)),
     "sensor_out_of_range": (sensor_out_of_range, ("illustration",)),
 }
 
 __all__ = ["EXPLAINERS", "SUBJECT_SHARE", "subject_box", "subject_share", "one_example", "checkup_part", "the_rule", "rule_test", "servo_cutaway", "servo_dial",
-           "servo_head", "quiz_question", "sensor_range", "sensor_out_of_range", "ILLUSTRATION_BOX"]
+           "servo_head", "servo_split", "servo_cause", "quiz_question", "sensor_range", "sensor_out_of_range", "ILLUSTRATION_BOX"]

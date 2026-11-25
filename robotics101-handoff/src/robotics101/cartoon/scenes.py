@@ -541,6 +541,36 @@ def stage_rule_board(sc: Scene) -> None:
     generic_sfx_lettering(sc, {}, skip=("skid", "ping", "chalk", "sparkle"))
 
 
+SERVO_HOLD_AFTER_S = 3.2                 # last servo angle is held this long after its move
+
+
+def servo_track(sc: Scene) -> list[tuple[float, float, float, float, float]]:
+    """M05.8: the scene's servo angle track from its ``arm_to:<deg>`` actions: (start, reach, release, from, to) in
+    servo degrees (0 = arm straight forward, 90 = straight up). Each move starts from the previous angle (the first
+    from 0, "ready"), eases over the action and holds until the next move. Stage arm and split dial both use it."""
+    arms = [b for b in sc.beats if b["type"] == "action" and str(b["do"]).startswith("arm_to:")]
+    out, prev = [], 0.0
+    for i, a in enumerate(arms):
+        ang = float(a["do"].split(":")[1])
+        rel = arms[i + 1]["start_s"] if i + 1 < len(arms) else a["end_s"] + SERVO_HOLD_AFTER_S
+        out.append((a["start_s"], a["end_s"], rel, prev, ang))
+        prev = ang
+    return out
+
+
+def servo_angle(track, t: float) -> float:
+    """Servo angle (degrees) at time ``t`` on a ``servo_track``."""
+    if not track or t <= track[0][0]:
+        return 0.0
+    for s0, s1, rel, a0, a1 in track:
+        if t < s0:
+            break
+        if t < s1:
+            return a0 + (a1 - a0) * ease_in_out((t - s0) / max(1e-6, s1 - s0))
+        ang = a1
+    return ang
+
+
 def stage_servo_highfive(sc: Scene) -> None:
     bolt = Performer("bolt", x=-1.4, facing=1, scale=SCALES["bolt"])
     maya = Performer("maya", x=1.45, facing=-1, scale=SCALES["maya"])
@@ -549,31 +579,32 @@ def stage_servo_highfive(sc: Scene) -> None:
     miss = float(sc.params.get("missAngleDegrees", 30))
     goal = float(sc.params.get("endAngleDegrees", 60))
     sc.facts.update(missAngle=miss, endAngle=goal)
-    arms = [b for b in sc.beats if b["type"] == "action" and b["do"].startswith("arm_to")]
-    holds = []                                              # (start, reach_t, release_t, servo angle)
-    for i, a in enumerate(arms):
-        ang = float(a["do"].split(":")[1])
-        nxt = arms[i + 1]["start_s"] - 0.5 if i + 1 < len(arms) else a["end_s"] + 3.2
-        holds.append((a["start_s"], a["end_s"], nxt, ang))
-        dur = (a["end_s"] - a["start_s"]) / 0.6          # arm_to eases over the first 60 % of the act
-        bolt.act(a["start_s"], a["start_s"] + dur, f"arm_to:{90 + ang}")
-        bolt.act(a["start_s"] + dur, nxt, f"arm_to_hold:{90 + ang}")
+    # M05.8: one servo angle track drives Bolt's stage arm AND the split-screen dial (servo_track); the arm comes up
+    # to "ready" (0 deg, straight forward) just before the first move, then turns 0 -> 30, holds, 30 -> 60, holds.
+    track = servo_track(sc)
+    holds = [(s0, s1, rel, a1) for s0, s1, rel, a0, a1 in track]       # (start, reach_t, release_t, servo angle)
+    if track:
+        r0 = track[0][0]
+        bolt.act(r0 - 0.9, r0 - 0.3, "arm_to:90")
+        bolt.act(r0 - 0.3, r0, "arm_to_hold:90")
+    for s0, s1, rel, a0, a1 in track:
+        bolt.act(s0, s1, f"servo_arm:{a0:g}:{a1:g}")
+        bolt.act(s1, rel, f"arm_to_hold:{90 + a1:g}")
     clap = sc.beat("sfx", "id", "clap")
     if clap:
         maya.act(clap["start_s"] - 0.7, clap["start_s"] + 1.0, "highfive_reach")
     hf = sc.beat("action", "do", "highfive")
     if hf:
         nib.move(hf["start_s"] - 1.2, hf["start_s"], x=-3.2, y=2.2, arc=0.5)
-    goal_t = sc.word_time("60 degrees") or sc.word_time("high-five")
+    # M05.8: the shoulder gauge only comes up on stage once the last servo move has reached its angle (the split
+    # screen shows the moves themselves)
+    goal_t = track[-1][1] if track else None
 
     def gauge(t, m):
         b = m.get("bolt")
         if b is None or not goal_t or not (goal_t <= t < holds[-1][2] + 0.6):
             return []
-        ang = 0.0
-        for s0, s1, rel, a in holds:
-            if s0 <= t < rel:
-                ang = a * ease_in_out(_u(t, s0, s1))
+        ang = servo_angle(track, t)
         shoulder = b.parts["arm_r"].get_start()
         return [PR.protractor(shoulder, ang, facing=1, radius=1.25, target=goal)]
     sc.back.append(gauge)                              # behind the rigs so the real arm reads on top
@@ -869,6 +900,27 @@ def _ctx_servo_dial(sc: Scene, sh: dict) -> dict:
     return {"t30": t30, "t60": t60, "t0": sh["start"]}
 
 
+def _ctx_servo_split(sc: Scene, sh: dict) -> dict:
+    """M05.8 split screen: Bolt (live performer: lip sync, blinks) with his arm on the shared servo track, and the
+    dial reading the same angle at the same instant."""
+    clap = next((b["start_s"] for b in sc.beats if b["type"] == "sfx" and b.get("id") == "clap"
+                 and sh["start"] <= b["start_s"] < sh["end"]), None)
+    goal = float(sc.params.get("endAngleDegrees", 60))
+    return {"track": servo_track(sc), "perf": sc.perf.get("bolt"), "clap": clap, "goal": goal, "t0": sh["start"]}
+
+
+def _ctx_servo_cause(sc: Scene, sh: dict) -> dict:
+    """M05.8 cause -> effect: the brain sends the target angle, the signal travels, the servo turns, the arm moves.
+    Timed to the line: the angle command lands on "brain", the motion finishes before the line ends."""
+    goal = float(sc.params.get("endAngleDegrees", 60))
+    line = sc.beats[sh["fromBeat"]]
+    tb = word_time_in_line(sc.voice_dir, line, "brain") if line.get("type") == "line" else None
+    t0 = sh["start"] + 0.35
+    t_brain = tb if tb is not None and tb > t0 else t0 + 0.8
+    t_end = sh["end"] - 0.6
+    return {"goal": goal, "t0": t0, "send": max(t0, min(t_brain - 0.9, t_end - 2.4)), "end": t_end}
+
+
 def _ctx_quiz(sc: Scene, sh: dict) -> dict:
     line = next((b for b in sc.lines() if "which part" in b["text"].lower()), None)
     return {"question": line["text"] if line else "Which part of a robot measures distance?"}
@@ -914,6 +966,7 @@ def shot_context(sc: Scene, sh: dict) -> dict:
 
 SHOT_CONTEXT = {"robot_families": _ctx_robot_families, "echo_diagram": _ctx_echo, "sense_think_act": _ctx_sta,
                 "the_rule": _ctx_rule, "rule_test": _ctx_rule, "servo_dial": _ctx_servo_dial,
+                "servo_split": _ctx_servo_split, "servo_cause": _ctx_servo_cause,
                 "quiz_question": _ctx_quiz, "sensor_range": _ctx_range, "sensor_out_of_range": _ctx_range,
                 "part_power": _ctx_part}
 

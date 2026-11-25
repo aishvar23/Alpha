@@ -159,3 +159,27 @@ def test_safe_area_excess():
     from robotics101.cartoon.scenes import safe_area_excess
     assert safe_area_excess([0.1, 0.1, 0.9, 0.9]) == 0.0
     assert safe_area_excess([0.7, -0.02, 0.98, 0.3]) > 0.03          # M05.7 card poked above the top edge
+
+
+def test_servo_track_drives_arm_and_dial_together():
+    """M05.8: the split screen's dial and Bolt's stage arm read one servo track: 0 -> 30, hold, 30 -> 60, hold."""
+    from robotics101.cartoon.motion import ACTIONS as MOTIONS
+    from robotics101.cartoon.scenes import servo_angle
+    track = [(1.0, 2.0, 5.0, 0.0, 30.0), (5.0, 6.0, 9.0, 30.0, 60.0)]
+    assert servo_angle(track, 0.5) == 0.0 and servo_angle(track, 2.0) == 30.0 and servo_angle(track, 4.9) == 30.0
+    assert 30.0 < servo_angle(track, 5.5) < 60.0 and servo_angle(track, 8.0) == 60.0
+    # the stage verb ends exactly where the dial ends (arm_r = 90 + servo angle)
+    assert MOTIONS["servo_arm"](1.0, "30:60")["arm_r"] == 150.0
+    assert MOTIONS["servo_arm"](0.0, "30:60")["arm_r"] == 120.0
+
+
+def test_servo_split_and_cause_visuals_draw():
+    import pytest
+    pytest.importorskip("manim")
+    from robotics101.cartoon.explainers import ILLUSTRATION_BOX, servo_cause, servo_split
+    track = [(1.0, 2.0, 5.0, 0.0, 30.0), (5.0, 6.0, 9.0, 30.0, 60.0)]
+    for t in (0.5, 1.5, 3.0, 6.2, 8.0):
+        g = servo_split(t, {"track": track, "clap": 6.0}, ILLUSTRATION_BOX)
+        assert g.width > 10
+    for t in (0.2, 1.2, 2.2, 3.5):
+        assert servo_cause(t, {"goal": 60, "t0": 0.0, "send": 0.5, "end": 4.0}, ILLUSTRATION_BOX).width > 10

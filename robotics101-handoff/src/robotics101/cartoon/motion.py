@@ -59,6 +59,14 @@ def _hop(u: float, height: float = 0.6) -> dict:
     return {"squash": 1 - 0.18 * bump(v)}
 
 
+def _servo_pair(a) -> tuple[float, float]:
+    try:
+        f, t = str(a).split(":")[:2]
+        return float(f), float(t)
+    except (TypeError, ValueError):
+        return 0.0, _arg_float(a, 0.0)
+
+
 def _arg_float(arg: str | None, default: float) -> float:
     try:
         return float(arg) if arg is not None else default
@@ -92,6 +100,9 @@ ACTIONS = {
     "spin": lambda u, a: {"flip": int(u * 6) % 2 == 1, "dy": 0.15 * bump(u)},
     "arm_to": lambda u, a: {"arm_r": 20 + (_arg_float(a, 90) - 20) * ease_in_out(u / 0.6)},
     "arm_to_hold": lambda u, a: {"arm_r": _arg_float(a, 90)},     # internal: keep a servo angle after arm_to
+    # M05.8: servo-driven arm, "servo_arm:<from>:<to>" in servo degrees (0 = arm straight forward, 90 = up); the
+    # split-screen dial reads the same track (scenes.servo_track), so the arm and the dial never disagree
+    "servo_arm": lambda u, a: {"arm_r": 90 + _servo_pair(a)[0] + (_servo_pair(a)[1] - _servo_pair(a)[0]) * ease_in_out(u)},
     "ping": lambda u, a: {"glow": 0.5 + 0.5 * bump(u)},
     "plug_in": lambda u, a: {"lean": 0.08 * bump(u), "glow": ease_in_out(u)},
     "enter": lambda u, a: {"dy": 0.05 * abs(math.sin(2 * math.pi * 3 * u))},
