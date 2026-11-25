@@ -186,3 +186,29 @@ def test_qa_title_card_faces():
     assert c.status == "fail" and "maya" in c.message and "partial" in c.message
     assert run({"scene-002": ok, "scene-003": {"facesClear": {}}}).status == "fail"   # unmeasured scene
     assert run({"scene-003": {"facesClear": {}}}).status == "warn"                     # pre-v7 bundle
+
+
+def test_title_card_exception_is_scoped_to_ep001_scene001():
+    from robotics101.cartoon.qa import check_title_card_faces, load_qa_exceptions
+
+    excs = load_qa_exceptions("ep-001")
+    assert len(excs) == 1 and excs[0]["sceneId"] == "scene-001" and excs[0]["approvedOn"] == "2026-11-25"
+
+    def off(cid):
+        return {"character": cid, "what": "cartoon_cold_open:<lambda>@325", "first": 34.25, "n": 10,
+                "maxCoverage": 0.64, "kind": "partial"}
+    ok = {"facesClear": {"cardFaces": {"samples": 15, "offenders": []}}}
+    s1 = {"facesClear": {"cardFaces": {"samples": 11, "offenders": [off("maya"), off("bolt")]}}}
+
+    def run(ep, by, ex=None):
+        rep = QaReport(ep, "full", "x")
+        check_title_card_faces(rep, by, ex)
+        return {c.id: c for c in rep.checks}["layout.title_card_faces"]
+
+    c = run("ep-001", {"scene-001": s1, "scene-008": ok})          # the owner's exception: accepted warning
+    assert c.status == "warn" and "accepted by" in c.message
+    assert run("ep-002", {"scene-001": s1, "scene-008": ok}).status == "fail"            # other episode
+    assert run("ep-001", {"scene-001": ok, "scene-008": s1}, excs).status == "fail"      # other scene
+    s1_nib = {"facesClear": {"cardFaces": {"samples": 11, "offenders": [off("maya"), off("nib")]}}}
+    assert run("ep-001", {"scene-001": s1_nib}, excs).status == "fail"                   # unlisted character
+    assert run("ep-001", {"scene-001": ok, "scene-008": ok}).status == "pass"

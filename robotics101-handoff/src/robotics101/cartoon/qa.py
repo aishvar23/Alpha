@@ -647,7 +647,37 @@ def check_overlays_in_frame(rep, by: dict) -> None:
              {sid: r.get("offFrame", []) for sid, r in measured.items()})
 
 
-def check_title_card_faces(rep, by: dict) -> None:
+QA_EXCEPTIONS_SCHEMA = "robotics101.qa_exceptions/1"
+
+
+def qa_exceptions_path(episode_id: str | None) -> Path:
+    return Path(__file__).resolve().parents[3] / "approvals" / str(episode_id) / "qa_exceptions.json"
+
+
+def load_qa_exceptions(episode_id: str | None, path: Path | None = None) -> list[dict]:
+    """Owner-accepted QA exceptions (reviewable ``approvals/<episodeId>/qa_exceptions.json``). Each one names the
+    check, episode, scene (and optionally characters), who accepted it, when and why. Nothing else is waived."""
+    p = Path(path) if path else qa_exceptions_path(episode_id)
+    if not episode_id or not p.is_file():
+        return []
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    if doc.get("schemaVersion") != QA_EXCEPTIONS_SCHEMA:
+        return []
+    need = ("checkId", "episodeId", "sceneId", "approvedBy", "approvedOn", "reason")
+    return [e for e in doc.get("exceptions", []) if all(e.get(k) for k in need)]
+
+
+def accepted_exception(excs: list[dict], check_id: str, episode_id: str | None, scene_id: str,
+                       character: str | None = None) -> dict | None:
+    """The exception that covers exactly this check + episode + scene (+ character, if the exception lists them)."""
+    for e in excs:
+        if (e["checkId"] == check_id and e["episodeId"] == episode_id and e["sceneId"] == scene_id
+                and (not e.get("characters") or character in e["characters"])):
+            return e
+    return None
+
+
+def check_title_card_faces(rep, by: dict, exceptions: list[dict] | None = None) -> None:
     """M05.8: a full-stage title / end card (e.g. the ROBOTICS 101 starburst) never covers a character's face,
     fully or partly. The pipeline default (``stage_card``) clears the stage first; measured at render time
     against the card's real outline (scenes.json ``facesClear.cardFaces``)."""
@@ -656,15 +686,33 @@ def check_title_card_faces(rep, by: dict) -> None:
     if not measured:
         rep.soft("layout.title_card_faces", False, "no title-card measurements in scenes.json (pre-M05.8 v7 render)")
         return
-    bad = [f"{sid}: {o['what']} covers {o['character']}'s face ({o['kind']}, up to {o['maxCoverage']:.0%}) "
-           f"from {o['first']}s ({o['n']} samples)"
-           for sid, r in measured.items() for o in r.get("offenders", [])]
+    excs = exceptions if exceptions is not None else load_qa_exceptions(rep.episodeId)
+
+    def msg(sid, o):
+        return (f"{sid}: {o['what']} covers {o['character']}'s face ({o['kind']}, up to {o['maxCoverage']:.0%}) "
+                f"from {o['first']}s ({o['n']} samples)")
+    bad, accepted = [], []
+    for sid, r in measured.items():
+        for o in r.get("offenders", []):
+            e = accepted_exception(excs, "layout.title_card_faces", rep.episodeId, sid, o.get("character"))
+            if e:
+                accepted.append(msg(sid, o) + f" [accepted by {e['approvedBy']} on {e['approvedOn']}: {e['reason']}]")
+            else:
+                bad.append(msg(sid, o))
     missing = sorted(set(by) - set(measured))
     n = sum(r.get("samples", 0) for r in measured.values())
-    rep.hard("layout.title_card_faces", not bad and not missing,
-             f"{n} sampled title/end-card frames, no face under a card; problems: {bad or 'none'}; "
-             f"unmeasured scenes: {missing or 'none'}",
-             {sid: r.get("offenders", []) for sid, r in measured.items()})
+    value = {sid: r.get("offenders", []) for sid, r in measured.items()}
+    if bad or missing:
+        rep.hard("layout.title_card_faces", False,
+                 f"{n} sampled title/end-card frames; problems: {bad or 'none'}; unmeasured scenes: {missing or 'none'}"
+                 + (f"; accepted exceptions: {accepted}" if accepted else ""), value)
+    elif accepted:
+        rep.soft("layout.title_card_faces", False,
+                 f"{n} sampled title/end-card frames; owner-accepted exception(s) only: {accepted}", value)
+    else:
+        rep.hard("layout.title_card_faces", True,
+                 f"{n} sampled title/end-card frames, no face under a card; problems: none; unmeasured scenes: none",
+                 value)
 
 
 def check_charge_cable(rep, by: dict) -> None:

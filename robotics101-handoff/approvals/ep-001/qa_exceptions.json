@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "robotics101.qa_exceptions/1",
+  "episodeId": "ep-001",
+  "exceptions": [
+    {
+      "checkId": "layout.title_card_faces",
+      "episodeId": "ep-001",
+      "sceneId": "scene-001",
+      "characters": ["maya", "bolt"],
+      "approvedBy": "aishvar23 (user, relayed by Grok Bot 7:57 AM CST)",
+      "approvedOn": "2026-11-25",
+      "reason": "Owner chose to keep the locked, approved scene-001 cold-open title sting as is (Maya's face partly and Bolt's fully under the ROBOTICS 101 starburst at about 0:34-0:37). It reports as an accepted warning for this scene only; every other scene and episode is still held to the check."
+    }
+  ]
+}
