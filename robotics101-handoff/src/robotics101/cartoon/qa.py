@@ -647,6 +647,26 @@ def check_overlays_in_frame(rep, by: dict) -> None:
              {sid: r.get("offFrame", []) for sid, r in measured.items()})
 
 
+def check_title_card_faces(rep, by: dict) -> None:
+    """M05.8: a full-stage title / end card (e.g. the ROBOTICS 101 starburst) never covers a character's face,
+    fully or partly. The pipeline default (``stage_card``) clears the stage first; measured at render time
+    against the card's real outline (scenes.json ``facesClear.cardFaces``)."""
+    measured = {sid: r["facesClear"]["cardFaces"] for sid, r in by.items()
+                if "cardFaces" in (r.get("facesClear") or {})}
+    if not measured:
+        rep.soft("layout.title_card_faces", False, "no title-card measurements in scenes.json (pre-M05.8 v7 render)")
+        return
+    bad = [f"{sid}: {o['what']} covers {o['character']}'s face ({o['kind']}, up to {o['maxCoverage']:.0%}) "
+           f"from {o['first']}s ({o['n']} samples)"
+           for sid, r in measured.items() for o in r.get("offenders", [])]
+    missing = sorted(set(by) - set(measured))
+    n = sum(r.get("samples", 0) for r in measured.values())
+    rep.hard("layout.title_card_faces", not bad and not missing,
+             f"{n} sampled title/end-card frames, no face under a card; problems: {bad or 'none'}; "
+             f"unmeasured scenes: {missing or 'none'}",
+             {sid: r.get("offenders", []) for sid, r in measured.items()})
+
+
 def check_charge_cable(rep, by: dict) -> None:
     """M05.6: while Bolt charges, the cable must not cross Maya's body (sampled at seat time)."""
     hits = [(sid, (r.get("facts") or {}).get("chargeCable")) for sid, r in by.items()
@@ -726,6 +746,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     check_charge_cable(rep, by)
     check_faces_clear(rep, by)
     check_overlays_in_frame(rep, by)
+    check_title_card_faces(rep, by)
     check_caption_band(rep, by)
     check_acting(rep, spec, by)
     if video_s:

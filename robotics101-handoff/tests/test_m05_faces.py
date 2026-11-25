@@ -110,3 +110,79 @@ def test_every_fixture_scene_keeps_faces_clear(voiced, monkeypatch):
         for o in r["offFrame"]:                 # M05.8: and every overlay stays inside the action-safe area
             hits.append(f"{tmg['sceneId']}: {o['what']} leaves the safe area by {o['maxExcess']} from {o['first']}s")
     assert hits == [], hits
+
+
+# ---------------------------------------------------------------- M05.8: title / end cards never cover a face
+
+def _v6_end_card(sc):
+    """Reproduce v6's scene-008 end card: the starburst popped straight onto the stage at the outro cue."""
+    from robotics101.cartoon import props as PR
+    from robotics101.cartoon import scenes as S
+    outro = sc.beat("music", "cue", "outro")
+    sc.screen = [f for f in sc.screen if getattr(f, "__name__", "") not in ("clean", "card")]
+    sc.screen.append(lambda t, m: [PR.title_card(min(0.8, S._u(t, outro["start_s"], outro["start_s"] + 3.0)),
+                                                 subtitle="See you next time!")] if t >= outro["start_s"] else [])
+    return sc
+
+
+def test_face_coverage_uses_the_card_outline():
+    import numpy as np
+    from robotics101.cartoon.scenes import face_coverage
+    from robotics101.cartoon.layout import FRAME_X, FRAME_Y
+    sq = [np.array([[-1.0, -1.0], [1.0, -1.0], [1.0, 1.0], [-1.0, 1.0]])]   # world square around the centre
+    cx = lambda x: (x + FRAME_X) / (2 * FRAME_X)                            # noqa: E731
+    cy = lambda y: (FRAME_Y - y) / (2 * FRAME_Y)                            # noqa: E731
+    assert face_coverage([cx(-0.5), cy(0.5), cx(0.5), cy(-0.5)], sq) == 1.0              # fully under
+    assert face_coverage([cx(3.0), cy(0.5), cx(4.0), cy(-0.5)], sq) == 0.0               # clear
+    assert 0.2 < face_coverage([cx(0.0), cy(0.5), cx(2.0), cy(-0.5)], sq) < 0.8          # half under
+
+
+def test_v6_scene008_end_card_is_flagged_and_the_default_clears_the_stage(voiced, monkeypatch):
+    from robotics101.cartoon import scenes as S
+    sc = _scene(voiced, "scene-008", monkeypatch)
+    rec = sc.facts["stageCards"][0]
+    outro = sc.beat("music", "cue", "outro")
+    last = max(b["end_s"] for b in sc.lines() if b["start_s"] < outro["start_s"])
+    # the clear starts after the last line, lasts CARD_CLEAR_S, and the card only pops on the cleared stage
+    assert rec["clearFrom"] >= last - 1e-6 and abs(rec["clearAt"] - rec["clearFrom"] - S.CARD_CLEAR_S) < 1e-6
+    assert rec["cardAt"] >= rec["clearAt"] - 1e-6 and rec["cardAt"] >= outro["start_s"]
+    fixed = S.card_faces_report(sc, step=0.25)
+    assert fixed["samples"] > 5 and fixed["offenders"] == []
+    v6 = S.card_faces_report(_v6_end_card(_scene(voiced, "scene-008", monkeypatch)), step=0.25)
+    who = {o["character"]: o for o in v6["offenders"]}
+    assert "maya" in who and who["maya"]["kind"] == "partial"     # her face peeks out from behind the burst
+    assert "bolt" in who
+
+
+def test_stage_card_clear_fully_hides_the_set_before_the_card(voiced, monkeypatch):
+    from robotics101.cartoon import scenes as S
+    sc = _scene(voiced, "scene-008", monkeypatch)
+    rec = sc.facts["stageCards"][0]
+    mobs, _, over = S.frame_layers(sc, rec["cardAt"] + 0.05)
+    clears = [m for m in over if getattr(m, "clears_stage", False)]
+    cards = [m for m in over if getattr(m, "covers_stage", False)]
+    assert clears and clears[0].clear_alpha == 1.0 and cards
+    assert over.index(clears[0]) < over.index(cards[0])          # card drawn on top of the clean set
+    _, _, before = S.frame_layers(sc, rec["clearFrom"] - 0.05)
+    assert not any(getattr(m, "clears_stage", False) or getattr(m, "covers_stage", False) for m in before)
+    _, _, mid = S.frame_layers(sc, (rec["clearFrom"] + rec["clearAt"]) / 2)
+    assert not any(getattr(m, "covers_stage", False) and (m.has_points() or m.submobjects) for m in mid)
+
+
+def test_qa_title_card_faces():
+    from robotics101.cartoon.qa import check_title_card_faces
+
+    def run(by):
+        rep = QaReport("ep", "full", "x")
+        check_title_card_faces(rep, by)
+        return {c.id: c for c in rep.checks}["layout.title_card_faces"]
+
+    ok = {"facesClear": {"cardFaces": {"samples": 15, "offenders": []}}}
+    assert run({"scene-008": ok}).status == "pass"
+    bad = {"facesClear": {"cardFaces": {"samples": 15, "offenders": [
+        {"character": "maya", "what": "cartoon_recap_chant:<lambda>", "first": 30.25, "n": 14,
+         "maxCoverage": 0.42, "kind": "partial"}]}}}
+    c = run({"scene-002": ok, "scene-008": bad})
+    assert c.status == "fail" and "maya" in c.message and "partial" in c.message
+    assert run({"scene-002": ok, "scene-003": {"facesClear": {}}}).status == "fail"   # unmeasured scene
+    assert run({"scene-003": {"facesClear": {}}}).status == "warn"                     # pre-v7 bundle

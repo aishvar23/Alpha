@@ -96,6 +96,7 @@ def scene_qa(out_dir: Path, scene_ids: list[str]) -> dict:
     Q.check_clutter(rep, sub_spec, by)
     Q.check_faces_clear(rep, by)
     Q.check_overlays_in_frame(rep, by)
+    Q.check_title_card_faces(rep, by)
     Q.check_caption_band(rep, by)
     half = float((sj or {}).get("transitionHalfSeconds", 0.4))
     for sid in scene_ids:                            # still-picture checks on the scene video itself

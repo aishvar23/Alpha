@@ -4,65 +4,69 @@
   "scenes": {
     "scene-002": {
       "inputsSha256": "14e40fdbe9618d821098462d108fc0d496863776ad54f3b70041aad29f173ab5",
-      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
-      "contentSha256": "107f6a1fa0d67bc8d7673c5c01382e874aabdb70cdeed218243cb540e2367798",
+      "codeSha256": "d81475bb66f2e5cff5b9bfec5857f82762fcf16b1983acae9d95c70eac5cc570",
+      "contentSha256": "75140d61c0828ab6e91479ed0c4fe94f8c66887511780f340246b3a99b67eeab",
       "approvedAt": "2026-11-25T00:57:18+00:00",
       "approvedBy": "aishvar23 (relayed by Grok Bot 3:07 PM CST)",
       "previewFramesMd5": "43004f6fc1ec9b2dc893e1a38edc78b8",
       "previewSha256": "891c339eb00cbe2e1551e3a7ef4e55abc571fb0b5bd8f6d101a64afd84a62886",
       "note": "M05.8 batch 1 review",
-      "carriedOverAt": "2026-11-25T02:56:32+00:00"
+      "carriedOverAt": "2026-11-25T13:37:17+00:00"
     },
     "scene-004": {
       "inputsSha256": "96ff3807984e9402a1d6d11a143e712d49710fb059f550d98226068944da7a78",
-      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
-      "contentSha256": "fe6028240fa04695abf33b35599bb5e89bbf8d19065664c6313aab624db2c590",
+      "codeSha256": "d81475bb66f2e5cff5b9bfec5857f82762fcf16b1983acae9d95c70eac5cc570",
+      "contentSha256": "237ae193dab90af529572c8deb4691ecdb729c8386486680e4f333d2cc9a4130",
       "approvedAt": "2026-11-25T00:57:18+00:00",
       "approvedBy": "aishvar23 (relayed by Grok Bot 3:07 PM CST)",
       "previewFramesMd5": "9281f0f1f4442568e2e4fc2581acf6c8",
       "previewSha256": "756087790f43543c96744f47e5f419beb0889956b3b8c01629b89abeaf0e086e",
       "note": "M05.8 batch 1 review",
-      "carriedOverAt": "2026-11-25T02:58:39+00:00"
+      "carriedOverAt": "2026-11-25T13:37:25+00:00"
     },
     "scene-003": {
       "inputsSha256": "485d1ce9c79138b5082fc1367e1a54b023676032cb2e083cc1ca263088ef8ce8",
-      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
-      "contentSha256": "2aa1a17651af62eff8fac3b8b34b41e3ccc821b77d444905d39e5a2b4b830293",
+      "codeSha256": "d81475bb66f2e5cff5b9bfec5857f82762fcf16b1983acae9d95c70eac5cc570",
+      "contentSha256": "16a59cd1abe03228152cf32685653e9a5776e57b76d9d6858d208a745a50a39d",
       "approvedAt": "2026-11-25T03:04:00+00:00",
       "approvedBy": "aishvar23 (relayed by Grok Bot 8:45 PM; pre-approved with POWER-screen timing fix)",
       "previewFramesMd5": "673b949c9c4fcce513228de3ff74bada",
       "previewSha256": "81f17c02111bbe9366da722af837d0435d56fb3f58715e3bc6247ac1e5093865",
-      "note": "M05.8 scene-003 v3: POWER screen ends after 'gives you energy'; Bolt droops from 'Hmm... you look sleepy'"
+      "note": "M05.8 scene-003 v3: POWER screen ends after 'gives you energy'; Bolt droops from 'Hmm... you look sleepy'",
+      "carriedOverAt": "2026-11-25T13:37:21+00:00"
     },
     "scene-005": {
       "inputsSha256": "3a0895176d9645f8b163e2da70ec7c4cfe2921ed154429e5143584b79d4ed8f5",
-      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
-      "contentSha256": "4450ed8af417a1a3824c2f2868e8a66c2e169f408f77d506a6a004acee003e7f",
+      "codeSha256": "d81475bb66f2e5cff5b9bfec5857f82762fcf16b1983acae9d95c70eac5cc570",
+      "contentSha256": "6e761a6df080321e6e2aef530aac8a3b2c9d5fc41144b0ed4c9e6b3e646d53af",
       "approvedAt": "2026-11-25T03:42:25+00:00",
       "approvedBy": "aishvar23 (user widget answers relayed by Grok Bot 9:40 PM)",
       "previewFramesMd5": "93977b16b13cf7fae4e491a21b4159a0",
       "previewSha256": "6e3836dc2f343c036c48c3734cc401a469ba680b0fc714db5272163c115925a0",
-      "note": "M05.8 batch 2 approved as is"
+      "note": "M05.8 batch 2 approved as is",
+      "carriedOverAt": "2026-11-25T13:37:30+00:00"
     },
     "scene-006": {
       "inputsSha256": "81f890aeead13b3bb0359f4ecc78c81a21bc514d0742d3405402d555fa7e5783",
-      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
-      "contentSha256": "f2b9387851beba287cb97fb0a12dd85d37317ed94aedf09f592eb56678a0ca1f",
+      "codeSha256": "d81475bb66f2e5cff5b9bfec5857f82762fcf16b1983acae9d95c70eac5cc570",
+      "contentSha256": "b401d69812e1cce16ce37cacb3bffd73f6ae848413d5f466b4a68671a779455f",
       "approvedAt": "2026-11-25T03:42:25+00:00",
       "approvedBy": "aishvar23 (user widget answers relayed by Grok Bot 9:40 PM)",
       "previewFramesMd5": "9c5faeef214f2150bfae21f3ae8ec074",
       "previewSha256": "c065eeb8ab25cc9e88a586baafae7fecce092d7901bab10208daefdfa9c8eb8e",
-      "note": "M05.8 batch 2 approved as is"
+      "note": "M05.8 batch 2 approved as is",
+      "carriedOverAt": "2026-11-25T13:37:33+00:00"
     },
     "scene-007": {
       "inputsSha256": "bc6f68ea390b3e8f64b44e5abfce56bfe49ff9dd9f7eb0b765b010eb16ff09d7",
-      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
-      "contentSha256": "9fb7101b15551ddf3da43ded2b4515dd80b074b959ddc152c9af39e6611dbcc8",
+      "codeSha256": "d81475bb66f2e5cff5b9bfec5857f82762fcf16b1983acae9d95c70eac5cc570",
+      "contentSha256": "afef0e1ad4e460635003076c3867cb0029bcc297e80f670b689259b319515692",
       "approvedAt": "2026-11-25T03:42:25+00:00",
       "approvedBy": "aishvar23 (user widget answers relayed by Grok Bot 9:40 PM)",
       "previewFramesMd5": "694f653242ac879e41ad679d69b2fe6e",
       "previewSha256": "eb92cf3dad18a33274e4263bef3e17924644d94c5c649b80bbb0c2055b1ddd5f",
-      "note": "M05.8 batch 2 approved as is"
+      "note": "M05.8 batch 2 approved as is",
+      "carriedOverAt": "2026-11-25T13:37:36+00:00"
     },
     "scene-008": {
       "inputsSha256": "7b8910a0bf172cccbb8acfe36912be0ebc4ac1cd81e8e541b20baf13fcd69d6a",
@@ -76,23 +80,25 @@
     },
     "scene-001": {
       "inputsSha256": "b269adfecdfdbff0e02965fcd507c2541bc2796173adf094544c81908b30dd66",
-      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
-      "contentSha256": "7bfbb5c11b84d202a74f47408cc05f0421bc96d98fbacc924eb106abaf2e5a27",
+      "codeSha256": "d81475bb66f2e5cff5b9bfec5857f82762fcf16b1983acae9d95c70eac5cc570",
+      "contentSha256": "3a98f7b0240e778b30009c42c38b43b29eb42193cbf21d769a9dd5030cb1d07a",
       "approvedAt": "2026-11-25T03:51:08+00:00",
       "approvedBy": "aishvar23 (user widget answers relayed by Grok Bot 9:40 PM)",
       "previewFramesMd5": "14ff71d196c232384b44f9a54965e579",
       "previewSha256": "904d5d3b5d7357a13309371723c7258705b08c9c9110c4d0666c29c8bcde9603",
-      "note": "cold open approved as is, no review clip"
+      "note": "cold open approved as is, no review clip",
+      "carriedOverAt": "2026-11-25T13:37:11+00:00"
     },
     "scene-intro": {
       "inputsSha256": "afbbf5dd7d4b523b86f209e38f85dfd4660b182ea44cb6bb8834d660be191e9d",
-      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
-      "contentSha256": "7b63b353776b3509fd8926e644574a613c5452f2fd9453a73e236e2079496d89",
+      "codeSha256": "d81475bb66f2e5cff5b9bfec5857f82762fcf16b1983acae9d95c70eac5cc570",
+      "contentSha256": "5ba3cf0d7a86ae9ef41461de1280cb68669884373dd7cd7d21c5e8571a6e2e65",
       "approvedAt": "2026-11-25T03:51:08+00:00",
       "approvedBy": "aishvar23: approved as is (fine up to 1:18), relayed by Grok Bot 9:49 PM",
       "previewFramesMd5": "b178053d702c9458d82b3adaca284467",
       "previewSha256": "8b81d2c70d40cf95cf4a4d8c4c7a38c1081d1ca8148e1c21fbc07c05f2e967c3",
-      "note": "character intro, 0:37-1:01"
+      "note": "character intro, 0:37-1:01",
+      "carriedOverAt": "2026-11-25T13:37:13+00:00"
     }
   }
 }

@@ -753,8 +753,54 @@ def stage_recap_chant(sc: Scene) -> None:
                                                        m["nib"].get_top() + PR.P(0.3, 1.0)))]
                         if "nib" in m and dance["start_s"] <= t < dance["end_s"] + 0.6 else [])
     sc.top_busy.append((outro["start_s"], sc.duration))
-    sc.screen.append(lambda t, m: [PR.title_card(min(0.8, _u(t, outro["start_s"], outro["start_s"] + 3.0)),
-                                                 subtitle="See you next time!")] if t >= outro["start_s"] else [])
+    stage_card(sc, outro["start_s"], subtitle="See you next time!", hold=True)
+
+
+CARD_CLEAR_S = 0.45          # M05.8: the stage fades to the clean set this long before a title / end card pops
+
+
+def stage_card(sc: Scene, at: float, subtitle: str = "with Bolt, Maya & Nib", end: float | None = None,
+               hold: bool = False) -> dict:
+    """M05.8 pipeline default for full-stage title / end cards (QA ``layout.title_card_faces``): a card never
+    covers part of a face. First the characters are cleared: the scene's own set, with no characters on it,
+    fades in over ``CARD_CLEAR_S`` on the HUD layer. The fade starts once the last line before the card has
+    ended, so nobody vanishes mid-sentence. The card pops only when the stage is clear (``at`` or later).
+    ``hold`` keeps the card up until the scene ends; otherwise it scales away by ``end``."""
+    before = [b["end_s"] for b in sc.lines() if b["start_s"] < at]
+    c0 = max(at - CARD_CLEAR_S, max(before, default=0.0))
+    c1 = c0 + CARD_CLEAR_S
+    start = max(at, c1)
+    stop = (start + 3.0) if hold else max(start + 0.5, end if end is not None else start + 2.8)
+    cache: dict = {}
+
+    def clean(t, m):
+        if t < c0:
+            return []
+        if "full" not in cache:
+            from manim import VGroup
+            g = VGroup(backdrop(sc.background["theme"], sc.background.get("palette"), sc.set_variant).copy())
+            g.clears_stage, g.clear_alpha, g.decor = True, 1.0, True
+            cache["full"] = g
+        a = ease_in_out(_u(t, c0, c1))
+        if a >= 1.0:
+            return [cache["full"]]
+        g = cache["full"].copy()
+        for mob in g.family_members_with_points():
+            mob.set_fill(opacity=mob.get_fill_opacity() * a)
+            mob.set_stroke(opacity=mob.get_stroke_opacity() * a)
+        g.clears_stage, g.clear_alpha, g.decor = True, round(a, 4), True
+        return [g]
+    sc.screen.append(clean)
+
+    def card(t, m):
+        if t < start:
+            return []
+        u = min(0.8, _u(t, start, stop)) if hold else _u(t, start, stop)
+        return [PR.title_card(u, subtitle=subtitle)]
+    sc.screen.append(card)
+    rec = {"clearFrom": round(c0, 3), "clearAt": round(c1, 3), "cardAt": round(start, 3), "hold": hold}
+    sc.facts.setdefault("stageCards", []).append(rec)
+    return rec
 
 
 INTRO_SLOT_X = 4.0
@@ -1367,21 +1413,25 @@ def faces_report(sc: Scene, step: float = BAND_SAMPLE_S) -> dict:
     from robotics101.cartoon.layout import boxes_collide
     k = transition_frames(sc) / FPS
     offenders, off_frame, n = {}, {}, 0
+    cards = {"samples": 0, "offenders": {}}
     t = 0.0
     while t < sc.duration:
-        skip = ((sc.trans_in and t < k) or (sc.trans_out and t >= sc.duration - k)
-                or any(c["start"] <= t < c["end"] for c in sc.cutaways)
-                or any(c["start"] <= t < c["end"] for c in sc.concepts)
+        hidden = ((sc.trans_in and t < k) or (sc.trans_out and t >= sc.duration - k)
+                  or any(c["start"] <= t < c["end"] for c in sc.cutaways))
+        skip = (hidden or any(c["start"] <= t < c["end"] for c in sc.concepts)
                 or any(sh["start"] <= t < sh["end"] for sh in sc.shots))
-        if not skip:
-            n += 1
+        if not hidden:
             mobs, _, _ = frame_layers(sc, t)
             _, over = named_layers(sc, t, mobs)
+            _card_faces_at(t, mobs, over, cards)          # M05.8 layout.title_card_faces (same samples)
+        if not skip:
+            n += 1
             faces = [(cid, face_box(cid, m)) for cid, m in mobs.items()]
             boxes: list = []
             for name, m in over:
                 if (getattr(m, "on_character", False) or getattr(m, "decor", False)
-                        or getattr(m, "scene_fx", False) or getattr(m, "covers_stage", False)):
+                        or getattr(m, "scene_fx", False) or getattr(m, "covers_stage", False)
+                        or getattr(m, "clears_stage", False)):
                     continue
                 _content_boxes(m, boxes, name)
                 # M05.8: cards / HUD / lettering stay inside the action-safe area (QA layout.overlays_in_frame)
@@ -1399,7 +1449,94 @@ def faces_report(sc: Scene, step: float = BAND_SAMPLE_S) -> dict:
                                                        "first": round(t, 2), "n": 0})
                         o["n"] += 1
         t += step
-    return {"samples": n, "offenders": list(offenders.values()), "offFrame": list(off_frame.values())}
+    return {"samples": n, "offenders": list(offenders.values()), "offFrame": list(off_frame.values()),
+            "cardFaces": _card_faces_result(cards)}
+
+
+CARD_FACE_GRID = 11           # face box sampled on an 11x11 grid against the card's real outline
+
+
+def _inside(pts: np.ndarray, poly: np.ndarray) -> np.ndarray:
+    """Even-odd point-in-polygon for many points (``pts`` N x 2, ``poly`` M x 2)."""
+    x, y = pts[:, 0][:, None], pts[:, 1][:, None]
+    x0, y0 = poly[:, 0][None, :], poly[:, 1][None, :]
+    x1, y1 = np.roll(poly[:, 0], -1)[None, :], np.roll(poly[:, 1], -1)[None, :]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        cross = ((y0 > y) != (y1 > y)) & (x < (x1 - x0) * (y - y0) / (y1 - y0) + x0)
+    return (cross.sum(axis=1) % 2) == 1
+
+
+def card_outlines(card) -> list[np.ndarray]:
+    """World-space outlines of a stage card's visible parts: the starburst's own polygon, plus a box per text
+    block (the title and subtitle)."""
+    out = []
+    for part in card.submobjects:
+        if not part.has_points() and not part.submobjects:
+            continue
+        if part.has_points() and not part.submobjects:            # the burst / panel shape itself
+            out.append(np.array(part.get_anchors())[:, :2])
+            continue
+        x0, y0 = part.get_corner(np.array([-1, -1, 0]))[:2]
+        x1, y1 = part.get_corner(np.array([1, 1, 0]))[:2]
+        out.append(np.array([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], dtype=float))
+    return out
+
+
+def face_coverage(face: list[float], outlines: list[np.ndarray], grid: int = CARD_FACE_GRID) -> float:
+    """Fraction (0..1) of a normalised face box that lies under a card's outlines."""
+    from robotics101.cartoon.layout import FRAME_H, FRAME_W, FRAME_X, FRAME_Y
+    if not outlines:
+        return 0.0
+    xs = np.linspace(face[0], face[2], grid) * FRAME_W - FRAME_X
+    ys = FRAME_Y - np.linspace(face[1], face[3], grid) * FRAME_H
+    pts = np.array([(x, y) for y in ys for x in xs])
+    hit = np.zeros(len(pts), dtype=bool)
+    for poly in outlines:
+        hit |= _inside(pts, poly)
+    return float(hit.mean())
+
+
+def _card_faces_at(t: float, mobs: dict, over: list, acc: dict) -> None:
+    cards = [(name, m) for name, m in over if getattr(m, "covers_stage", False) and (m.has_points() or m.submobjects)]
+    if not cards:
+        return
+    acc["samples"] += 1
+    if any(getattr(m, "clears_stage", False) and getattr(m, "clear_alpha", 0.0) >= 0.999 for _, m in over):
+        return                                            # stage cleared under the card: no face left to cover
+    for name, cm in cards:
+        outl = card_outlines(cm)
+        for cid, mob in mobs.items():
+            cov = face_coverage(face_box(cid, mob), outl)
+            if cov > 0.0:
+                o = acc["offenders"].setdefault(f"{cid}/{name}", {"character": cid, "what": name,
+                                                                  "first": round(t, 2), "n": 0, "maxCoverage": 0.0})
+                o["n"] += 1
+                o["maxCoverage"] = max(o["maxCoverage"], round(cov, 3))
+
+
+def _card_faces_result(acc: dict) -> dict:
+    offs = list(acc["offenders"].values())
+    for o in offs:
+        o["kind"] = "full" if o["maxCoverage"] >= 0.999 else "partial"
+    return {"samples": acc["samples"], "offenders": offs}
+
+
+def card_faces_report(sc: Scene, step: float = BAND_SAMPLE_S) -> dict:
+    """M05.8 (QA ``layout.title_card_faces``): while a full-stage title / end card (``covers_stage``) is up, no
+    character face that is still on stage may sit under it, fully or partly. Faces count as gone once a
+    ``clears_stage`` backdrop is fully opaque underneath the card (``stage_card``'s default clear). Render time
+    measures this inside ``faces_report`` (``facesClear.cardFaces``); this is the standalone version."""
+    k = transition_frames(sc) / FPS
+    acc = {"samples": 0, "offenders": {}}
+    t = 0.0
+    while t < sc.duration:
+        if not ((sc.trans_in and t < k) or (sc.trans_out and t >= sc.duration - k)
+                or any(c["start"] <= t < c["end"] for c in sc.cutaways)):
+            mobs, _, _ = frame_layers(sc, t)
+            _, over = named_layers(sc, t, mobs)
+            _card_faces_at(t, mobs, over, acc)
+        t += step
+    return _card_faces_result(acc)
 
 
 SAFE_MARGIN = 0.02            # M05.8: overlays stay inside the frame with a 2% margin (QA layout.overlays_in_frame)
