@@ -33,6 +33,66 @@
       "previewFramesMd5": "673b949c9c4fcce513228de3ff74bada",
       "previewSha256": "81f17c02111bbe9366da722af837d0435d56fb3f58715e3bc6247ac1e5093865",
       "note": "M05.8 scene-003 v3: POWER screen ends after 'gives you energy'; Bolt droops from 'Hmm... you look sleepy'"
+    },
+    "scene-005": {
+      "inputsSha256": "3a0895176d9645f8b163e2da70ec7c4cfe2921ed154429e5143584b79d4ed8f5",
+      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
+      "contentSha256": "4450ed8af417a1a3824c2f2868e8a66c2e169f408f77d506a6a004acee003e7f",
+      "approvedAt": "2026-11-25T03:42:25+00:00",
+      "approvedBy": "aishvar23 (user widget answers relayed by Grok Bot 9:40 PM)",
+      "previewFramesMd5": "93977b16b13cf7fae4e491a21b4159a0",
+      "previewSha256": "6e3836dc2f343c036c48c3734cc401a469ba680b0fc714db5272163c115925a0",
+      "note": "M05.8 batch 2 approved as is"
+    },
+    "scene-006": {
+      "inputsSha256": "81f890aeead13b3bb0359f4ecc78c81a21bc514d0742d3405402d555fa7e5783",
+      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
+      "contentSha256": "f2b9387851beba287cb97fb0a12dd85d37317ed94aedf09f592eb56678a0ca1f",
+      "approvedAt": "2026-11-25T03:42:25+00:00",
+      "approvedBy": "aishvar23 (user widget answers relayed by Grok Bot 9:40 PM)",
+      "previewFramesMd5": "9c5faeef214f2150bfae21f3ae8ec074",
+      "previewSha256": "c065eeb8ab25cc9e88a586baafae7fecce092d7901bab10208daefdfa9c8eb8e",
+      "note": "M05.8 batch 2 approved as is"
+    },
+    "scene-007": {
+      "inputsSha256": "bc6f68ea390b3e8f64b44e5abfce56bfe49ff9dd9f7eb0b765b010eb16ff09d7",
+      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
+      "contentSha256": "9fb7101b15551ddf3da43ded2b4515dd80b074b959ddc152c9af39e6611dbcc8",
+      "approvedAt": "2026-11-25T03:42:25+00:00",
+      "approvedBy": "aishvar23 (user widget answers relayed by Grok Bot 9:40 PM)",
+      "previewFramesMd5": "694f653242ac879e41ad679d69b2fe6e",
+      "previewSha256": "eb92cf3dad18a33274e4263bef3e17924644d94c5c649b80bbb0c2055b1ddd5f",
+      "note": "M05.8 batch 2 approved as is"
+    },
+    "scene-008": {
+      "inputsSha256": "7b8910a0bf172cccbb8acfe36912be0ebc4ac1cd81e8e541b20baf13fcd69d6a",
+      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
+      "contentSha256": "3bae353bb4ef6469654178ba80fc2763b306767eb8c0f9014c8a0aa1bcfd6999",
+      "approvedAt": "2026-11-25T03:42:25+00:00",
+      "approvedBy": "aishvar23 (user widget answers relayed by Grok Bot 9:40 PM)",
+      "previewFramesMd5": "5928b6e308204a67b3bf932b33757547",
+      "previewSha256": "93fac2189cc5194e545997de1b71a32b68a825975f6a0379a199bb1b96c04fdd",
+      "note": "M05.8 batch 2 approved as is"
+    },
+    "scene-001": {
+      "inputsSha256": "b269adfecdfdbff0e02965fcd507c2541bc2796173adf094544c81908b30dd66",
+      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
+      "contentSha256": "7bfbb5c11b84d202a74f47408cc05f0421bc96d98fbacc924eb106abaf2e5a27",
+      "approvedAt": "2026-11-25T03:51:08+00:00",
+      "approvedBy": "aishvar23 (user widget answers relayed by Grok Bot 9:40 PM)",
+      "previewFramesMd5": "14ff71d196c232384b44f9a54965e579",
+      "previewSha256": "904d5d3b5d7357a13309371723c7258705b08c9c9110c4d0666c29c8bcde9603",
+      "note": "cold open approved as is, no review clip"
+    },
+    "scene-intro": {
+      "inputsSha256": "afbbf5dd7d4b523b86f209e38f85dfd4660b182ea44cb6bb8834d660be191e9d",
+      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
+      "contentSha256": "7b63b353776b3509fd8926e644574a613c5452f2fd9453a73e236e2079496d89",
+      "approvedAt": "2026-11-25T03:51:08+00:00",
+      "approvedBy": "aishvar23: approved as is (fine up to 1:18), relayed by Grok Bot 9:49 PM",
+      "previewFramesMd5": "b178053d702c9458d82b3adaca284467",
+      "previewSha256": "8b81d2c70d40cf95cf4a4d8c4c7a38c1081d1ca8148e1c21fbc07c05f2e967c3",
+      "note": "character intro, 0:37-1:01"
     }
   }
 }

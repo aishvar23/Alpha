@@ -16,7 +16,7 @@ MIN_LINE_S = 0.25
 WPS_HARD = (0.8, 7.0)     # outside: truncated / garbled / stuck TTS
 WPS_SOFT = (1.2, 5.0)     # outside: rushed or dragging delivery (lines of >= 4 words)
 MIN_SCENE_COVERAGE = 0.40
-TOTAL_RANGE_S = (270.0, 330.0)
+TOTAL_RANGE_S = (270.0, 420.0)          # default only; see validation.episode_duration_range (ADR-034)
 SCENE_TARGET_TOLERANCE = 0.40
 SILENT_DBFS = -45.0
 SECRET_SCAN_SUFFIXES = {".json", ".srt", ".md", ".txt", ".log", ".jsonl"}
@@ -105,7 +105,8 @@ def check_dialogue(rep, out_dir: Path, extra_secret_roots: list[Path] | None = N
              else f"implausible speech rate (truncated/garbled TTS?): {word_rate[:8]}", word_rate)
     rep.soft("dialogue.delivery_pace", not pace, "delivery pace natural for every line" if not pace
              else f"rushed/dragging lines: {pace[:8]}", pace)
-    lo, hi = TOTAL_RANGE_S
+    from robotics101.validation import episode_duration_range_for
+    lo, hi = episode_duration_range_for(out_dir)                    # ADR-034
     total = doc["totalDurationSeconds"]
     rep.soft("dialogue.total_duration", lo <= total <= hi, f"episode {total:.1f}s (target {lo:.0f}-{hi:.0f}s)", total)
     rep.soft("dialogue.production_voice", bool(doc.get("isProductionVoice")),

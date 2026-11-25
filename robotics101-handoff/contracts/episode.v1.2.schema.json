@@ -194,6 +194,23 @@
           "maximum": 80
         }
       }
+    },
+    "final": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "ADR-034: finished-episode settings",
+      "properties": {
+        "durationRangeSeconds": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[min, max] allowed episode length in seconds (default [270, 420])"
+        }
+      }
     }
   },
   "$defs": {

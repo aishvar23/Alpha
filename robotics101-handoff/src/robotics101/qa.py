@@ -2,7 +2,7 @@
 
 Hard checks (any failure -> status FAIL, non-zero exit) follow the gates in docs/SECURITY_AND_QA.md:
 video (decodable, H.264 High yuv420p, resolution, 30 fps CFR), audio (AAC 48 kHz stereo, present, not
-silent, no peak clipping), total duration 270–330 s and equal to the scene timeline, A/V stream
+silent, no peak clipping), total duration inside the episode length window (default 270–420 s, ADR-034) and equal to the scene timeline, A/V stream
 lengths, captions (present, monotonic, inside the video), every scene/clip present with the right
 duration, and manifest hashes. Soft warnings: synthetic/fixture TTS, voice coverage < 60 % per scene,
 preview profile, loudness off target, missing +faststart.
@@ -22,7 +22,7 @@ from robotics101.media import MediaError, audio_levels, find_ffmpeg, is_faststar
 from robotics101.narration.captions import parse_srt, validate_srt
 from robotics101.narration.timing import MIN_SPEECH_COVERAGE
 
-DURATION_RANGE_S = (270.0, 330.0)
+DURATION_RANGE_S = (270.0, 420.0)       # default only; see validation.episode_duration_range (ADR-034)
 SILENT_MEAN_DB = -60.0          # whole programme mean below this = silent
 SILENT_SCENE_MAX_DB = -50.0     # a narrated clip whose peak is below this = silent narration
 CLIP_MAX_DB = -0.1              # max_volume must stay below (no peak clipping)
@@ -161,7 +161,8 @@ def _check_final(rep: QaReport, out_dir: Path, ffmpeg: str, ffprobe: str, profil
                 rep.soft("final.loudness", abs(lv.integrated_lufs - LOUDNESS_TARGET_LUFS) <= LOUDNESS_TOLERANCE_LU,
                          f"integrated {lv.integrated_lufs} LUFS, true peak {lv.true_peak_dbfs} dBFS "
                          f"(target {LOUDNESS_TARGET_LUFS}±{LOUDNESS_TOLERANCE_LU})", lv.integrated_lufs)
-    lo, hi = DURATION_RANGE_S
+    from robotics101.validation import episode_duration_range_for
+    lo, hi = episode_duration_range_for(out_dir)                    # ADR-034: configurable, default 270..420 s
     rep.hard("final.duration_range", lo <= video_s <= hi, f"total {video_s:.3f}s (must be {lo:g}–{hi:g}s)",
              round(video_s, 3))
     frame = 1.0 / profile.fps

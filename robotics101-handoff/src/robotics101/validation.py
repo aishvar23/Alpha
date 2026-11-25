@@ -8,7 +8,7 @@ ERROR   -> spec cannot be rendered safely/deterministically; `validate` exits 1.
 WARNING -> editorial/pacing concern; spec is still renderable, exit 0
            (unless --strict). Applies to durations:
            * episode durationTargetSeconds outside the product window
-             270..330 s (300 s +/- 10%). The schema itself allows 120..900.
+             the episode length window (default 270..420 s, configurable, ADR-034). The schema allows 120..900.
            * sum of scene durationTargetSeconds deviates > 10% from the
              episode target. Real timing is derived from narration audio
              later (M01.2), so scene targets are planning hints only.
@@ -34,7 +34,40 @@ SCHEMA_PATHS = {"1.0": DEFAULT_SCHEMA_PATH, "1.1": PROJECT_ROOT / "contracts" / 
 DIALOGUE_WPS = 2.6            # planning estimate: words per second of cartoon dialogue
 MIN_DIALOGUE_COVERAGE = 0.6   # warn when estimated dialogue covers less of a scene's target
 
-EPISODE_DURATION_WINDOW_S = (270, 330)
+# ADR-034: the finished-episode length window is a pipeline default, configurable per episode (spec
+# ``final.durationRangeSeconds: [min, max]``) or per run (env ROBOTICS101_DURATION_RANGE="min,max"). The owner allows
+# longer episodes (ep1 is 6:38): default 270..420 s. Used by validation, dialogue QA and final QA.
+DEFAULT_EPISODE_DURATION_RANGE_S = (270.0, 420.0)
+DURATION_RANGE_ENV = "ROBOTICS101_DURATION_RANGE"
+
+
+def episode_duration_range(spec: dict | None = None) -> tuple[float, float]:
+    """(min, max) seconds for a finished episode: spec ``final.durationRangeSeconds``, else the env override, else
+    DEFAULT_EPISODE_DURATION_RANGE_S."""
+    import os
+    rng = ((spec or {}).get("final") or {}).get("durationRangeSeconds")
+    if not rng and os.environ.get(DURATION_RANGE_ENV):
+        rng = [x.strip() for x in os.environ[DURATION_RANGE_ENV].split(",")]
+    if rng:
+        lo, hi = float(rng[0]), float(rng[1])
+        if not 0 < lo < hi:
+            raise ValueError(f"episode duration range must be 0 < min < max, got {rng}")
+        return lo, hi
+    return DEFAULT_EPISODE_DURATION_RANGE_S
+
+
+def episode_duration_range_for(out_dir) -> tuple[float, float]:
+    """The duration range for a bundle (reads ``<out_dir>/episode.json`` when present)."""
+    import json as _json
+    p = Path(out_dir) / "episode.json"
+    try:
+        spec = _json.loads(p.read_text(encoding="utf-8")) if p.is_file() else None
+    except (OSError, ValueError):
+        spec = None
+    return episode_duration_range(spec)
+
+
+EPISODE_DURATION_WINDOW_S = DEFAULT_EPISODE_DURATION_RANGE_S     # back-compat name
 SCENE_SUM_TOLERANCE = 0.10
 
 
@@ -267,11 +300,11 @@ def _check_sequences(scenes: list[dict], report: ValidationReport) -> None:
 
 def _check_durations(spec: dict, report: ValidationReport) -> None:
     target = spec["durationTargetSeconds"]
-    lo, hi = EPISODE_DURATION_WINDOW_S
+    lo, hi = episode_duration_range(spec)
     if not lo <= target <= hi:
         report.warn(
             "$.durationTargetSeconds",
-            f"episode target {target}s outside product window {lo}..{hi}s (5-minute lesson)",
+            f"episode target {target}s outside product window {lo:g}..{hi:g}s",
         )
     total = sum(s["durationTargetSeconds"] for s in spec["scenes"])
     if abs(total - target) > SCENE_SUM_TOLERANCE * target:

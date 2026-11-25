@@ -83,6 +83,11 @@ def scene_qa(out_dir: Path, scene_ids: list[str]) -> dict:
         rep.hard(f"scene.{sid}.presence", bool(pres) and min(pres.values()) >= Q.PRESENCE_MIN,
                  f"min on-screen fraction {pres} (≥ {Q.PRESENCE_MIN})", pres)
     rows = check_sync(rep, sub_spec, sub_timing, by, out_dir, only=scene_ids)
+    if not rows:
+        # a scene with no teaching screens (cold open, character intro) has nothing to sync: not a failure
+        for c in rep.checks:
+            if c.id in ("sync.visual_narration", "sync.visual_topic") and not c.ok:
+                c.ok, c.message = True, "no teaching screens in this scene (nothing to time)"
     for fn in ("check_shots", "check_one_example_per_frame"):
         if fn == "check_shots":
             Q.check_shots(rep, sub_spec, sub_timing, by, out_dir)

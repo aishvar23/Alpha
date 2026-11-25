@@ -180,7 +180,7 @@ def _status(rep, check_id):
 def test_qa_good_bundle_passes_media_gates(bundle):
     rep = run_qa(bundle, TINY)
     failed = {c.id for c in rep.failures}
-    assert failed == {"final.duration_range"}            # 3.5 s is (correctly) outside 270–330 s
+    assert failed == {"final.duration_range"}            # 3.5 s is (correctly) outside the 270–420 s window
     for cid in ("final.decodable", "final.video_codec", "final.resolution", "final.fps", "final.audio_codec",
                 "final.audio_not_silent", "final.no_clipping", "final.av_sync", "final.duration_matches_scenes",
                 "captions.valid", "manifest.hashes", "scene.scene-a.clip_duration", "scene.scene-b.narration_audible"):
