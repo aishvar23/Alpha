@@ -69,14 +69,14 @@
       "carriedOverAt": "2026-11-25T13:37:36+00:00"
     },
     "scene-008": {
-      "inputsSha256": "7b8910a0bf172cccbb8acfe36912be0ebc4ac1cd81e8e541b20baf13fcd69d6a",
-      "codeSha256": "07f50c218d01d1c4c31cb5b0bd5fc16bb22cc48902686a9c7669be6200a7375f",
-      "contentSha256": "3bae353bb4ef6469654178ba80fc2763b306767eb8c0f9014c8a0aa1bcfd6999",
-      "approvedAt": "2026-11-25T03:42:25+00:00",
-      "approvedBy": "aishvar23 (user widget answers relayed by Grok Bot 9:40 PM)",
-      "previewFramesMd5": "5928b6e308204a67b3bf932b33757547",
-      "previewSha256": "93fac2189cc5194e545997de1b71a32b68a825975f6a0379a199bb1b96c04fdd",
-      "note": "M05.8 batch 2 approved as is"
+      "inputsSha256": "f318017380a2f1d208debd18f3382241b7c038dd2b668457223c655a94421d94",
+      "codeSha256": "d81475bb66f2e5cff5b9bfec5857f82762fcf16b1983acae9d95c70eac5cc570",
+      "contentSha256": "57e86254d44ab94d578d9e82d920e654386954be81c2b50a7783b4d46f5528f6",
+      "approvedAt": "2026-11-25T13:57:58+00:00",
+      "approvedBy": "aishvar23 (relayed by Grok Bot 7:57 AM CST)",
+      "previewFramesMd5": "376a6662c005403690a4800dbf76c4da",
+      "previewSha256": "5e9eb2c421776bdb0f9690bfdbcd1a8e9408bfeca3a0d8dcea80c7b6b194af04",
+      "note": "M05.8 v7 end card: stage clears (0.45 s fade to the empty set) before the ROBOTICS 101 card; preview at 6be2b9a"
     },
     "scene-001": {
       "inputsSha256": "b269adfecdfdbff0e02965fcd507c2541bc2796173adf094544c81908b30dd66",
