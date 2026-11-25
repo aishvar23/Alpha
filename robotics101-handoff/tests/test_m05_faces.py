@@ -107,4 +107,6 @@ def test_every_fixture_scene_keeps_faces_clear(voiced, monkeypatch):
         r = S.faces_report(sc, step=0.25)
         for o in r["offenders"]:
             hits.append(f"{tmg['sceneId']}: {o['what']} covers {o['character']} from {o['first']}s ({o['n']} samples)")
+        for o in r["offFrame"]:                 # M05.8: and every overlay stays inside the action-safe area
+            hits.append(f"{tmg['sceneId']}: {o['what']} leaves the safe area by {o['maxExcess']} from {o['first']}s")
     assert hits == [], hits

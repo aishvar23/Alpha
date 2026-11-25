@@ -151,7 +151,7 @@ def album(examples: list[str], reveal: list[float], open_u: float = 1.0, t: floa
 
 def checklist(parts: list[str], ticks: list[float]) -> VGroup:
     """Compact checkup card (M05.7): short enough to sit above character heads in the top-right."""
-    row, head, width = 0.36, 0.36, 3.05
+    row, head, width = 0.32, 0.36, 3.05            # M05.8: tighter rows so the card fits the safe area
     card = _o(RoundedRectangle(width=width, height=head + row * len(parts) + 0.14, corner_radius=0.2,
                                fill_color="#FFFFFF", fill_opacity=1))
     g = VGroup(card, txt("ROBOT CHECK-UP", 20, color="#6C4AB6").move_to(card.get_top() + DOWN * 0.22))

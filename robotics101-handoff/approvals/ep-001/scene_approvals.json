@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "robotics101.scene_approvals/1",
+  "episodeId": "ep-001",
+  "scenes": {
+    "scene-002": {
+      "inputsSha256": "14e40fdbe9618d821098462d108fc0d496863776ad54f3b70041aad29f173ab5",
+      "codeSha256": "540ff05088a63f2e945727db545b75e65f7177274fde5365caed51de28d9de02",
+      "contentSha256": "ee5f485c169c187057ec1964a1f71e84e66dca3629c9731dcd807c18f07a4a34",
+      "approvedAt": "2026-11-25T00:57:18+00:00",
+      "approvedBy": "aishvar23 (relayed by Grok Bot 3:07 PM CST)",
+      "previewFramesMd5": "43004f6fc1ec9b2dc893e1a38edc78b8",
+      "previewSha256": "891c339eb00cbe2e1551e3a7ef4e55abc571fb0b5bd8f6d101a64afd84a62886",
+      "note": "M05.8 batch 1 review",
+      "carriedOverAt": "2026-11-25T02:16:07+00:00"
+    },
+    "scene-004": {
+      "inputsSha256": "96ff3807984e9402a1d6d11a143e712d49710fb059f550d98226068944da7a78",
+      "codeSha256": "540ff05088a63f2e945727db545b75e65f7177274fde5365caed51de28d9de02",
+      "contentSha256": "89f626dccdcf0fdf58a15c7f645ed153658b68d4ea41f38c3dfe602e6d299d37",
+      "approvedAt": "2026-11-25T00:57:18+00:00",
+      "approvedBy": "aishvar23 (relayed by Grok Bot 3:07 PM CST)",
+      "previewFramesMd5": "9281f0f1f4442568e2e4fc2581acf6c8",
+      "previewSha256": "756087790f43543c96744f47e5f419beb0889956b3b8c01629b89abeaf0e086e",
+      "note": "M05.8 batch 1 review",
+      "carriedOverAt": "2026-11-25T02:18:30+00:00"
+    }
+  }
+}

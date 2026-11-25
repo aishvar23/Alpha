@@ -628,6 +628,21 @@ def check_faces_clear(rep, by: dict) -> None:
              {sid: r.get("offenders", []) for sid, r in measured.items()})
 
 
+def check_overlays_in_frame(rep, by: dict) -> None:
+    """M05.8: cards, HUD and SFX lettering stay inside the frame with a 2% margin (e.g. the ROBOT CHECK-UP card
+    must not lose its title row off the top edge). Measured with ``facesClear`` (scenes.json ``offFrame``)."""
+    measured = {sid: r["facesClear"] for sid, r in by.items() if "offFrame" in (r.get("facesClear") or {})}
+    if not measured:
+        rep.soft("layout.overlays_in_frame", False, "no safe-area measurements in scenes.json (pre-M05.8 render)")
+        return
+    bad = [f"{sid}: {o['what']} leaves the safe area by {o['maxExcess']:.3f} from {o['first']}s ({o['n']} samples)"
+           for sid, r in measured.items() for o in r.get("offFrame", [])]
+    missing = sorted(set(by) - set(measured))
+    rep.hard("layout.overlays_in_frame", not bad and not missing,
+             f"overlays inside the frame (2% margin); problems: {bad or 'none'}; unmeasured scenes: {missing or 'none'}",
+             {sid: r.get("offFrame", []) for sid, r in measured.items()})
+
+
 def check_charge_cable(rep, by: dict) -> None:
     """M05.6: while Bolt charges, the cable must not cross Maya's body (sampled at seat time)."""
     hits = [(sid, (r.get("facts") or {}).get("chargeCable")) for sid, r in by.items()
@@ -706,6 +721,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     check_clutter(rep, spec, by)
     check_charge_cable(rep, by)
     check_faces_clear(rep, by)
+    check_overlays_in_frame(rep, by)
     check_caption_band(rep, by)
     check_acting(rep, spec, by)
     if video_s:

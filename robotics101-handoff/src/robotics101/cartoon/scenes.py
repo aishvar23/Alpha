@@ -156,8 +156,32 @@ class Scene:
         return line_span(self.voice_dir, b)
 
 
-def sfx_word(word: str, color: str, start: float, at, dur: float = 0.9, size: int = 88) -> Overlay:
-    return lambda t, m: [PR.sfx_text(word, color, (t - start) / dur, at, size=size)] if start <= t < start + dur else []
+FIT_MARGIN = 0.025            # M05.8: overlays are nudged inside the frame with this margin (QA uses SAFE_MARGIN)
+
+
+def fit_in_frame(mob, margin: float = FIT_MARGIN, shrink: bool = False):
+    """M05.8 pipeline default: shift an overlay (SFX lettering, cards, chips, plates, bubbles) so its whole box
+    sits inside the frame with ``margin`` (fraction of each dimension) to spare. No-op when it already fits.
+    ``shrink`` scales it down about its bottom edge instead of moving it (for plates that must not drop onto
+    a face)."""
+    from robotics101.cartoon.layout import FRAME_X, FRAME_Y
+    if not (mob.has_points() or mob.submobjects):
+        return mob
+    (x0, y0), (x1, y1) = mob.get_corner(np.array([-1, -1, 0]))[:2], mob.get_corner(np.array([1, 1, 0]))[:2]
+    lx, ly = FRAME_X * (1 - 2 * margin), FRAME_Y * (1 - 2 * margin)
+    if shrink and y1 > ly and y0 < ly:
+        mob.scale(float((ly - y0) / (y1 - y0)), about_point=np.array([float((x0 + x1) / 2), float(y0), 0.0]))
+        (x0, y0), (x1, y1) = mob.get_corner(np.array([-1, -1, 0]))[:2], mob.get_corner(np.array([1, 1, 0]))[:2]
+    dx = (-lx - x0) if x0 < -lx else (lx - x1) if x1 > lx else 0.0
+    dy = (-ly - y0) if y0 < -ly else (ly - y1) if y1 > ly else 0.0
+    if dx or dy:
+        mob.shift(np.array([float(dx), float(dy), 0.0]))
+    return mob
+
+
+def sfx_word(word: str, color: str, start: float, at, dur: float = 0.9, size: int = 88, shrink: bool = False) -> Overlay:
+    return lambda t, m: [fit_in_frame(PR.sfx_text(word, color, (t - start) / dur, at, size=size), shrink=shrink)] \
+        if start <= t < start + dur else []
 
 
 def _u(t: float, a: float, b: float) -> float:
@@ -321,8 +345,10 @@ def stage_checkup(sc: Scene) -> None:
     sc.facts["parts"] = parts
     # M05.7: compact card in the top-right, above head height, so it never covers Maya after she
     # steps to Bolt's right for the charge.
+    # M05.8: anchored by its top-right corner inside the 5% action-safe area (QA layout.overlays_in_frame);
+    # the M05.7 centre (5.45, 2.98) put the title row above the top edge.
     sc.front.append(lambda t, m: [PR.checklist(parts, [_u(t, k, k + 0.4) if k else 0 for k in ticks])
-                                  .move_to(PR.P(5.45, 2.98))])
+                                  .scale(CHECKLIST_SCALE).move_to(PR.P(*CHECKLIST_CORNER), aligned_edge=np.array([1.0, 1.0, 0.0]))])
 
     def glow(t, m):
         out = []
@@ -364,7 +390,12 @@ def stage_checkup(sc: Scene) -> None:
         return out
     sc.back.append(lambda t, m: [])
     sc.front.append(batt)
-    bolt.feel(low_t, "sleepy").feel(plug["end_s"] + 1.2, "happy")
+    # M05.8: Bolt dozes from "sleepy" until his yawn line (said while the battery fills) is over, then perks up.
+    sleepy_t = min(t for t in (sc.word_time("sleepy"), low_t) if t is not None)
+    yawn = next((b for b in sc.beats if b["type"] == "line" and b.get("speaker") == "bolt"
+                 and b["start_s"] >= plug["end_s"] - 0.05), None)
+    perk = yawn["end_s"] if yawn and yawn["start_s"] < plug["end_s"] + 1.5 else plug["end_s"] + 1.2
+    bolt.feel(sleepy_t, "sleepy").feel(perk, "happy")
     # BZZT! / DING! sit above Bolt, left of Maya's charge stand, so they never cover a face.
     # Above Bolt, in the gap between Nib (left-high) and Maya after she steps right.
     generic_sfx_lettering(sc, {"charge": PR.P(0.45, 2.70), "ding": PR.P(0.55, 2.95)})
@@ -465,7 +496,7 @@ def stage_rule_board(sc: Scene) -> None:
         if not marks[0][1] or t < marks[0][1]:
             return []
         active = next((n for n, wt in reversed(marks) if wt and t >= wt), None)
-        return [PR.stc_chips(active if t < expl["end_s"] + 3 else None, at=PR.P(0.20, 3.85))]
+        return [fit_in_frame(PR.stc_chips(active if t < expl["end_s"] + 3 else None, at=PR.P(0.20, 3.85)))]
     sc.screen.append(chips)
     drive = sc.beat("action", "do", "drive")
     bolt.face(drive["start_s"] - 1.2, 1)
@@ -546,8 +577,8 @@ def stage_servo_highfive(sc: Scene) -> None:
         shoulder = b.parts["arm_r"].get_start()
         return [PR.protractor(shoulder, ang, facing=1, radius=1.25, target=goal)]
     sc.back.append(gauge)                              # behind the rigs so the real arm reads on top
-    # WHOOSH sits above Nib's hover; CLAP stays in the gap above Bolt / Maya (M05.7).
-    generic_sfx_lettering(sc, {"whoosh": PR.P(-4.55, 3.58), "clap": PR.P(0.2, 2.2)})
+    # WHOOSH sits between Bolt and Maya above their heads; CLAP stays in the gap above Bolt / Maya (M05.7).
+    generic_sfx_lettering(sc, {"whoosh": PR.P(0.0, 3.0), "clap": PR.P(0.2, 2.2)})   # M05.8: WHOOSH off Nib, in frame
 
 
 def stage_obstacle_rematch(sc: Scene, robotcam: dict | None = None) -> None:
@@ -628,7 +659,8 @@ def stage_recap_chant(sc: Scene) -> None:
     lines = sc.lines()[:3]
     for (word, color), b, x in zip(chants, lines, (-4.7, 0.0, 4.7)):
         dur = 2.9 - (b["start_s"] - lines[0]["start_s"])
-        sc.screen.append(sfx_word(word, color, b["start_s"], PR.P(x, 3.62), dur=dur, size=100))
+        # M05.8: shrink (not shift) into the safe area so the chant word never drops onto Maya's face
+        sc.screen.append(sfx_word(word, color, b["start_s"], PR.P(x, 3.62), dur=dur, size=100, shrink=True))
         sc.top_busy.append((b["start_s"], b["start_s"] + dur))
     q = sc.params.get("question", "")
     sc.facts["question"] = q
@@ -636,14 +668,15 @@ def stage_recap_chant(sc: Scene) -> None:
     outro = sc.beat("music", "cue", "outro")
     if q_line:
         sc.top_busy.append((q_line["start_s"], outro["start_s"]))
-        sc.screen.append(lambda t, m: [PR.card("Quiz time!", q, _u(t, q_line["start_s"], q_line["start_s"] + 0.6),
-                                               at=PR.P(0.0, 3.22), width=7.2).scale(0.80, about_point=PR.P(0.0, 3.22))]
+        sc.screen.append(lambda t, m: [fit_in_frame(PR.card("Quiz time!", q, _u(t, q_line["start_s"], q_line["start_s"] + 0.6),
+                                               at=PR.P(0.0, 3.22), width=7.2).scale(0.80, about_point=PR.P(0.0, 3.22)),
+                                                    shrink=True)]
                          if q_line["start_s"] <= t < outro["start_s"] else [])
     dance = sc.beat("action", "do", "beep_dance")
     if dance:
-        sc.front.append(lambda t, m: [PR.speech_bubble("beep boop!", m["nib"].get_top() + PR.P(-0.2, 0.05),
+        sc.front.append(lambda t, m: [fit_in_frame(PR.speech_bubble("beep boop!", m["nib"].get_top() + PR.P(-0.2, 0.05),
                                                        _u(t, dance["start_s"], dance["end_s"] + 0.6),
-                                                       m["nib"].get_top() + PR.P(0.3, 1.0))]
+                                                       m["nib"].get_top() + PR.P(0.3, 1.0)))]
                         if "nib" in m and dance["start_s"] <= t < dance["end_s"] + 0.6 else [])
     sc.top_busy.append((outro["start_s"], sc.duration))
     sc.screen.append(lambda t, m: [PR.title_card(min(0.8, _u(t, outro["start_s"], outro["start_s"] + 3.0)),
@@ -694,7 +727,8 @@ def stage_character_intro(sc: Scene) -> None:
         at = PR.P(max(-3.4, min(3.4, x)), 3.20)
 
         def plate(t, m, c=c, t1=t1, end=end, at=at):
-            return [PR.nameplate(c["name"], c["tagline"], c.get("color", "#FFFFFF"), _u(t, t1 - 0.1, end), at, t)] \
+            return [fit_in_frame(PR.nameplate(c["name"], c["tagline"], c.get("color", "#FFFFFF"),
+                                              _u(t, t1 - 0.1, end), at, t), shrink=True)] \
                 if t1 - 0.1 <= t < end else []
 
         def light(t, m, x=x, t0=t0, end=end, cy=(3.2 if c.get("entrance") == "fly_to" else 1.7)):
@@ -791,6 +825,8 @@ SHOT_IN, SHOT_OUT = 0.4, 0.35          # seconds of the pop-in / shrink-out anim
 SHOT_LEAD, SHOT_TAIL = 0.15, 0.35      # shot starts a little before its first beat, ends after its last
 # Keep the seated charger + filling battery visible this long after the plug seats.
 CHARGE_HOLD_S = 2.2
+CHECKLIST_CORNER = (6.32, 3.56)            # M05.8: checkup card top-right corner, inside the 5% safe area
+CHECKLIST_SCALE = 0.82                     # M05.8: card bottom (~1.84) stays above Maya's head after she steps right
 CHARGE_FILL_S = 1.2                     # M05.8: the battery fills red -> green before the controller frame
 SYNC_HOLD_MAX = 0.6                     # M05.8: a shot may start at most this late after its first word
 SOLO_GAIN = 1.2                         # solo character drawn a bit bigger than on stage
@@ -1229,7 +1265,7 @@ def faces_report(sc: Scene, step: float = BAND_SAMPLE_S) -> dict:
     ``scene_fx`` (e.g. a ping meant to hit an obstacle) or ``covers_stage`` (title cards) are ignored."""
     from robotics101.cartoon.layout import boxes_collide
     k = transition_frames(sc) / FPS
-    offenders, n = {}, 0
+    offenders, off_frame, n = {}, {}, 0
     t = 0.0
     while t < sc.duration:
         skip = ((sc.trans_in and t < k) or (sc.trans_out and t >= sc.duration - k)
@@ -1247,6 +1283,13 @@ def faces_report(sc: Scene, step: float = BAND_SAMPLE_S) -> dict:
                         or getattr(m, "scene_fx", False) or getattr(m, "covers_stage", False)):
                     continue
                 _content_boxes(m, boxes, name)
+                # M05.8: cards / HUD / lettering stay inside the action-safe area (QA layout.overlays_in_frame)
+                if m.has_points() or m.submobjects:
+                    out_by = safe_area_excess(_bbox(m))
+                    if out_by > FACE_SAFE_TOL:
+                        o = off_frame.setdefault(name, {"what": name, "first": round(t, 2), "n": 0, "maxExcess": 0.0})
+                        o["n"] += 1
+                        o["maxExcess"] = max(o["maxExcess"], round(out_by, 4))
             for oname, ob in boxes:
                 for cid, fb in faces:
                     if boxes_collide(ob, fb):
@@ -1255,7 +1298,16 @@ def faces_report(sc: Scene, step: float = BAND_SAMPLE_S) -> dict:
                                                        "first": round(t, 2), "n": 0})
                         o["n"] += 1
         t += step
-    return {"samples": n, "offenders": list(offenders.values())}
+    return {"samples": n, "offenders": list(offenders.values()), "offFrame": list(off_frame.values())}
+
+
+SAFE_MARGIN = 0.02            # M05.8: overlays stay inside the frame with a 2% margin (QA layout.overlays_in_frame)
+FACE_SAFE_TOL = 0.004         # ~4 px slack for anti-aliased outlines
+
+
+def safe_area_excess(b: list[float], margin: float = SAFE_MARGIN) -> float:
+    """How far (normalised) a box pokes out of the action-safe area on its worst side (0 = inside)."""
+    return max(0.0, margin - b[0], margin - b[1], b[2] - (1 - margin), b[3] - (1 - margin))
 
 
 def transition_frames(sc: Scene) -> int:

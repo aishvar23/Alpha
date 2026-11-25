@@ -324,15 +324,8 @@
         {
           "type": "line",
           "speaker": "maya",
-          "text": "The power source gives you energy. Hmm... your battery is a little low.",
+          "text": "The power source gives you energy. Hmm... you look sleepy. Your battery is low!",
           "emotion": "worried"
-        },
-        {
-          "type": "line",
-          "speaker": "bolt",
-          "text": "I'm not sleepy... you're sleepy...",
-          "emotion": "sleepy",
-          "action": "yawn"
         },
         {
           "type": "action",
@@ -342,6 +335,13 @@
         {
           "type": "sfx",
           "id": "charge"
+        },
+        {
+          "type": "line",
+          "speaker": "bolt",
+          "text": "Yaaawn... I'm not sleepy... zzz...",
+          "emotion": "sleepy",
+          "action": "yawn"
         },
         {
           "type": "line",

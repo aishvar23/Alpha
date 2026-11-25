@@ -162,7 +162,58 @@ def row_problems(row: dict, tol: float = SYNC_TOL_S) -> list[str]:
     return p
 
 
+# M05.8: on-stage actions whose visible effect outlasts the action beat itself: (extra seconds the effect stays
+# animated after the beat ends, words a line must contain to be "about" it). While the effect plays, any narration
+# line that overlaps it by more than ACTION_OVERLAP_TOL must be about the same thing (e.g. the battery filling
+# must not play under "And last, the controller").
+ACTION_EFFECTS = {
+    "plug_in": (1.2 + 0.3, ("battery", "charg", "power", "energy", "sleepy", "low", "tired", "yawn", "zzz", "plug")),
+}
+ACTION_OVERLAP_TOL = 0.3
+
+
+def action_rows(timing: dict, voice_dir, only: list[str] | None = None) -> list[dict]:
+    from robotics101.cartoon.scenes import line_span
+    rows = []
+    for ts in timing["scenes"]:
+        sid = ts["sceneId"]
+        if only and sid not in only:
+            continue
+        beats, off = ts["beats"], ts.get("scene_start_s", 0.0)
+        for i, x in enumerate(beats):
+            if x["type"] != "action":
+                continue
+            verb = str(x["do"]).split(":")[0]
+            if verb not in ACTION_EFFECTS:
+                continue
+            extra, kws = ACTION_EFFECTS[verb]
+            a, b = float(x["start_s"]), float(x["end_s"]) + extra
+            unrelated = []
+            for j, ln in enumerate(beats):
+                if ln["type"] != "line":
+                    continue
+                w0, w1 = line_span(Path(voice_dir), ln) if voice_dir is not None else (ln["start_s"], ln["end_s"])
+                ov = _overlap(a, b, w0, w1)
+                if ov > ACTION_OVERLAP_TOL and not _hit(kws, ln["text"]):
+                    unrelated.append({"beat": j, "text": ln["text"][:60], "seconds": round(ov, 2)})
+            rows.append({"scene": sid, "beat": i, "do": x["do"], "who": x.get("who"),
+                         "effect": [round(a, 3), round(b, 3)], "episodeEffect": [round(off + a, 2), round(off + b, 2)],
+                         "unrelatedLines": unrelated})
+    return rows
+
+
+def check_action_overlap(rep, timing: dict, voice_dir, only: list[str] | None = None) -> list[dict]:
+    rows = action_rows(timing, voice_dir, only)
+    bad = [f"{r['scene']} {r['who']} {r['do']} @{r['episodeEffect'][0]:.1f}s plays over {u['seconds']}s of "
+           f"unrelated line {u['text']!r}" for r in rows for u in r["unrelatedLines"]]
+    rep.hard("sync.action_narration", not bad,
+             f"{len(rows)} on-stage action effect(s) vs narration (tolerance {ACTION_OVERLAP_TOL}s); "
+             f"problems: {bad or 'none'}", rows)
+    return rows
+
+
 def check_sync(rep, spec: dict, timing: dict, by: dict, voice_dir, only: list[str] | None = None) -> list[dict]:
+    check_action_overlap(rep, timing, voice_dir, only)
     rows = sync_rows(spec, timing, by, voice_dir, only)
     bad = [p for r in rows for p in row_problems(r)]
     rep.hard("sync.visual_narration", bool(rows) and not bad,
@@ -179,4 +230,4 @@ def check_sync(rep, spec: dict, timing: dict, by: dict, voice_dir, only: list[st
     return rows
 
 
-__all__ = ["SYNC_TOL_S", "VISUAL_KEYWORDS", "check_sync", "first_keyword_time", "keywords_for", "row_problems", "sync_rows"]
+__all__ = ["ACTION_EFFECTS", "SYNC_TOL_S", "action_rows", "check_action_overlap", "VISUAL_KEYWORDS", "check_sync", "first_keyword_time", "keywords_for", "row_problems", "sync_rows"]

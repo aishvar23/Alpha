@@ -110,3 +110,52 @@ def test_rover_moves_and_family_frames_use_the_middle_scale():
     sh = subject_share()
     lo, hi = SUBJECT_SHARE
     assert lo <= sh["width"] <= hi and lo <= sh["height"] <= hi and sh["marginX"] >= 0.1
+
+
+def _charge_fixture(tmp_path, plug_before_controller: bool):
+    low = "The power source gives you energy. Hmm... you look sleepy. Your battery is low!"
+    yawn = "Yaaawn... I'm not sleepy... zzz..."
+    ctl = "And last, the controller. It's your robot brain, and it decides what to do."
+    L = lambda n, t, a, b: {"type": "line", "text": t, "start_s": a, "end_s": b, "words": _words(tmp_path, n, t, (b - a) / len(t.split()))}
+    if plug_before_controller:     # M05.8 batch-1 cut: charging landed on the controller line
+        beats = [L("low", low, 0.0, 6.4), L("yawn", yawn, 6.7, 10.7),
+                 {"type": "action", "who": "maya", "do": "plug_in", "start_s": 11.0, "end_s": 11.9},
+                 L("ctl", ctl, 11.9, 16.8)]
+    else:                          # fixed: plugged in on the battery-low beat, Bolt yawns while it fills
+        beats = [L("low", low, 0.0, 6.4),
+                 {"type": "action", "who": "maya", "do": "plug_in", "start_s": 6.7, "end_s": 7.6},
+                 L("yawn", yawn, 7.9, 11.9), L("ctl", ctl, 12.2, 17.1)]
+    return {"scenes": [{"sceneId": "scene-003", "scene_start_s": 0.0, "scene_duration_s": 18.0, "beats": beats}]}
+
+
+def test_charging_over_the_controller_line_is_flagged(tmp_path):
+    from robotics101.cartoon.sync import action_rows, check_action_overlap
+    timing = _charge_fixture(tmp_path, plug_before_controller=True)
+    rows = action_rows(timing, tmp_path)
+    assert rows and rows[0]["unrelatedLines"] and "controller" in rows[0]["unrelatedLines"][0]["text"]
+    rep = QaReport("e", "t", str(tmp_path))
+    check_action_overlap(rep, timing, tmp_path)
+    assert {c.id: c.status for c in rep.checks}["sync.action_narration"] == "fail"
+
+
+def test_charging_on_the_battery_low_beat_passes(tmp_path):
+    from robotics101.cartoon.sync import check_action_overlap
+    timing = _charge_fixture(tmp_path, plug_before_controller=False)
+    rep = QaReport("e", "t", str(tmp_path))
+    rows = check_action_overlap(rep, timing, tmp_path)
+    assert {c.id: c.status for c in rep.checks}["sync.action_narration"] == "pass", rows
+
+
+def test_ep1_spec_plugs_in_on_the_battery_low_beat():
+    spec = json.loads(CARTOON.read_text())
+    beats = next(s for s in spec["scenes"] if s["sceneId"] == "scene-003")["beats"]
+    i = next(k for k, b in enumerate(beats) if b.get("do") == "plug_in")
+    assert "battery" in beats[i - 1]["text"].lower()
+    nxt = next(b for b in beats[i + 1:] if b["type"] == "line")
+    assert nxt["speaker"] == "bolt" and "sleepy" in nxt["text"].lower()
+
+
+def test_safe_area_excess():
+    from robotics101.cartoon.scenes import safe_area_excess
+    assert safe_area_excess([0.1, 0.1, 0.9, 0.9]) == 0.0
+    assert safe_area_excess([0.7, -0.02, 0.98, 0.3]) > 0.03          # M05.7 card poked above the top edge
