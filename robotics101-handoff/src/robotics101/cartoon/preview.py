@@ -84,7 +84,10 @@ def scene_qa(out_dir: Path, scene_ids: list[str]) -> dict:
                  f"min on-screen fraction {pres} (≥ {Q.PRESENCE_MIN})", pres)
     rows = check_sync(rep, sub_spec, sub_timing, by, out_dir, only=scene_ids)
     for fn in ("check_shots", "check_one_example_per_frame"):
-        getattr(Q, fn)(rep, sub_spec, sub_timing, by)
+        if fn == "check_shots":
+            Q.check_shots(rep, sub_spec, sub_timing, by, out_dir)
+        else:
+            getattr(Q, fn)(rep, sub_spec, sub_timing, by)
     Q.check_clutter(rep, sub_spec, by)
     Q.check_faces_clear(rep, by)
     Q.check_overlays_in_frame(rep, by)

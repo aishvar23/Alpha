@@ -94,6 +94,39 @@ def line_span(voice_dir, b: dict) -> tuple[float, float]:
     return b["start_s"], b["end_s"]
 
 
+# M05.8 (owner feedback): a sentence that opens with one of these is a character reaction / joke setup ("Hmm... you
+# look sleepy."), not explanation. A teaching screen ends with its own explanatory phrase, before such a sentence.
+REACTION_OPENERS = {"hmm", "hm", "oh", "uh", "uh-oh", "oops", "wait", "whoa", "wow", "ha", "haha", "hey", "yikes",
+                    "huh", "ooh", "aww", "yawn", "yaaawn", "zzz"}
+
+
+def _bare(w: str) -> str:
+    return re.sub(r"[^\w\-]", "", w).lower()
+
+
+def reaction_spans(voice_dir, b: dict) -> list[tuple[float, float]]:
+    """(start, end) of the reaction / setup part of a line: from a sentence that opens with a REACTION_OPENERS word
+    (after a sentence end, or the line start) to the end of the line. Needs word timings; [] without them."""
+    ws = line_words(voice_dir, b)
+    if not ws or b.get("type") != "line":
+        return []
+    for k, w in enumerate(ws):
+        starts = k == 0 or re.search(r"[.!?\u2026]$", ws[k - 1]["text"].strip())
+        if starts and _bare(w["text"]) in REACTION_OPENERS:
+            return [(w["start_s"], ws[-1]["end_s"])]
+    return []
+
+
+def explanatory_end(voice_dir, b: dict) -> float | None:
+    """End of the last explanatory word of a line that goes on into a reaction / setup sentence (None if it
+    doesn't, or the whole line is a reaction)."""
+    ws = line_words(voice_dir, b)
+    sp = reaction_spans(voice_dir, b)
+    if not ws or not sp or sp[0][0] <= ws[0]["start_s"]:
+        return None
+    return max(w["end_s"] for w in ws if w["end_s"] <= sp[0][0] + 1e-6)
+
+
 
 
 @dataclass
@@ -392,10 +425,20 @@ def stage_checkup(sc: Scene) -> None:
     sc.front.append(batt)
     # M05.8: Bolt dozes from "sleepy" until his yawn line (said while the battery fills) is over, then perks up.
     sleepy_t = min(t for t in (sc.word_time("sleepy"), low_t) if t is not None)
+    # M05.8: Bolt is already drooping when Maya's reaction starts ("Hmm... you look sleepy"), right after the
+    # POWER screen cuts back to the room
+    setup = next((b for b in sc.beats if b["type"] == "line" and b.get("speaker") != "bolt"
+                  and "sleepy" in b["text"].lower() and reaction_spans(sc.voice_dir, b)), None)
+    if setup is not None:
+        sleepy_t = min(sleepy_t, reaction_spans(sc.voice_dir, setup)[0][0])
     yawn = next((b for b in sc.beats if b["type"] == "line" and b.get("speaker") == "bolt"
                  and b["start_s"] >= plug["end_s"] - 0.05), None)
     perk = yawn["end_s"] if yawn and yawn["start_s"] < plug["end_s"] + 1.5 else plug["end_s"] + 1.2
     bolt.feel(sleepy_t, "sleepy").feel(perk, "happy")
+    # M05.8: from "you look sleepy" Bolt visibly droops (eyes half shut, antenna and head down) until his yawn line
+    droop_end = yawn["start_s"] if yawn and yawn["start_s"] > sleepy_t else plug["start_s"]
+    if droop_end - sleepy_t > 0.3:
+        bolt.act(sleepy_t - 0.1, droop_end, "droop")
     # BZZT! / DING! sit above Bolt, left of Maya's charge stand, so they never cover a face.
     # Above Bolt, in the gap between Nib (left-high) and Maya after she steps right.
     generic_sfx_lettering(sc, {"charge": PR.P(0.45, 2.70), "ding": PR.P(0.55, 2.95)})
@@ -1027,7 +1070,12 @@ def illustrated_span_beats(beats: list[dict], voice_dir, spec: dict) -> tuple[fl
         s0 = first["start_s"]
     last_line = next((b for b in reversed(rng) if b["type"] == "line"), None)
     s1 = line_span(voice_dir, last_line)[1] if last_line is not None else rng[-1]["end_s"]
-    if last_line is not None and rng[-1]["type"] != "line":
+    if last_line is not None and not spec.get("untilWord"):
+        xe = explanatory_end(voice_dir, last_line)          # M05.8: cut before "Hmm... you look sleepy."
+        if xe is not None and xe > s0:
+            s1 = xe
+    if last_line is not None and rng[-1]["type"] != "line" and not (rng[-1].get("start_s", 0) > s1
+                                                                  and explanatory_end(voice_dir, last_line)):
         s1 = max(s1, rng[-1]["end_s"])
     if spec.get("untilWord"):
         for b in rng:

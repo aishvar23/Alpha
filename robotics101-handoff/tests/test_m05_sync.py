@@ -183,3 +183,36 @@ def test_servo_split_and_cause_visuals_draw():
         assert g.width > 10
     for t in (0.2, 1.2, 2.2, 3.5):
         assert servo_cause(t, {"goal": 60, "t0": 0.0, "send": 0.5, "end": 4.0}, ILLUSTRATION_BOX).width > 10
+
+
+def _power_fixture(tmp_path):
+    low = "The power source gives you energy. Hmm... you look sleepy. Your battery is low!"
+    return [{"index": 0, "type": "line", "speaker": "maya", "text": low, "start_s": 0.0, "end_s": 5.6,
+             "words": _words(tmp_path, "low", low, 0.4)}]
+
+
+def test_power_screen_ends_with_its_explanatory_phrase(tmp_path):
+    """M05.8 (owner, scene-003 v2): the POWER screen ends after "gives you energy", before "Hmm... you look
+    sleepy" (Bolt's sleepy setup plays in the room)."""
+    from robotics101.cartoon.scenes import illustrated_span_beats, reaction_spans
+    beats = _power_fixture(tmp_path)
+    s0, s1 = illustrated_span_beats(beats, tmp_path, {"fromBeat": 0, "toBeat": 0, "visual": "part_power"})
+    energy_end = 5 * 0.4 + 0.32
+    assert abs(s1 - energy_end) < 1e-6
+    assert abs(reaction_spans(tmp_path, beats[0])[0][0] - 2.4) < 1e-6          # "Hmm..."
+
+
+def test_screen_over_a_reaction_line_is_flagged(tmp_path):
+    from robotics101.cartoon.sync import check_screen_reaction
+    beats = _power_fixture(tmp_path)
+    timing = {"scenes": [{"sceneId": "scene-003", "scene_start_s": 0.0, "beats": beats}]}
+    old = {"scene-003": {"facts": {"shots": [{"layout": "illustration", "visual": "part_power", "start": 0.0,
+                                              "end": 6.0, "fromBeat": 0, "toBeat": 0}]}}}
+    rep = QaReport("e", "t", str(tmp_path))
+    check_screen_reaction(rep, timing, old, tmp_path)
+    assert {c.id: c.status for c in rep.checks}["sync.screen_covers_reaction"] == "fail"
+    new = {"scene-003": {"facts": {"shots": [{"layout": "illustration", "visual": "part_power", "start": 0.0,
+                                              "end": 2.67, "fromBeat": 0, "toBeat": 0}]}}}
+    rep = QaReport("e", "t", str(tmp_path))
+    check_screen_reaction(rep, timing, new, tmp_path)
+    assert {c.id: c.status for c in rep.checks}["sync.screen_covers_reaction"] == "pass"

@@ -99,6 +99,10 @@ ACTIONS = {
     "resume": lambda u, a: {"lean": 0.1 * bump(u)},
     "spin": lambda u, a: {"flip": int(u * 6) % 2 == 1, "dy": 0.15 * bump(u)},
     "arm_to": lambda u, a: {"arm_r": 20 + (_arg_float(a, 90) - 20) * ease_in_out(u / 0.6)},
+    "droop": lambda u, a: {"lean": -0.07 * ease_out(min(1.0, u * 4)), "head_tilt": -0.14 * ease_out(min(1.0, u * 4)),
+                           "squash": 1 - 0.05 * ease_out(min(1.0, u * 4)) + 0.015 * math.sin(2 * math.pi * 1.2 * u),
+                           "blink": 0.55 + 0.25 * max(0.0, math.sin(2 * math.pi * 0.9 * u)), "antenna": -0.3,
+                           "glow": 0.15, "arm_l": 12, "arm_r": 12},
     "arm_to_hold": lambda u, a: {"arm_r": _arg_float(a, 90)},     # internal: keep a servo angle after arm_to
     # M05.8: servo-driven arm, "servo_arm:<from>:<to>" in servo degrees (0 = arm straight forward, 90 = up); the
     # split-screen dial reads the same track (scenes.servo_track), so the arm and the dial never disagree

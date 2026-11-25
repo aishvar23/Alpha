@@ -212,8 +212,55 @@ def check_action_overlap(rep, timing: dict, voice_dir, only: list[str] | None = 
     return rows
 
 
+REACTION_TOL_S = 0.4
+REACTION_ACTIONS = {"yawn", "flinch", "facepalm", "gasp", "laugh"}
+REACTION_EMOTIONS = {"sleepy"}
+LIVE_CHARACTER = {"servo_split": "bolt"}     # screens that draw this character live (lip sync, expressions)
+
+
+def reaction_rows(timing: dict, by: dict, voice_dir, only: list[str] | None = None) -> list[dict]:
+    """M05.8: every teaching screen vs the character-reaction / joke-setup speech under it: reaction sentences
+    ("Hmm... you look sleepy.", scenes.reaction_spans) and reaction lines (yawn, flinch, sleepy...)."""
+    from robotics101.cartoon.scenes import line_span, reaction_spans
+    rows = []
+    for ts in timing["scenes"]:
+        sid = ts["sceneId"]
+        if only and sid not in only:
+            continue
+        beats, off = ts["beats"], ts.get("scene_start_s", 0.0)
+        for sh in ((by.get(sid) or {}).get("facts") or {}).get("shots") or []:
+            if sh.get("layout") == "stage":
+                continue
+            a, b = float(sh["start"]) + SHOT_IN, float(sh["end"]) - SHOT_OUT
+            hits = []
+            for i, ln in enumerate(beats):
+                if ln["type"] != "line" or ln.get("speaker") == LIVE_CHARACTER.get(sh.get("visual")):
+                    continue                    # the screen shows that character live (his reaction is on screen)
+                spans = list(reaction_spans(Path(voice_dir), ln))
+                if ln.get("action") in REACTION_ACTIONS or ln.get("emotion") in REACTION_EMOTIONS:
+                    spans.append(line_span(Path(voice_dir), ln))
+                for w0, w1 in spans:
+                    ov = _overlap(a, b, w0, w1)
+                    if ov > REACTION_TOL_S:
+                        hits.append({"beat": i, "text": ln["text"][:60], "seconds": round(ov, 2),
+                                     "episodeAt": round(off + max(a, w0), 2)})
+            rows.append({"scene": sid, "visual": sh.get("visual"), "shot": [sh["start"], sh["end"]], "covers": hits})
+    return rows
+
+
+def check_screen_reaction(rep, timing: dict, by: dict, voice_dir, only: list[str] | None = None) -> list[dict]:
+    rows = reaction_rows(timing, by, voice_dir, only)
+    bad = [f"{r['scene']} {r['visual']} covers {h['seconds']}s of reaction/setup {h['text']!r} @{h['episodeAt']}s"
+           for r in rows for h in r["covers"]]
+    rep.hard("sync.screen_covers_reaction", not bad,
+             f"{len(rows)} teaching screen(s) end with their explanatory phrase (tolerance {REACTION_TOL_S}s); "
+             f"problems: {bad or 'none'}", rows)
+    return rows
+
+
 def check_sync(rep, spec: dict, timing: dict, by: dict, voice_dir, only: list[str] | None = None) -> list[dict]:
     check_action_overlap(rep, timing, voice_dir, only)
+    check_screen_reaction(rep, timing, by, voice_dir, only)
     rows = sync_rows(spec, timing, by, voice_dir, only)
     bad = [p for r in rows for p in row_problems(r)]
     rep.hard("sync.visual_narration", bool(rows) and not bad,
@@ -230,4 +277,4 @@ def check_sync(rep, spec: dict, timing: dict, by: dict, voice_dir, only: list[st
     return rows
 
 
-__all__ = ["ACTION_EFFECTS", "SYNC_TOL_S", "action_rows", "check_action_overlap", "VISUAL_KEYWORDS", "check_sync", "first_keyword_time", "keywords_for", "row_problems", "sync_rows"]
+__all__ = ["ACTION_EFFECTS", "check_screen_reaction", "reaction_rows", "SYNC_TOL_S", "action_rows", "check_action_overlap", "VISUAL_KEYWORDS", "check_sync", "first_keyword_time", "keywords_for", "row_problems", "sync_rows"]

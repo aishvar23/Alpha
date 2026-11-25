@@ -217,7 +217,7 @@ def check_liveliness(rep, by: dict) -> None:
              {c: w[0] for c, w in worst.items()})
 
 
-def check_shots(rep, spec: dict, timing: dict, by: dict) -> None:
+def check_shots(rep, spec: dict, timing: dict, by: dict, voice_dir=None) -> None:
     """M05.1 / M05.6 illustration-first layouts: every explanatory line is inside an illustration/solo shot;
     illustration visuals cover >= 60% of the frame and solo visuals >= 35%; a teaching visual may not share the
     frame with a full-size character (corner cameo <= 8%) and must itself cover >= 60%."""
@@ -260,9 +260,13 @@ def check_shots(rep, spec: dict, timing: dict, by: dict) -> None:
             # little late when a prior beat (the seated charger) is held on screen. The end of the
             # line must still be inside an illustration/solo shot, and most of the line must be covered.
             ill = [(sh["start"], sh["end"]) for sh in shots if sh["layout"] in ("illustration", "solo")]
-            cov, first, last = _merged_coverage(ill, tb["start_s"], tb["end_s"])
-            dur = max(1e-6, tb["end_s"] - tb["start_s"])
-            prefix, suffix = first - tb["start_s"], tb["end_s"] - last
+            # M05.8: a trailing reaction / joke-setup sentence ("Hmm... you look sleepy.") is not explanation and
+            # plays in the room, so the line's explanatory part ends at its last explanatory word
+            from robotics101.cartoon.scenes import explanatory_end
+            t_end = (explanatory_end(Path(voice_dir), tb) if voice_dir is not None else None) or tb["end_s"]
+            cov, first, last = _merged_coverage(ill, tb["start_s"], t_end)
+            dur = max(1e-6, t_end - tb["start_s"])
+            prefix, suffix = first - tb["start_s"], t_end - last
             if suffix > 0.05 or cov / dur < 0.50 or prefix > 2.35:
                 bad.append(f"{sid}#{i}: explanatory line not shown in an illustration/solo shot")
     if not rows and not n_explain:
@@ -714,7 +718,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     check_section_backgrounds(rep, spec, by)
     check_kicker_variety(rep, spec, by)
     check_liveliness(rep, by)
-    check_shots(rep, spec, timing, by)
+    check_shots(rep, spec, timing, by, out_dir)
     from robotics101.cartoon.sync import check_sync
     check_sync(rep, spec, timing, by, out_dir)                    # M05.8 narration sync (hard)
     check_one_example_per_frame(rep, spec, timing, by)
