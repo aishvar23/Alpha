@@ -1,0 +1,3 @@
+[HAND-WRITTEN TEST FIXTURE - synthetic page text, not a real source]
+Servo basics for young makers. A servo is a motor that turns to an exact angle and holds it there.
+Most hobby servos move between 0 and 180 degrees. Servos are actuators: they turn the controller's decision into movement.

@@ -1,0 +1,97 @@
+{
+  "sources": [
+    {
+      "contentSha256": "b2cba958e7ce6a098ecb6ca0219ab5ccc958786715f0f428715f03ded89b6f73",
+      "outboundLinks": [],
+      "publisher": "Fixture Edu A",
+      "publisherGroup": "FixtureEduA",
+      "references": [],
+      "retrievedAt": "fixture",
+      "sourceId": "s-01",
+      "textFile": "pages/s-01.txt",
+      "tier": "B",
+      "title": "What is a robot?",
+      "url": "https://edu-a.fixture.test/robots/what-is-a-robot"
+    },
+    {
+      "contentSha256": "2707a1be1e417c711703e1cfe613b85ba865e179f0c9fd5c63821262d4ca9671",
+      "outboundLinks": [],
+      "publisher": "Fixture Edu B",
+      "publisherGroup": "FixtureEduB",
+      "references": [],
+      "retrievedAt": "fixture",
+      "sourceId": "s-02",
+      "textFile": "pages/s-02.txt",
+      "tier": "B",
+      "title": "Robots for beginners",
+      "url": "https://edu-b.fixture.test/learn/robots-for-beginners"
+    },
+    {
+      "contentSha256": "a1a0f6c520b77c5e1a5d2d9a95db02a3079d1ac54e9d86224ed12468fd47cad1",
+      "outboundLinks": [],
+      "publisher": "Fixture SensorCo",
+      "publisherGroup": "FixtureSensorCo",
+      "references": [],
+      "retrievedAt": "fixture",
+      "sourceId": "s-03",
+      "textFile": "pages/s-03.txt",
+      "tier": "C",
+      "title": "Ultrasonic distance sensor module",
+      "url": "https://sensorco.fixture.test/docs/ultrasonic-module"
+    },
+    {
+      "contentSha256": "674e43ead7bff6649e945f6e29641ce3f0714fc6ab17400c4180797d590b90ec",
+      "outboundLinks": [],
+      "publisher": "Fixture Edu C",
+      "publisherGroup": "FixtureEduC",
+      "references": [],
+      "retrievedAt": "fixture",
+      "sourceId": "s-04",
+      "textFile": "pages/s-04.txt",
+      "tier": "B",
+      "title": "How do robots measure distance?",
+      "url": "https://edu-c.fixture.test/how-robots-measure-distance"
+    },
+    {
+      "contentSha256": "27175ba0e252e7406c32cd4ace5cd2ac28b50c4a9032c219ea563cf98c06d778",
+      "outboundLinks": [],
+      "publisher": "Fixture PartsCo",
+      "publisherGroup": "FixturePartsCo",
+      "references": [],
+      "retrievedAt": "fixture",
+      "sourceId": "s-05",
+      "textFile": "pages/s-05.txt",
+      "tier": "C",
+      "title": "Hobby servo motor datasheet",
+      "url": "https://partsco.fixture.test/datasheets/hobby-servo"
+    },
+    {
+      "contentSha256": "ff2e32c6678d2b373ca5862fd6f57e868093b80280449af38d1cb9899dcefc8e",
+      "outboundLinks": [],
+      "publisher": "Fixture ServoCo",
+      "publisherGroup": "FixtureServoCo",
+      "references": [],
+      "retrievedAt": "fixture",
+      "sourceId": "s-06",
+      "textFile": "pages/s-06.txt",
+      "tier": "C",
+      "title": "Servo basics for young makers",
+      "url": "https://servoco.fixture.test/learn/servo-basics"
+    },
+    {
+      "contentSha256": "674e43ead7bff6649e945f6e29641ce3f0714fc6ab17400c4180797d590b90ec",
+      "outboundLinks": [
+        "https://edu-c.fixture.test/how-robots-measure-distance"
+      ],
+      "publisher": "Fixture Copycat",
+      "publisherGroup": "FixtureCopycat",
+      "references": [],
+      "retrievedAt": "fixture",
+      "sourceId": "s-07",
+      "textFile": "pages/s-07.txt",
+      "tier": "B",
+      "title": "How do robots measure distance? (reprint)",
+      "url": "https://copycat.fixture.test/reprint/robots-distance"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+[HAND-WRITTEN TEST FIXTURE - synthetic page text, not a real source]
+What is a robot? A robot is a machine that can sense the world around it, think about what it senses and then act.
+A toaster is not a robot because it does not decide anything on its own; it only heats bread for a set time.
+Robot vacuums sense dirt and obstacles and clean floors. In factories, robot arms assemble products piece by piece.
+Space rovers explore distant places like Mars and can drive short distances on their own.
+Most robots have five main parts: a structure, sensors, actuators, a power source and a controller.
+The structure is the frame or body that holds all the other parts together.
+Sensors gather information about the world, a little like our eyes and ears.
+Actuators are the parts that move, such as motors that turn wheels or arms.
+The power source, often a battery, supplies the energy the robot needs.
+The controller is the robot's computer brain: it decides what the robot should do.
+Robots repeat a loop: they sense, then think by comparing what they sense with their rules, then act.

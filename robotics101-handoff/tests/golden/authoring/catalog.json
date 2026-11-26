@@ -371,6 +371,11 @@
         "light",
         "surface_black"
       ],
+      "cueWords": [
+        "bounces",
+        "faster",
+        "bats"
+      ],
       "shows": [
         "sound",
         "pulse",
@@ -505,6 +510,11 @@
       "cannotShow": [
         "mechanism"
       ],
+      "cueWords": [
+        "vacuum",
+        "arm",
+        "rover"
+      ],
       "shows": [
         "robot_examples",
         "family_album"
@@ -529,6 +539,11 @@
     "sense_think_act": {
       "cannotShow": [
         "branching"
+      ],
+      "cueWords": [
+        "sense",
+        "think",
+        "act"
       ],
       "shows": [
         "loop",
@@ -568,6 +583,9 @@
       "cannotShow": [
         "gripper"
       ],
+      "cueWords": [
+        "brain"
+      ],
       "shows": [
         "servo",
         "cause_effect"
@@ -592,6 +610,12 @@
     "servo_dial": {
       "cannotShow": [
         "multi_joint"
+      ],
+      "cueWords": [
+        "30",
+        "thirty",
+        "60",
+        "sixty"
       ],
       "shows": [
         "gauge",

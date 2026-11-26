@@ -42,7 +42,10 @@
           "message": {
             "type": "string"
           },
-          "value": {}
+          "value": {},
+          "warning": {
+            "type": "boolean"
+          }
         }
       }
     },

@@ -1,0 +1,28 @@
+# Source allowlist (PLAN-authoring §3.1) — PROVISIONAL, owner-reviewed (§12 item 7).
+# Each domain maps to a publisherGroup (registrable domain; unknown subdomains inherit the parent's group) and a tier.
+version: 1
+provisional: true
+domains:
+  nextgenscience.org: {group: NGSS, tier: A}
+  csteachers.org: {group: CSTA, tier: A}
+  iste.org: {group: ISTE, tier: A}
+  nasa.gov: {group: NASA, tier: B}
+  jpl.nasa.gov: {group: NASA, tier: B}
+  science.nasa.gov: {group: NASA, tier: B}
+  cmu.edu: {group: CMU, tier: B}
+  spectrum.ieee.org: {group: IEEE, tier: B}
+  ieee.org: {group: IEEE, tier: B}
+  si.edu: {group: Smithsonian, tier: B}
+  bbc.co.uk: {group: BBC, tier: B}
+  bbc.com: {group: BBC, tier: B}
+  khanacademy.org: {group: KhanAcademy, tier: B}
+  pbslearningmedia.org: {group: PBS, tier: B}
+  pbs.org: {group: PBS, tier: B}
+  sparkfun.com: {group: SparkFun, tier: C}
+  sharpsde.com: {group: Sharp, tier: C}
+  education.lego.com: {group: LEGO, tier: C}
+  microbit.org: {group: MicroBit, tier: C}
+  vexrobotics.com: {group: VEX, tier: C}
+  britannica.com: {group: Britannica, tier: D}
+  wikipedia.org: {group: Wikipedia, tier: D, neverCounts: true}
+blocked: [medium.com, quora.com, reddit.com, youtube.com, tiktok.com, pinterest.com]

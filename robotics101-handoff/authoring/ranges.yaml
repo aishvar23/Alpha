@@ -1,0 +1,22 @@
+# Numeric plausibility table (PLAN-authoring §3.4). Values in SI-ish units (m, deg, s, Hz, %).
+# `parameters`: scene parameter name -> [min, max] (a parameter outside its range blocks the gate).
+version: 1
+parameters:
+  rangeMeters: [0.02, 4.0]              # hobby ultrasonic 0.02-4 m (IR distance 0.1-1.5 m: use irRangeMeters)
+  irRangeMeters: [0.1, 1.5]
+  obstacleDistanceMeters: [0.02, 10.0]
+  thresholdMeters: [0.05, 2.0]
+  distanceMeters: [0.02, 10.0]
+  startAngleDegrees: [0, 180]           # servo 0-180 deg
+  endAngleDegrees: [0, 180]
+  missAngleDegrees: [0, 180]
+  angleDegrees: [0, 180]
+  readings: [0.0, 10.0]
+quantities:
+  m: [0.0, 100.0]
+  deg: [0, 360]
+  s: [0.0, 600.0]
+  hz: [0.0, 100000.0]
+  pct: [0.0, 100.0]
+constants:
+  speedOfSoundMps: 343

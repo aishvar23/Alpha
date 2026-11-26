@@ -1,0 +1,6 @@
+[HAND-WRITTEN TEST FIXTURE - synthetic page text, not a real source]
+How do robots measure distance? Many robots use an ultrasonic sensor, which sends out a sound too high for people to hear.
+The sound bounces off things and comes back as an echo; the faster the echo comes back, the closer the thing is.
+Bats use echoes the same way to find insects and avoid walls.
+A distance sensor is the part of a robot that measures distance.
+Robot programs often compare a distance reading with a threshold: if the reading is less than the threshold, the robot stops.

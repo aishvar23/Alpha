@@ -1,6 +1,7 @@
 # Capability cards (PLAN-authoring §5.1): what each catalogue entry teaches / shows, the anchor beats it needs,
 # its parameters and what it CANNOT show. `robotics101 authoring catalog` joins these with the code catalogue;
 # tests/test_authoring_a1.py fails when code and cards disagree.
+# `cueWords`: words a visual animates on (reveal/advance cues; engagement.visual_change counts them).
 # `shows` keywords are matched against curriculum `expectedVisuals[].keywords` by the deterministic binder (§5.6 step 1).
 version: 1
 templates:
@@ -59,15 +60,15 @@ templates:
     params: {characters: "generated from the registry"}
     cannotShow: [teaching]
 visuals:
-  robot_families: {teaches: [what_is_a_robot], shows: [robot_examples, family_album], cannotShow: [mechanism]}
-  echo_diagram: {teaches: [ultrasonic, echo], shows: [sound, pulse, echo, reflect], cannotShow: [light, surface_black]}
-  sense_think_act: {teaches: [sense_think_act], shows: [loop, sense_think_act, flow_cycle], cannotShow: [branching]}
+  robot_families: {teaches: [what_is_a_robot], shows: [robot_examples, family_album], cannotShow: [mechanism], cueWords: [vacuum, arm, rover]}
+  echo_diagram: {teaches: [ultrasonic, echo], shows: [sound, pulse, echo, reflect], cannotShow: [light, surface_black], cueWords: [bounces, faster, bats]}
+  sense_think_act: {teaches: [sense_think_act], shows: [loop, sense_think_act, flow_cycle], cannotShow: [branching], cueWords: [sense, think, act]}
   the_rule: {teaches: [stop_rule], shows: [rule, threshold, if_then], cannotShow: [graph]}
   rule_test: {teaches: [stop_rule], shows: [readout, threshold, value_change], cannotShow: [graph]}
   servo_cutaway: {teaches: [servo_motor], shows: [servo, parts, callouts], cannotShow: [articulated_arm]}
-  servo_dial: {teaches: [servo_motor, angle], shows: [gauge, angle], cannotShow: [multi_joint]}
+  servo_dial: {teaches: [servo_motor, angle], shows: [gauge, angle], cannotShow: [multi_joint], cueWords: ["30", thirty, "60", sixty]}
   servo_head: {teaches: [servo_motor], shows: [servo, angle], cannotShow: [gripper]}
-  servo_cause: {teaches: [servo_motor], shows: [servo, cause_effect], cannotShow: [gripper]}
+  servo_cause: {teaches: [servo_motor], shows: [servo, cause_effect], cannotShow: [gripper], cueWords: [brain]}
   servo_split: {teaches: [servo_motor], shows: [servo, angle, compare], cannotShow: [gripper]}
   quiz_question: {teaches: [quiz], shows: [quiz_question, picture_choices], cannotShow: [new concepts]}
   sensor_range: {teaches: [sensor_range], shows: [range, distance, readout], cannotShow: [light]}

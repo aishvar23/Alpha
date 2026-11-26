@@ -1,0 +1,530 @@
+{
+  "claims": [
+    {
+      "claimId": "c-01",
+      "concept": "what_is_a_robot",
+      "kidText": "A robot senses, thinks and acts.",
+      "kind": "definition",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "a robot is a machine that can sense the world around it, think about what it senses and then act",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "a robot as a machine that can sense, think and act by itself",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "A robot is a machine that can sense, think and act."
+    },
+    {
+      "claimId": "c-02",
+      "concept": "what_is_a_robot",
+      "kidText": "A toaster doesn't think.",
+      "kind": "example",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "A toaster is not a robot because it does not decide anything on its own",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "a toaster does not decide anything, it just follows a timer",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "A toaster is not a robot: it does not decide anything."
+    },
+    {
+      "claimId": "c-03",
+      "concept": "what_is_a_robot",
+      "kidText": "A robot vacuum senses dirt and cleans.",
+      "kind": "example",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "Robot vacuums sense dirt and obstacles and clean floors",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "robot vacuums that clean floors",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "Robot vacuums sense dirt and clean floors."
+    },
+    {
+      "claimId": "c-04",
+      "concept": "what_is_a_robot",
+      "kidText": "A factory arm builds things.",
+      "kind": "example",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "robot arms assemble products piece by piece",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "factory robot arms that build cars",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "Factory robot arms build products."
+    },
+    {
+      "claimId": "c-05",
+      "concept": "what_is_a_robot",
+      "kidText": "A rover explores far away.",
+      "kind": "example",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "Space rovers explore distant places like Mars and can drive short distances on their own",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "rovers that explore other planets",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "Space rovers explore distant places and can drive on their own."
+    },
+    {
+      "claimId": "c-06",
+      "concept": "robot_parts",
+      "kidText": "Five main parts.",
+      "kind": "definition",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "Most robots have five main parts: a structure, sensors, actuators, a power source and a controller",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "Every robot needs a body or frame called the structure, sensors to notice things, actuators that move, a power source such as a battery, and a controller that decides what to do",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "Robots have five main parts: structure, sensors, actuators, power source, controller."
+    },
+    {
+      "claimId": "c-07",
+      "concept": "robot_parts",
+      "kidText": "The body holds everything.",
+      "kind": "definition",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "The structure is the frame or body that holds all the other parts together",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "a body or frame called the structure",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "The structure is the frame that holds the parts together."
+    },
+    {
+      "claimId": "c-08",
+      "concept": "robot_parts",
+      "kidText": "Sensors notice the world.",
+      "kind": "definition",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "Sensors gather information about the world, a little like our eyes and ears",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "Sensors work a bit like eyes and ears for a robot",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "Sensors gather information, like eyes and ears."
+    },
+    {
+      "claimId": "c-09",
+      "concept": "robot_parts",
+      "kidText": "Actuators move.",
+      "kind": "definition",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "Actuators are the parts that move, such as motors that turn wheels or arms",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "Actuators like motors make wheels and arms move",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "Actuators are the parts that move, like motors turning wheels and arms."
+    },
+    {
+      "claimId": "c-10",
+      "concept": "robot_parts",
+      "kidText": "Power gives energy.",
+      "kind": "definition",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "The power source, often a battery, supplies the energy the robot needs",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "a power source such as a battery",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "The power source, often a battery, supplies energy."
+    },
+    {
+      "claimId": "c-11",
+      "concept": "robot_parts",
+      "kidText": "The controller decides.",
+      "kind": "definition",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "The controller is the robot's computer brain: it decides what the robot should do",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "a controller that decides what to do",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "The controller is the robot's computer brain that decides."
+    },
+    {
+      "claimId": "c-12",
+      "concept": "distance_sensor",
+      "kidText": "It sends a sound we can't hear.",
+      "kind": "mechanism",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "a sound too high for people to hear",
+          "sourceId": "s-03"
+        },
+        {
+          "excerpt": "an ultrasonic sensor, which sends out a sound too high for people to hear",
+          "sourceId": "s-04"
+        }
+      ],
+      "text": "An ultrasonic sensor sends a sound too high for people to hear."
+    },
+    {
+      "claimId": "c-13",
+      "concept": "distance_sensor",
+      "kidText": "Faster echo, closer thing.",
+      "kind": "mechanism",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "the sooner the echo comes back, the closer the object is",
+          "sourceId": "s-03"
+        },
+        {
+          "excerpt": "the faster the echo comes back, the closer the thing is",
+          "sourceId": "s-04"
+        }
+      ],
+      "text": "The sound bounces back; the sooner the echo returns, the closer the object."
+    },
+    {
+      "claimId": "c-14",
+      "concept": "distance_sensor",
+      "kidText": "Bats do this too.",
+      "kind": "example",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "Bats use echoes the same way",
+          "sourceId": "s-04"
+        },
+        {
+          "excerpt": "Bats find their way in the dark using echoes of their own calls",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "Bats use echoes too."
+    },
+    {
+      "claimId": "c-15",
+      "concept": "distance_sensor",
+      "kidText": "It can measure a few meters.",
+      "kind": "number",
+      "numbers": [
+        {
+          "role": "min",
+          "unit": "cm",
+          "value": 2
+        },
+        {
+          "role": "max",
+          "unit": "m",
+          "value": 4
+        }
+      ],
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "Measuring range: about 2 cm to 4 m",
+          "sourceId": "s-03"
+        },
+        {
+          "excerpt": "Hobby ultrasonic modules sold with this kit measure distances from 2 cm to 4 m",
+          "sourceId": "s-05"
+        }
+      ],
+      "text": "Hobby ultrasonic sensors measure about 2 cm to 4 m."
+    },
+    {
+      "claimId": "c-16",
+      "concept": "stop_rule",
+      "kidText": "Too close? Stop.",
+      "kind": "mechanism",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "if an obstacle is closer than a set distance, called a threshold, it stops and turns",
+          "sourceId": "s-02"
+        },
+        {
+          "excerpt": "if the reading is less than the threshold, the robot stops",
+          "sourceId": "s-04"
+        }
+      ],
+      "text": "A robot can stop when a distance reading is below a threshold."
+    },
+    {
+      "claimId": "c-17",
+      "concept": "stop_rule",
+      "kidText": "Sense, think, act.",
+      "kind": "mechanism",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "they sense, then think by comparing what they sense with their rules, then act",
+          "sourceId": "s-01"
+        },
+        {
+          "excerpt": "This sense, think, act cycle repeats",
+          "sourceId": "s-02"
+        }
+      ],
+      "text": "Robots repeat a sense, think, act loop."
+    },
+    {
+      "claimId": "c-18",
+      "concept": "servo_motor",
+      "kidText": "A servo turns to an exact angle.",
+      "kind": "number",
+      "numbers": [
+        {
+          "role": "min",
+          "unit": "deg",
+          "value": 0
+        },
+        {
+          "role": "max",
+          "unit": "deg",
+          "value": 180
+        }
+      ],
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "Standard hobby servos can be positioned anywhere from 0 to 180 degrees",
+          "sourceId": "s-05"
+        },
+        {
+          "excerpt": "Most hobby servos move between 0 and 180 degrees",
+          "sourceId": "s-06"
+        }
+      ],
+      "text": "A servo turns to an exact angle, usually between 0 and 180 degrees."
+    },
+    {
+      "claimId": "c-19",
+      "concept": "distance_sensor",
+      "kidText": "The sensor measures distance.",
+      "kind": "definition",
+      "status": "unverified",
+      "support": [
+        {
+          "excerpt": "This sensor is often used to measure distance",
+          "sourceId": "s-03"
+        },
+        {
+          "excerpt": "A distance sensor is the part of a robot that measures distance",
+          "sourceId": "s-04"
+        }
+      ],
+      "text": "The distance sensor is the part that measures distance."
+    }
+  ],
+  "lineClaims": [
+    {
+      "beat": 5,
+      "claimIds": [
+        "c-02"
+      ],
+      "sceneId": "scene-002"
+    },
+    {
+      "beat": 8,
+      "claimIds": [
+        "c-03",
+        "c-04"
+      ],
+      "sceneId": "scene-002"
+    },
+    {
+      "beat": 9,
+      "claimIds": [
+        "c-05"
+      ],
+      "sceneId": "scene-002"
+    },
+    {
+      "beat": 1,
+      "claimIds": [
+        "c-07"
+      ],
+      "sceneId": "scene-003"
+    },
+    {
+      "beat": 3,
+      "claimIds": [
+        "c-08"
+      ],
+      "sceneId": "scene-003"
+    },
+    {
+      "beat": 4,
+      "claimIds": [
+        "c-09"
+      ],
+      "sceneId": "scene-003"
+    },
+    {
+      "beat": 7,
+      "claimIds": [
+        "c-10"
+      ],
+      "sceneId": "scene-003"
+    },
+    {
+      "beat": 11,
+      "claimIds": [
+        "c-11"
+      ],
+      "sceneId": "scene-003"
+    },
+    {
+      "beat": 0,
+      "claimIds": [
+        "c-12"
+      ],
+      "sceneId": "scene-004"
+    },
+    {
+      "beat": 4,
+      "claimIds": [
+        "c-13",
+        "c-14"
+      ],
+      "sceneId": "scene-004"
+    },
+    {
+      "beat": 13,
+      "claimIds": [
+        "c-15"
+      ],
+      "sceneId": "scene-004"
+    },
+    {
+      "beat": 17,
+      "claimIds": [
+        "c-15"
+      ],
+      "sceneId": "scene-004"
+    },
+    {
+      "beat": 2,
+      "claimIds": [
+        "c-16"
+      ],
+      "sceneId": "scene-005"
+    },
+    {
+      "beat": 4,
+      "claimIds": [
+        "c-17",
+        "c-16"
+      ],
+      "sceneId": "scene-005"
+    },
+    {
+      "beat": 0,
+      "claimIds": [
+        "c-09",
+        "c-18"
+      ],
+      "sceneId": "scene-006"
+    },
+    {
+      "beat": 2,
+      "claimIds": [
+        "c-18"
+      ],
+      "sceneId": "scene-006"
+    },
+    {
+      "beat": 5,
+      "claimIds": [
+        "c-18"
+      ],
+      "sceneId": "scene-006"
+    },
+    {
+      "beat": 6,
+      "claimIds": [
+        "c-18"
+      ],
+      "sceneId": "scene-006"
+    },
+    {
+      "beat": 9,
+      "claimIds": [
+        "c-18"
+      ],
+      "sceneId": "scene-006"
+    },
+    {
+      "beat": 0,
+      "claimIds": [
+        "c-17"
+      ],
+      "sceneId": "scene-007"
+    },
+    {
+      "beat": 6,
+      "claimIds": [
+        "c-19"
+      ],
+      "sceneId": "scene-008"
+    },
+    {
+      "beat": 7,
+      "claimIds": [
+        "c-19"
+      ],
+      "sceneId": "scene-008"
+    }
+  ]
+}

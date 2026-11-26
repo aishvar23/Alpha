@@ -1,0 +1,13 @@
+# HAND-WRITTEN TEST FIXTURE allowlist. The *.fixture.test domains are fake; their page texts in
+# tests/golden/authoring/*/pages/ are synthetic, written for the offline tests (not real source text).
+version: 1
+domains:
+  edu-a.fixture.test: {group: FixtureEduA, tier: B}
+  edu-b.fixture.test: {group: FixtureEduB, tier: B}
+  edu-c.fixture.test: {group: FixtureEduC, tier: B}
+  sensorco.fixture.test: {group: FixtureSensorCo, tier: C}
+  partsco.fixture.test: {group: FixturePartsCo, tier: C}
+  servoco.fixture.test: {group: FixtureServoCo, tier: C}
+  copycat.fixture.test: {group: FixtureCopycat, tier: B}
+  wiki.fixture.test: {group: FixtureWiki, tier: D, neverCounts: true}
+blocked: [spam.fixture.test]

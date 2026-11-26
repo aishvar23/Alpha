@@ -1,0 +1,4 @@
+[HAND-WRITTEN TEST FIXTURE - synthetic page text, not a real source]
+Hobby servo motor datasheet. A servo motor turns its output shaft to an exact angle that the controller asks for.
+Standard hobby servos can be positioned anywhere from 0 to 180 degrees.
+Hobby ultrasonic modules sold with this kit measure distances from 2 cm to 4 m.

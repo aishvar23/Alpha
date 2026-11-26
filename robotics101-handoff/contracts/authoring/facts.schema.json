@@ -60,6 +60,15 @@
                 },
                 "unit": {
                   "type": "string"
+                },
+                "role": {
+                  "enum": [
+                    "exact",
+                    "min",
+                    "max"
+                  ],
+                  "default": "exact",
+                  "description": "min/max bound a verified range; an episode demo number inside it is allowed (§3.5 rule 4)"
                 }
               }
             }
@@ -97,6 +106,36 @@
           },
           "note": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "lineClaims": {
+      "type": "array",
+      "description": "teaching line -> claim ids (source-spec beat indices); kept here, not in the beat (§1.2)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sceneId",
+          "beat",
+          "claimIds"
+        ],
+        "properties": {
+          "sceneId": {
+            "type": "string"
+          },
+          "beat": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "claimIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^c-[0-9]{2,3}$"
+            }
           }
         }
       }

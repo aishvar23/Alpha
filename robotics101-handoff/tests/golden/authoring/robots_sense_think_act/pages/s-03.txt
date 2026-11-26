@@ -1,0 +1,4 @@
+[HAND-WRITTEN TEST FIXTURE - synthetic page text, not a real source]
+Ultrasonic distance sensor module, product notes. The sensor sends out a burst of ultrasound at 40 kHz, a sound too high for people to hear.
+The sound bounces off objects and the echo comes back to the receiver. The sensor measures the time until the echo returns: the sooner the echo comes back, the closer the object is.
+Measuring range: about 2 cm to 4 m. This sensor is often used to measure distance in hobby robots.

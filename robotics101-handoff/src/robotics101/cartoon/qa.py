@@ -728,6 +728,34 @@ def check_charge_cable(rep, by: dict) -> None:
              {sid: d for sid, d in hits})
 
 
+def engagement_outline(out_dir: Path, episode_id: str | None) -> dict | None:
+    """Gag tags / hook for the engagement re-measure: the bundle's authoring outline, else the committed
+    ``curriculum/outlines/<episodeId>.json`` (ep-001 is hand-authored)."""
+    for p in (Path(out_dir) / "authoring_outline.json",
+              Path(__file__).resolve().parents[3] / "curriculum" / "outlines" / f"{episode_id}.json"):
+        doc = _load(p)
+        if doc:
+            return doc
+    return None
+
+
+def check_engagement(rep, out_dir: Path, spec: dict, timing: dict, sj: dict) -> None:
+    """A3 (PLAN-authoring §6.2): the authoring engagement gate re-measured on the real timing.json + scenes.json shot
+    windows, same thresholds. Hard when gag tags are known (authoring outline); soft otherwise."""
+    from robotics101.authoring import engagement as E
+    from robotics101.authoring.curriculum import canon
+    from robotics101.authoring.gates import to_expanded
+    outline = engagement_outline(out_dir, spec.get("episodeId"))
+    src = _load(Path(out_dir) / "episode.source.json")
+    if outline and src:
+        outline = {**outline, "gags": to_expanded(src, spec, outline.get("gags") or [])}
+    res = E.evaluate(spec, timing, shots_by_scene=E.shots_from_scenes_json(sj), outline=outline,
+                     vocabulary=canon()["vocabulary"])
+    for c in res.checks:
+        (rep.hard if outline else rep.soft)(c["id"], c["ok"], c["message"] + ("" if outline else
+                                            " (no authoring outline: gag tags unknown, soft)"), c.get("value"))
+
+
 def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     from robotics101.cartoon.audio import check_mix
     from robotics101.cartoon.rigs import RIG_VERSION
@@ -802,6 +830,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
         check_concepts(rep, out_dir, spec, by, timing)
         check_static_holds(rep, out_dir, spec, timing, by, float(sj.get("transitionHalfSeconds", 0.4)))
     check_subtitles(rep, out_dir, spec, timing, video_s)
+    check_engagement(rep, out_dir, spec, timing, sj)               # A3 engagement gate on real timing
 
     # teaching facts (what is drawn on screen vs the spec)
     sp = {s["template"]: s.get("parameters", {}) for s in spec["scenes"]}

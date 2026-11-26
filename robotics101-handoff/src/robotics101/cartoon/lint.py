@@ -12,7 +12,8 @@ import re
 
 _WORDS = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
           "nine": 9, "ten": 10, "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "ninety": 90}
-_UNIT = r"(meters?|metres?|m\b|centimeters?|centimetres?|cm\b|degrees?|°)"
+_UNIT = (r"(meters?|metres?|m\b|centimeters?|centimetres?|cm\b|millimeters?|millimetres?|mm\b|degrees?|°|"
+         r"seconds?|hertz|hz\b|percent|%)")   # A3: + mm, s, Hz, % (PLAN-authoring §3.4)
 _NUM_RE = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)\s*" + _UNIT, re.I)
 _WORD_RE = re.compile(r"\b(" + "|".join(_WORDS) + r")\s+" + _UNIT, re.I)
 _HALF_RE = re.compile(r"\bhalf\s+(?:a\s+)?(meter|metre)s?\b", re.I)
@@ -25,6 +26,14 @@ def _to_si(value: float, unit: str) -> tuple[float, str]:
     u = unit.lower()
     if u.startswith(("cent", "cm")):
         return value / 100.0, "m"
+    if u.startswith(("milli", "mm")):
+        return value / 1000.0, "m"
+    if u.startswith("sec"):
+        return value, "s"
+    if u.startswith(("hertz", "hz")):
+        return value, "hz"
+    if u.startswith(("percent", "%")):
+        return value, "pct"
     if u.startswith(("deg", "°")):
         return value, "deg"
     return value, "m"

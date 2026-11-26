@@ -147,6 +147,8 @@ def test_no_network_imports_outside_provider_module():
                 elif isinstance(node, ast.ImportFrom) and node.module:
                     names = [node.module]
                 for n in names:
+                    if n == "urllib.parse":                 # pure URL parsing, no I/O
+                        continue
                     if n.split(".")[0] in NET_MODULES and p.name not in ALLOWED:
                         bad.append(f"{p.relative_to(ROOT)} imports {n}")
     assert bad == []

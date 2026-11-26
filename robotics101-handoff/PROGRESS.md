@@ -230,6 +230,14 @@ Design: `cartoon/episode.py::expand_episode(spec, registry)` (idempotent) adds g
 
 - M05.3 notes: `cartoon/acting.py` pose library (surprised, giggle, proud, excited, thinking, worried, curious, nod, talk_bounce, celebrate) with envelopes; `auto_pose` picks a pose from the line `emotion` + text (`?` → curious, `!` + happy → excited), `auto_react` gives listeners a reaction; script overrides via line `pose`/`react` (schema 1.1, validated). Rig v2 channels: `head_tilt`, `brow`, `antenna`, `hair`, `stride`, `wheel` (Maya brows + leg swing + hair bounce, Bolt antenna follow-through + wheels + LED brows for strong feelings, Nib mast sway). `Performer.emote` layers poses additively; music cues victory/chant/title and sfx sparkle/ding/clap trigger `celebrate`. QA `characters.acting` (hard): mean key-point speed ≥ 75 px/s (Nib 40), still share ≤ 30 %, ≥ 3 distinct emotion poses per speaker; `characters.celebrate` (soft). Measured on ep1 EL timing: Maya 87–114 → 135–250 px/s, Bolt 63–113 → 79–216, Nib 30 → 45; max still share 0.19. Feasibility/options: docs/RIG_FEASIBILITY.md.
 
+## Authoring track (docs/PLAN-authoring.md, approved 2026-11-26; offline, $0, no paid calls)
+| Step | Scope | Status |
+|---|---|---|
+| A1 | Authoring contracts (contracts/authoring), curriculum sequence + canon, capability catalogue + snapshot, R1/R2 review packets/checker; `authoring catalog`, `authoring review` | **done** (3f753a3) |
+| A2 | Provider interface (fixture default, recording, Anthropic refuses without live flag+key), prompt registry, trace + budget guard, no-network test guard | **done** (c988584) |
+| A3 | Deterministic gates (numbers/canon/ranges/teaching lines/kid-safe/caption/layout dry runs, reading level), source independence, engagement gate calibrated on ep-001 (+ QA `engagement.*`), `authoring gate` | **done** (see git log) |
+Notes: details in docs/AUTHORING.md. Provisional (user-tunable) defaults live in authoring/config.yaml and curriculum/sequence.yaml.
+
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)
 - Done: validate CLI + schema/semantic checks; labelled offline TTS + per-scene timing + SRT; six Manim templates + headless Blender scene with collision check; composer (H.264/AAC 1080p30, −16 LUFS), QA report, SHA-256 manifest, `render`/`make demo`; thumbnail; publisher dry-run stub; no uploads/cloud.
 - Not met by design / owner decisions pending: the sample narration is a short stub (66 s of speech in 300 s) so QA flags every scene for voice coverage and each scene animates ~10–20 s then holds; espeak is a robotic placeholder voice. Fuller narration + production voice (and then pacing animations to the narration window) are pending the owner's decision.

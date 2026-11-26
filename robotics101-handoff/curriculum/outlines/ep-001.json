@@ -1,0 +1,294 @@
+{
+  "gags": [
+    {
+      "beat": 11,
+      "kind": "line",
+      "note": "hard-working family",
+      "sceneId": "scene-002"
+    },
+    {
+      "beat": 2,
+      "kind": "sight",
+      "note": "flexing 'structures'",
+      "sceneId": "scene-003"
+    },
+    {
+      "beat": 10,
+      "kind": "sight",
+      "note": "yawn: low battery",
+      "sceneId": "scene-003"
+    },
+    {
+      "beat": 5,
+      "kind": "line",
+      "note": "a bat with wheels",
+      "sceneId": "scene-004"
+    },
+    {
+      "beat": 14,
+      "kind": "sight",
+      "note": "Nib flies out of range",
+      "sceneId": "scene-004"
+    },
+    {
+      "beat": 3,
+      "kind": "sight",
+      "note": "high-five misses at 30 degrees",
+      "sceneId": "scene-006"
+    }
+  ],
+  "hook": {
+    "id": "boxes",
+    "keywords": [
+      "boxes",
+      "bonk"
+    ],
+    "problem": "Bolt keeps bumping into a pile of boxes",
+    "prop": "boxes"
+  },
+  "scenes": [
+    {
+      "beats": [
+        {
+          "gag": {
+            "kind": "sight",
+            "note": "bonk + dizzy stars"
+          },
+          "purpose": "Bolt zooms in and bonks into the boxes",
+          "visualIntent": null
+        },
+        {
+          "gag": {
+            "kind": "line"
+          },
+          "purpose": "Maya: robots must notice things by themselves; ends on 'Is it a dance?'"
+        }
+      ],
+      "concept": null,
+      "role": "hook",
+      "sceneId": "scene-001",
+      "targetSeconds": 30,
+      "template": "cartoon_cold_open"
+    },
+    {
+      "beats": [
+        {
+          "claimIds": [
+            "c-01"
+          ],
+          "purpose": "define a robot: sense, think, act"
+        },
+        {
+          "claimIds": [
+            "c-02"
+          ],
+          "gag": {
+            "kind": "sfx",
+            "note": "toaster_pop"
+          },
+          "purpose": "toaster misconception",
+          "visualIntent": "a toaster that does not decide"
+        },
+        {
+          "claimIds": [
+            "c-03",
+            "c-04",
+            "c-05"
+          ],
+          "purpose": "robot family examples",
+          "visualIntent": "vacuum, factory arm, rover, one per frame"
+        },
+        {
+          "gag": {
+            "kind": "line"
+          },
+          "purpose": "Bolt is proud of his hard-working family"
+        }
+      ],
+      "concept": "what_is_a_robot",
+      "role": "concept",
+      "sceneId": "scene-002",
+      "targetSeconds": 40,
+      "template": "cartoon_robot_family"
+    },
+    {
+      "beats": [
+        {
+          "claimIds": [
+            "c-06",
+            "c-07",
+            "c-08",
+            "c-09",
+            "c-10",
+            "c-11"
+          ],
+          "purpose": "five main parts, one per frame",
+          "visualIntent": "each part glows on Bolt"
+        },
+        {
+          "gag": {
+            "kind": "sight"
+          },
+          "purpose": "'Check out these structures!' flex"
+        },
+        {
+          "claimIds": [
+            "c-10"
+          ],
+          "gag": {
+            "kind": "sight",
+            "note": "yawn"
+          },
+          "purpose": "battery low -> yawn -> charge"
+        }
+      ],
+      "concept": "robot_parts",
+      "role": "concept",
+      "sceneId": "scene-003",
+      "targetSeconds": 40,
+      "template": "cartoon_robot_checkup"
+    },
+    {
+      "beats": [
+        {
+          "claimIds": [
+            "c-12",
+            "c-13",
+            "c-14"
+          ],
+          "purpose": "ultrasonic ping and echo",
+          "visualIntent": "sound pulse out and back"
+        },
+        {
+          "gag": {
+            "kind": "line"
+          },
+          "purpose": "'A bat with wheels!'"
+        },
+        {
+          "claimIds": [
+            "c-15"
+          ],
+          "gag": {
+            "kind": "sight"
+          },
+          "purpose": "Nib at 1.2 m, range 3 m, Nib flies out of range",
+          "visualIntent": "range bar with Nib inside then outside"
+        }
+      ],
+      "concept": "distance_sensor",
+      "role": "concept",
+      "sceneId": "scene-004",
+      "targetSeconds": 45,
+      "template": "cartoon_sensor_ping"
+    },
+    {
+      "beats": [
+        {
+          "claimIds": [
+            "c-16"
+          ],
+          "purpose": "the stop rule at half a meter",
+          "visualIntent": "rule on the board"
+        },
+        {
+          "claimIds": [
+            "c-17"
+          ],
+          "purpose": "sense-think-act walk-through",
+          "visualIntent": "loop lighting each step"
+        },
+        {
+          "gag": {
+            "kind": "sfx",
+            "note": "skid"
+          },
+          "purpose": "practice readings, dramatic stop"
+        }
+      ],
+      "concept": "stop_rule",
+      "role": "concept",
+      "sceneId": "scene-005",
+      "targetSeconds": 50,
+      "template": "cartoon_rule_board"
+    },
+    {
+      "beats": [
+        {
+          "claimIds": [
+            "c-09",
+            "c-18"
+          ],
+          "purpose": "servo turns to an exact angle",
+          "visualIntent": "servo cutaway + dial"
+        },
+        {
+          "claimIds": [
+            "c-18"
+          ],
+          "gag": {
+            "kind": "sight"
+          },
+          "purpose": "miss at 30 degrees"
+        },
+        {
+          "claimIds": [
+            "c-18"
+          ],
+          "purpose": "high-five at 60 degrees"
+        }
+      ],
+      "concept": "servo_motor",
+      "role": "concept",
+      "sceneId": "scene-006",
+      "targetSeconds": 40,
+      "template": "cartoon_servo_highfive"
+    },
+    {
+      "beats": [
+        {
+          "claimIds": [
+            "c-17"
+          ],
+          "purpose": "rematch with the boxes: sense, stop, turn",
+          "visualIntent": "robot-cam cutaway"
+        },
+        {
+          "gag": {
+            "kind": "sight"
+          },
+          "purpose": "victory spin bonk"
+        }
+      ],
+      "concept": null,
+      "role": "practice",
+      "sceneId": "scene-007",
+      "targetSeconds": 30,
+      "template": "cartoon_obstacle_rematch"
+    },
+    {
+      "beats": [
+        {
+          "purpose": "chant: Sense! Think! Act!"
+        },
+        {
+          "claimIds": [
+            "c-19"
+          ],
+          "purpose": "quiz: which part measures distance?"
+        },
+        {
+          "gag": {
+            "kind": "reaction"
+          },
+          "purpose": "Nib answers first"
+        }
+      ],
+      "concept": null,
+      "role": "recap",
+      "sceneId": "scene-008",
+      "targetSeconds": 30,
+      "template": "cartoon_recap_chant"
+    }
+  ]
+}

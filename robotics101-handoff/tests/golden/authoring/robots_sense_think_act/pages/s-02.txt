@@ -1,0 +1,9 @@
+[HAND-WRITTEN TEST FIXTURE - synthetic page text, not a real source]
+Robots for beginners. Engineers describe a robot as a machine that can sense, think and act by itself.
+Everyday appliances such as a toaster are not robots: a toaster does not decide anything, it just follows a timer.
+Examples of real robots: robot vacuums that clean floors, factory robot arms that build cars, and rovers that explore other planets.
+Every robot needs a body or frame called the structure, sensors to notice things, actuators that move, a power source such as a battery, and a controller that decides what to do.
+Sensors work a bit like eyes and ears for a robot. Actuators like motors make wheels and arms move.
+A robot can follow a simple rule: if an obstacle is closer than a set distance, called a threshold, it stops and turns.
+Bats find their way in the dark using echoes of their own calls.
+This sense, think, act cycle repeats many times every second.

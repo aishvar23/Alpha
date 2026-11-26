@@ -41,3 +41,30 @@ blocked.
   and rubric thresholds, reading level, age band default, role line-up).
 - Tests: conftest blocks AF_INET/AF_INET6 `connect` for the whole suite and clears the live flag/key; an AST test
   forbids network imports in `authoring/` and `cartoon/kit/` outside `llm.py`.
+
+## A3 — deterministic gates + engagement gate (calibrated on ep-001)
+- `robotics101 authoring gate <spec> [--facts F] [--outline O] [--gaps G] [--age-band B] [--out DIR] [--screenplay]`
+  writes a contract-valid `authoring_report.json` (+ optional Markdown screenplay). Blocking gates: format.schema
+  (existing validator incl. `lint.fact_problems`), facts.numbers (every spoken number ↔ a verified claim, exact or
+  min..max range, plus canon `curriculum/canon.json`), facts.ranges (`authoring/ranges.yaml`), facts.cross_scene,
+  facts.teaching_lines (every teaching line cites a verified claim via `lineClaims`), kidsafe.topic, caption.dry_run
+  (subtitle chunker on an estimated timeline: max 2 lines, ≥ 80 % one-line), layout.dry_run (explain lines inside an
+  illustration/solo shot; `visual_gap` only if listed in visual_gaps.json), engagement.*. Warnings: reading level
+  (Flesch-Kincaid), timing vs `durationTargetSeconds`.
+- `timeline.estimate_timing(spec, wps=2.6)` gives a timing.json-shaped estimate with the voice.dialogue rules, so
+  gates run before any audio exists.
+- `independence.py`: source allowlist `authoring/sources.yaml` (tiers/groups, blocked list), independence reasons
+  (not allowlisted, wikipedia, same publisher group, near-duplicate / syndicated by shingle Jaccard + longest shared
+  run, cites each other, same upstream), `verify_claims` recomputes status (verified needs 2 independent sources
+  with the excerpt present; else single_source / unverified; contradicted kept).
+- Engagement (`engagement.py`, provisional thresholds in `authoring/config.yaml`): visual change ≤ **9.0 s**
+  (plan said 8; ep-001 measures 8.43 s estimated / 7.58 s on real v7 timing), cold open ≤ **40 s** (plan said 30;
+  ep-001 = 37.4 s), gag density, reaction density, monologue length, hook + hook callback, chant, audience
+  questions, first concept time. Visual events counted: scene/shot bounds, concept card, actions, emotion poses,
+  readouts, impact SFX, card/kit cue words. Both changes are calibration to the shipped, owner-approved ep-001 and
+  are user-tunable.
+- **ep-001 result:** all blocking gates pass with `tests/golden/authoring/robots_sense_think_act/facts.extracted.json`
+  + `curriculum/outlines/ep-001.json`; the QA check `engagement.*` (cartoon/qa.py, hard when an outline exists) passes
+  9/9 on the real out/m05.8-v7 timing. Fixture source pages are hand-written, labelled, on `*.fixture.test` domains.
+- `cartoon/lint.py` units extended (mm, seconds, Hz, percent). lint.py and qa.py are outside the scene-lock code
+  hash, so no ep-001 lock changed.
