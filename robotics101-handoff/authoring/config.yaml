@@ -1,0 +1,56 @@
+# Authoring run configuration. Every value marked PROVISIONAL is the plan's stated default and owner-tunable
+# (PLAN-authoring §12): change it here, not in code. Thresholds are frozen per prompt version after A8 calibration.
+version: 1
+provisional:
+  - budget.perEpisodeUsd
+  - budget.monthlyUsd
+  - engagement
+  - rubric
+  - readingLevel
+  - ageBandDefault
+  - roles
+roles:                         # §8.1 v1 single-vendor line-up (names/prices verified at A8)
+  writer: claude-opus-5.5
+  critic: claude-opus-5.5
+  critic_second: claude-sonnet-5.5
+  research: claude-sonnet-5.5
+  bulk: claude-haiku-5.5
+budget:
+  perEpisodeUsd: 8.00          # §8.4 default request budgetUsd
+  monthlyUsd: 40.00            # ROBOTICS101_AUTHORING_MAX_USD_MONTH overrides
+  stageCapsUsd:                # §8.2 estimate x ~2.5, per stage
+    plan: 0.50
+    research: 2.00
+    extract: 1.00
+    outline: 0.75
+    script: 1.50
+    bind: 0.75
+    critique: 1.50
+    revise: 3.00
+  maxRetries: 2
+ageBandDefault: "6-9"
+readingLevel:                  # §4.4
+  "6-9": {maxGrade: 3.5, avgWords: 11, maxWords: 18}
+  "9-12": {maxGrade: 5.0, avgWords: 14, maxWords: 22}
+engagement:                    # §6.2, ages 6-9 (9-12 relaxed by `relax9to12`)
+  wps: 2.6
+  visualChangeMaxS: 8.0
+  visualChangeWarnS: 6.0
+  gagPerMin: 1.5
+  gagPerScene: 1
+  gagWindowS: 45.0
+  reactionPerMin: 3.0
+  monologueMaxS: 15.0
+  hookFirstGagS: 10.0
+  coldOpenMaxS: 30.0
+  hookCallbackTail: 0.25
+  audienceQuestionsMin: 2
+  firstConceptMaxS: 75.0
+  relax9to12: 1.2
+rubric:                        # §6.3 blocking thresholds (lower of two critic samples counts)
+  accuracy: 5
+  clarity: 4
+  fun: 4
+  engagement: 4
+  character_voice: 4
+  age_fit: 4

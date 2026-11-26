@@ -33,3 +33,27 @@ def _no_elevenlabs_network(monkeypatch, tmp_path):
     def _blocked():
         raise AssertionError("tests must not create a real ElevenLabs client (inject client_factory)")
     monkeypatch.setattr(backends, "_sdk_client", _blocked)
+
+
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    """A2 (PLAN-authoring §9): tests never open an internet socket (AF_INET/AF_INET6). Unix sockets (used by
+    multiprocessing / asyncio internals) stay allowed. Paid authoring providers are also disabled."""
+    import socket
+
+    real_connect, real_connect_ex = socket.socket.connect, socket.socket.connect_ex
+
+    def _guard(self, *a, **k):
+        if self.family in (socket.AF_INET, socket.AF_INET6):
+            raise AssertionError(f"tests must not use the network (tried to connect to {a[0] if a else '?'})")
+        return real_connect(self, *a, **k)
+
+    def _guard_ex(self, *a, **k):
+        if self.family in (socket.AF_INET, socket.AF_INET6):
+            raise AssertionError("tests must not use the network")
+        return real_connect_ex(self, *a, **k)
+
+    monkeypatch.setattr(socket.socket, "connect", _guard)
+    monkeypatch.setattr(socket.socket, "connect_ex", _guard_ex)
+    monkeypatch.delenv("ROBOTICS101_AUTHORING_LIVE", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)

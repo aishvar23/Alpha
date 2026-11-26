@@ -1,0 +1,12 @@
+# Authoring model prices (PLAN-authoring §8.1). USD per 1M tokens, input / output; search per 1,000.
+# UNVERIFIED: copied from the plan (as seen 2026-11-24). A8 must check them against the official pricing page
+# (platform.claude.com/docs/en/about-claude/pricing) BEFORE any paid call and bump `version`.
+version: 1
+verified: false
+asOf: "2026-11-24 (plan)"
+models:
+  claude-opus-5.5: {input: 4.00, output: 20.00, cacheHit: 0.20}
+  claude-sonnet-5.5: {input: 2.00, output: 10.00, cacheHit: 0.10}
+  claude-haiku-5.5: {input: 0.10, output: 0.50, cacheHit: 0.01}
+  fixture-model: {input: 0.0, output: 0.0, cacheHit: 0.0}
+searchPer1000: 10.00
