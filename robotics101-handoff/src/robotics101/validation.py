@@ -257,7 +257,12 @@ def _check_cartoon(spec: dict, report: ValidationReport) -> None:
             if sh["layout"] == "solo" and not sh.get("character"):
                 report.error(where, "a solo shot needs its one `character`")
             vis = sh.get("visual")
-            if vis and not vis.startswith(("concept_", "example_", "part_")):
+            if (vis == "visual_gap") != bool(sh.get("gap")):                # A4 explicit placeholder
+                report.error(where, "a `visual_gap` placeholder shot needs its `gap` {gapId, what}, and `gap` is "
+                                    "only allowed on a `visual_gap` shot")
+            if vis == "visual_gap":
+                pass
+            elif vis and not vis.startswith(("concept_", "example_", "part_")):
                 from robotics101.cartoon.visuals import all_visuals
                 known = all_visuals()
                 if vis not in known:

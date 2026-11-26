@@ -180,6 +180,8 @@ def build_publish_plan(out_dir: Path) -> dict:
         blockers.append(f"profile {manifest.get('profile')!r} is not publishable (render with --profile full)")
     if approval["status"] != "approved":
         blockers.append(f"approval {approval['status']}: {approval['message']}")
+    from robotics101.authoring.gaps import publish_blockers               # A4: visual gaps / placeholders
+    blockers += publish_blockers(out_dir)
     if synthetic:
         blockers.append("narration is a synthetic placeholder voice (owner decision pending on production voice)")
 

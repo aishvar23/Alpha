@@ -92,6 +92,12 @@ def check_r3(bundle_dir: Path) -> dict:
     final = Path(bundle_dir) / "final.mp4"
     if not final.is_file():
         return {"point": "R3", "status": "missing", "message": "no final.mp4"}
+    from robotics101.authoring.gaps import placeholders
+    sj = Path(bundle_dir) / "scenes.json"
+    shown = placeholders(json.loads(sj.read_text(encoding="utf-8"))) if sj.is_file() else []
+    if shown:                                     # §5.6: R3 cannot approve a video that shows a placeholder
+        return {"point": "R3", "status": "placeholder",
+                "message": f"video shows {len(shown)} visual_gap placeholder(s); R3 cannot approve it"}
     return {"point": "R3", **check_approval(bundle_dir, sha256_file(final))}
 
 

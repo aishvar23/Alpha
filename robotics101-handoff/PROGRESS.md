@@ -236,6 +236,7 @@ Design: `cartoon/episode.py::expand_episode(spec, registry)` (idempotent) adds g
 | A1 | Authoring contracts (contracts/authoring), curriculum sequence + canon, capability catalogue + snapshot, R1/R2 review packets/checker; `authoring catalog`, `authoring review` | **done** (3f753a3) |
 | A2 | Provider interface (fixture default, recording, Anthropic refuses without live flag+key), prompt registry, trace + budget guard, no-network test guard | **done** (c988584) |
 | A3 | Deterministic gates (numbers/canon/ranges/teaching lines/kid-safe/caption/layout dry runs, reading level), source independence, engagement gate calibrated on ep-001 (+ QA `engagement.*`), `authoring gate` | **done** (see git log) |
+| A4 | Visual-gap report + `visual_gap` placeholder (golden) + QA `authoring.visual_gaps` (hard) + publish/R3 blockers; kit render hooks; scene-lock hash now includes cartoon/kit | **done** (see git log; ep-001 locks pending frame-identical carry-over after A6) |
 Notes: details in docs/AUTHORING.md. Provisional (user-tunable) defaults live in authoring/config.yaml and curriculum/sequence.yaml.
 
 ## M01 status vs acceptance (tasks/M01_LOCAL_VERTICAL_SLICE.md)

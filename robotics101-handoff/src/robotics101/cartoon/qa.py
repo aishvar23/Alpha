@@ -756,6 +756,28 @@ def check_engagement(rep, out_dir: Path, spec: dict, timing: dict, sj: dict) -> 
                                             " (no authoring outline: gag tags unknown, soft)"), c.get("value"))
 
 
+def check_visual_gaps(rep, out_dir: Path, sj: dict) -> None:
+    """A4 (PLAN-authoring §5.6): hard. A bundle that shows a ``visual_gap`` placeholder fails (R3 cannot approve it);
+    every placeholder must be listed in the bundle's visual_gaps.json."""
+    from robotics101.authoring.gaps import GAPS_NAME, gap_problems, load_gaps, placeholders
+    try:
+        gaps = load_gaps(Path(out_dir) / GAPS_NAME)
+    except Exception as e:
+        rep.hard("authoring.visual_gaps", False, f"{GAPS_NAME} invalid: {e}")
+        return
+    shown = placeholders(sj)
+    probs = gap_problems(sj, gaps)
+    if not shown and not probs:
+        n = len((gaps or {}).get("gaps", []))
+        rep.hard("authoring.visual_gaps", True, "no placeholder visuals shown"
+                 + (f" ({n} listed gap(s) covered by fallback visuals)" if n else ""), 0)
+        return
+    msg = [f"{len(shown)} 'VISUAL COMING SOON' placeholder(s) shown: "
+           + ", ".join(f"{sid} {(sh.get('gap') or {}).get('gapId')}" for sid, sh in shown[:6])] if shown else []
+    rep.hard("authoring.visual_gaps", False, "; ".join(msg + probs) + " — add the visual (kit preset/primitive/"
+             "template) and re-run bind; a placeholder cannot be approved", len(shown))
+
+
 def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
     from robotics101.cartoon.audio import check_mix
     from robotics101.cartoon.rigs import RIG_VERSION
@@ -831,6 +853,7 @@ def run_cartoon_qa(out_dir: Path, profile_name: str = "full") -> QaReport:
         check_static_holds(rep, out_dir, spec, timing, by, float(sj.get("transitionHalfSeconds", 0.4)))
     check_subtitles(rep, out_dir, spec, timing, video_s)
     check_engagement(rep, out_dir, spec, timing, sj)               # A3 engagement gate on real timing
+    check_visual_gaps(rep, out_dir, sj)                             # A4 explicit visual gaps
 
     # teaching facts (what is drawn on screen vs the spec)
     sp = {s["template"]: s.get("parameters", {}) for s in spec["scenes"]}

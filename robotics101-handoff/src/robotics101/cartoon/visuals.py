@@ -279,6 +279,9 @@ def visual(name: str):
         from robotics101.cartoon.explainers import checkup_part
         part = name[len("part_"):]
         return lambda t, ctx, box=ILLUSTRATION_BOX, k=part: checkup_part(t, {**ctx, "part": ctx.get("part") or k}, box)
+    if name == "visual_gap" or name.startswith("kit_"):          # A4-A6 parametric kit + explicit gap placeholder
+        from robotics101.cartoon import kit
+        return kit.visual(name)
     raise ValueError(f"unknown shot visual {name!r}; known: {sorted(catalog)} or concept_<icon> / example_<kind> / part_<name>")
 
 
@@ -286,8 +289,8 @@ def visual(name: str):
 TEACHING_VISUALS = {"echo_diagram", "sense_think_act", "the_rule", "rule_test", "servo_cutaway", "servo_dial",
                     "servo_head", "quiz_question", "sensor_range", "sensor_out_of_range", "robot_families",
                     "servo_cause", "servo_split"}
-TEACHING_PREFIXES = ("example_", "part_", "concept_")
-EXAMPLE_PREFIXES = ("example_", "part_")
+TEACHING_PREFIXES = ("example_", "part_", "concept_", "kit_", "visual_gap")
+EXAMPLE_PREFIXES = ("example_", "part_", "kit_", "visual_gap")
 EXAMPLE_VISUALS = {"echo_diagram", "sense_think_act", "the_rule", "rule_test", "servo_cutaway", "servo_dial",
                    "servo_head", "quiz_question", "sensor_range", "sensor_out_of_range", "servo_cause", "servo_split"}
 

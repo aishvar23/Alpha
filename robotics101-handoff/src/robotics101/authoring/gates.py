@@ -253,16 +253,15 @@ def caption_dry_run(est: dict) -> dict:
 def layout_problems(expanded: dict, gaps: dict | None, bindings: dict | None) -> list[str]:
     from robotics101.cartoon.episode import EXPLAIN_LAYOUTS
     out = []
-    gap_beats = {(g["sceneId"], b) for g in (gaps or {}).get("gaps", []) for b in g["beats"]}
     for s in expanded["scenes"]:
         shots = s.get("shots") or []
         for j, b in enumerate(s["beats"]):
             if b["type"] == "line" and b.get("explain"):
                 if not any(sh["layout"] in EXPLAIN_LAYOUTS and sh["fromBeat"] <= j <= sh["toBeat"] for sh in shots):
                     out.append(f"{s['sceneId']} beat {j}: explain line outside an illustration/solo shot")
-        for sh in shots:
-            if sh.get("visual") == "visual_gap" and (s["sceneId"], sh["fromBeat"]) not in gap_beats and gaps is not None:
-                out.append(f"{s['sceneId']}: visual_gap placeholder at beat {sh['fromBeat']} not in visual_gaps.json")
+    if gaps is not None:
+        from robotics101.authoring.gaps import gap_problems
+        out += gap_problems(expanded, gaps)
     return out
 
 

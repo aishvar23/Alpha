@@ -192,8 +192,9 @@ def test_caption_and_layout_variants(ep1, outline1, facts1):
     s1["beats"][7]["explain"] = True                                     # teaching line, but no shot covers it
     probs = G.layout_problems(exp, {"gaps": []}, None)
     assert any("outside an illustration/solo shot" in p for p in probs)
-    s1.setdefault("shots", []).append({"layout": "illustration", "fromBeat": 7, "toBeat": 7, "visual": "visual_gap"})
-    assert any("not in visual_gaps.json" in p for p in G.layout_problems(exp, {"gaps": []}, None))
+    s1.setdefault("shots", []).append({"layout": "illustration", "fromBeat": 7, "toBeat": 7, "visual": "visual_gap",
+                                       "gap": {"gapId": "gap-01", "what": "something"}})
+    assert any("not listed in visual_gaps.json" in p for p in G.layout_problems(exp, {"gaps": []}, None))
 
 
 def test_timing_gate_is_a_warning(ep1, outline1, facts1):

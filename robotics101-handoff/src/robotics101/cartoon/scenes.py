@@ -1050,6 +1050,9 @@ def shot_context(sc: Scene, sh: dict) -> dict:
         return _ctx_part(sc, sh)
     if vis.startswith("example_"):
         return _ctx_example(sc, sh)
+    if vis.startswith("kit_") or vis == "visual_gap":            # A4-A6 parametric kit / gap placeholder
+        from robotics101.cartoon import kit
+        return kit.context(sc, sh)
     return {}
 
 
@@ -1155,7 +1158,9 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
             # keep the seated charger visible (spark + battery) a moment, but never more than SYNC_HOLD_MAX
             # past the first illustrated word: the narration must not move on without the picture (M05.8)
             start = max(start, min(plug["end_s"] + CHARGE_HOLD_S, span0 + SYNC_HOLD_MAX))
-        sh = {"layout": spec["layout"], "visual": spec.get("visual") or "concept_robot",
+        kit = spec.get("kit")
+        sh = {"layout": spec["layout"],
+              "visual": spec.get("visual") or (f"kit_{kit['primitive']}" if kit else "concept_robot"),
               "character": spec.get("character"), "corner": spec.get("corner", "left"),
               "fromBeat": spec["fromBeat"], "toBeat": spec["toBeat"], "start": round(start, 3), "end": round(end, 3)}
         if spec.get("example"):
@@ -1164,6 +1169,10 @@ def stage_shots(sc: Scene, shots: list[dict]) -> None:
             sh["atWord"] = spec["atWord"]
         if spec.get("untilWord"):
             sh["untilWord"] = spec["untilWord"]
+        if kit:
+            sh["kit"] = kit
+        if spec.get("gap"):
+            sh["gap"] = spec["gap"]
         if sh["character"] and sh["character"] not in sc.perf:
             sh["character"] = None
         box = VZ.default_box(sh["layout"])

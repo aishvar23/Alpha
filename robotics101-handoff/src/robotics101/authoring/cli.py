@@ -79,7 +79,41 @@ def _extra(asub) -> None:
     _extra2(asub)
 
 
+def _cmd_gaps(args) -> int:
+    from robotics101.authoring.gaps import apply_placeholders, gap_problems, load_gaps
+    gaps = load_gaps(args.gaps)
+    if gaps is None:
+        print(f"no such file: {args.gaps}", file=sys.stderr)
+        return 2
+    for g in gaps["gaps"]:
+        print(f"{g['gapId']} [{g['severity']}] {g['sceneId']} beats {g['beats']}: {g['whatMustBeShown']} "
+              f"(suggested {g['suggestedKind']}; closest {g.get('closestExisting') or '-'})")
+    n_block = sum(g["severity"] == "blocker" for g in gaps["gaps"])
+    print(f"visual gaps: {len(gaps['gaps'])} ({n_block} blocker)")
+    if not args.spec:
+        return 0
+    spec = json.loads(args.spec.read_text(encoding="utf-8"))
+    if args.apply:
+        spec = apply_placeholders(spec, gaps)
+        args.apply.write_text(json.dumps(spec, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"spec with placeholders: {args.apply}")
+    probs = gap_problems(spec, gaps)
+    for p in probs:
+        print(f"FAIL {p}")
+    return 1 if probs else 0
+
+
 def _extra2(asub) -> None:
+    g = asub.add_parser("gaps", help="A4: print a visual_gaps.json report; --spec checks placeholder consistency, "
+                                     "--apply OUT writes the spec with VISUAL COMING SOON placeholder shots")
+    g.add_argument("gaps", type=Path)
+    g.add_argument("--spec", type=Path, default=None)
+    g.add_argument("--apply", type=Path, default=None)
+    g.set_defaults(func=_cmd_gaps)
+    _extra3(asub)
+
+
+def _extra3(asub) -> None:
     """Later milestones register more sub-commands here."""
 
 

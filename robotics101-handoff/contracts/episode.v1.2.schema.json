@@ -400,6 +400,26 @@
               },
               "generated": {
                 "type": "boolean"
+              },
+              "gap": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "gapId",
+                  "what"
+                ],
+                "description": "A4 (PLAN-authoring §5.6): with visual `visual_gap` only — the explicit placeholder for a visual the catalogue cannot draw yet. `gapId` must be listed in the run's visual_gaps.json; QA `authoring.visual_gaps` fails any bundle that shows a placeholder.",
+                "properties": {
+                  "gapId": {
+                    "type": "string",
+                    "pattern": "^gap-[0-9]{2,3}$"
+                  },
+                  "what": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 120
+                  }
+                }
               }
             }
           }

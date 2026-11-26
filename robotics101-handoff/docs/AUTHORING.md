@@ -68,3 +68,21 @@ blocked.
   9/9 on the real out/m05.8-v7 timing. Fixture source pages are hand-written, labelled, on `*.fixture.test` domains.
 - `cartoon/lint.py` units extended (mm, seconds, Hz, percent). lint.py and qa.py are outside the scene-lock code
   hash, so no ep-001 lock changed.
+
+## A4 — visual gaps, `visual_gap` placeholder, QA + publish blocker
+- `authoring/gaps.py`: `make_gap`/`gaps_doc` (contract `visual_gaps`), `placeholder_shot`, `apply_placeholders`,
+  `gap_problems` (every placeholder listed, same scene), `publish_blockers`. CLI `robotics101 authoring gaps
+  <visual_gaps.json> [--spec S] [--apply OUT]` prints the report, checks consistency, writes a spec with placeholders.
+- Spec: a shot may carry `gap: {gapId, what}` with `visual: "visual_gap"` (additive in schemas 1.1–1.3; validation
+  requires both together). The placeholder (`cartoon/kit/placeholder.py`) is hazard-striped, says
+  "VISUAL COMING SOON", what must be shown and the gap id, and is always animated. Golden:
+  `tests/golden/kit/visual_gap-960.png`.
+- QA `authoring.visual_gaps` (hard, every cartoon bundle): fails when any placeholder is shown (R3 cannot approve
+  it) or a placeholder is not listed in the bundle's `visual_gaps.json`; passes when none is shown.
+- `publish --dry-run`: blocker gaps listed in `visual_gaps.json` and shown placeholders are publish blockers.
+  `authoring.review.check_r3` returns `placeholder` for such a bundle.
+- Render hooks (shared code): `visuals.visual()` dispatches `visual_gap` / `kit_<primitive>` to `cartoon/kit`,
+  `scenes.stage_shots` carries `kit` / `gap` on the shot, `scenes.shot_context` resolves kit cues. `kit_` and
+  `visual_gap` count as teaching/example visuals. `approvals.code_sha256` now also hashes `cartoon/kit/*.py`
+  (honest: kit code draws frames). These change the code hash, so the 9 ep-001 locks are refreshed by frame-identical
+  re-previews after A6 (see PROGRESS).

@@ -54,6 +54,9 @@ def code_sha256() -> str:
             continue
         h.update(p.name.encode())
         h.update(p.read_bytes())
+    for p in sorted((CODE_DIR / "kit").glob("*.py")):            # A4-A6: the visual kit draws frames too
+        h.update(f"kit/{p.name}".encode())
+        h.update(p.read_bytes())
     if REGISTRY.is_file():
         h.update(REGISTRY.read_bytes())
     return h.hexdigest()
