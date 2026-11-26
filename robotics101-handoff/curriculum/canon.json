@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "episodes": [
+    "ep-001"
+  ],
+  "quantities": [
+    {
+      "id": "ultrasonic_range",
+      "subject": "Bolt's ultrasonic (echo) sensor range",
+      "value": 3.0,
+      "unit": "m",
+      "episode": "ep-001",
+      "keywords": [
+        "range",
+        "reach",
+        "echo",
+        "ultrasonic",
+        "sees"
+      ]
+    },
+    {
+      "id": "stop_threshold",
+      "subject": "Bolt's stop threshold (the Rule)",
+      "value": 0.5,
+      "unit": "m",
+      "episode": "ep-001",
+      "keywords": [
+        "stop",
+        "threshold",
+        "rule",
+        "closer than"
+      ]
+    },
+    {
+      "id": "servo_highfive",
+      "subject": "servo angle for the high-five",
+      "value": 60.0,
+      "unit": "deg",
+      "episode": "ep-001",
+      "keywords": [
+        "high-five",
+        "high five",
+        "highfive"
+      ]
+    }
+  ],
+  "vocabulary": [
+    "robot",
+    "sense",
+    "think",
+    "act",
+    "sensor",
+    "actuator",
+    "controller",
+    "servo",
+    "threshold",
+    "power",
+    "structure",
+    "echo",
+    "ultrasonic"
+  ],
+  "facts": [
+    "A robot senses, thinks and acts.",
+    "Main robot parts: structure, sensors, actuators, power, controller.",
+    "Bolt's ultrasonic sensor sends a sound and listens for the echo; it reaches 3 meters.",
+    "The Rule: if something is closer than half a meter, stop.",
+    "A servo turns to an exact angle (Bolt's high-five at 60 degrees)."
+  ]
+}

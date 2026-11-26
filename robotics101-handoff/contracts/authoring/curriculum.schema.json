@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/curriculum.schema.json",
+  "title": "Curriculum plan for one episode (§1.2 curriculum.json)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "topicId",
+    "objectives",
+    "concepts",
+    "prerequisites"
+  ],
+  "properties": {
+    "topicId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{1,47}$"
+    },
+    "title": {
+      "type": "string"
+    },
+    "objectives": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "type": "string"
+      }
+    },
+    "standards": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "prerequisites": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9_]{1,47}$"
+      }
+    },
+    "reuses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "newVocabulary": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "concepts": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,47}$"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 40
+          },
+          "term": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "researchQuestions": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "string"
+      }
+    },
+    "canonRecap": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

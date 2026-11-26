@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/critique.schema.json",
+  "title": "Critic pass (§6.3)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "pass",
+    "samples",
+    "scores",
+    "findings"
+  ],
+  "properties": {
+    "pass": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "samples": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accuracy",
+        "clarity",
+        "fun",
+        "engagement",
+        "character_voice",
+        "age_fit"
+      ],
+      "properties": {
+        "accuracy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "string"
+            }
+          }
+        },
+        "clarity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "string"
+            }
+          }
+        },
+        "fun": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "string"
+            }
+          }
+        },
+        "engagement": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "string"
+            }
+          }
+        },
+        "character_voice": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "string"
+            }
+          }
+        },
+        "age_fit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "score",
+            "reason"
+          ],
+          "properties": {
+            "score": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "reason": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "severity",
+          "message"
+        ],
+        "properties": {
+          "severity": {
+            "enum": [
+              "blocker",
+              "major",
+              "minor"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "sceneId": {
+            "type": "string"
+          },
+          "beat": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "teachingLines": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "changed": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

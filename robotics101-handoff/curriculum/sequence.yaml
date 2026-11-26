@@ -1,0 +1,134 @@
+# Robotics 101 curriculum sequence (PLAN-authoring §2). Owner-editable; versioned.
+# Topic order ep-002 -> ep-003 -> ep-004 and the backlog order are the plan's PROVISIONAL defaults (§12 item 5):
+# the owner may reorder them. `expectedVisuals[].keywords` drive the deterministic visual binder and the A6 coverage
+# report (robotics101 authoring coverage); they describe what must be SEEN, not which asset shows it.
+version: 1
+provisional: [order]
+topics:
+  - topicId: robots_sense_think_act
+    episode: 1
+    title: "Bolt Bumps Into Everything"
+    concepts: [what_is_a_robot, robot_parts, distance_sensor, stop_rule, servo_motor]
+    prerequisites: []
+    newVocabulary: [robot, sense, think, act, sensor, actuator, controller, servo, threshold]
+    standards: ["NGSS K-2-ETS1-1", "CSTA 1A-CS-01"]
+    expectedVisuals: []
+    status: published
+
+  - topicId: distance_with_light
+    episode: 2
+    title: "Seeing distance with light"
+    concepts: [light_sensor, reflection, light_vs_sound, tricky_surfaces]
+    prerequisites: [robots_sense_think_act]
+    reuses: [distance_sensor, stop_rule, sense_think_act]
+    newVocabulary: [infrared, reflect]
+    standards: ["NGSS 1-PS4-3", "NGSS 4-PS4-2", "CSTA 1A-CS-02"]
+    status: backlog
+    expectedVisuals:
+      - {id: ir_sensor_parts, need: "IR sensor parts (emitter, receiver, lens)", keywords: [parts, callouts, sensor_module]}
+      - {id: light_bounce, need: "light pulse goes out, bounces off a wall, comes back", keywords: [light, pulse, reflect]}
+      - {id: sound_vs_light, need: "sound sensor vs light sensor side by side", keywords: [compare, sound, light]}
+      - {id: distance_readout, need: "distance readout dropping as Bolt approaches", keywords: [readout, value_change, threshold]}
+      - {id: tricky_surfaces, need: "black/shiny surfaces fool the light sensor (absorb/scatter)", keywords: [light, surface_black, surface_shiny]}
+      - {id: stop_before_wall, need: "Bolt stops before the wall using the light sensor", keywords: [drive, stop_before, obstacle]}
+      - {id: sta_recap, need: "sense -> think -> act recap with the new sensor", keywords: [loop, sense_think_act]}
+
+  - topicId: line_following
+    episode: 3
+    title: "Follow that line!"
+    concepts: [light_dark_readings, two_rules, steering_loop, two_sensors]
+    prerequisites: [distance_with_light]
+    reuses: [light_sensor, reflection, stop_rule]
+    newVocabulary: [loop, line follower]
+    standards: ["CSTA 1A-AP-10", "CSTA 1B-AP-10", "NGSS K-2-ETS1-2"]
+    status: backlog
+    expectedVisuals:
+      - {id: track_top_down, need: "top-down track with a black line, robot on it", keywords: [top_down, line_track]}
+      - {id: down_sensor_white_black, need: "downward light sensor: white reflects a lot, black little", keywords: [compare, light, surface_white, surface_black]}
+      - {id: reading_over_time, need: "sensor reading light/dark over time", keywords: [graph, value_change]}
+      - {id: decision_rules, need: "decision: on black turn one way, on white turn the other", keywords: [decision, flow_branch]}
+      - {id: zigzag, need: "zigzag 'wiggle' along the line", keywords: [top_down, path_zigzag]}
+      - {id: one_vs_two_sensors, need: "one sensor vs two sensors", keywords: [compare, top_down]}
+      - {id: overshoot_corner, need: "Bolt overshoots a sharp corner (gag)", keywords: [top_down, path_overshoot]}
+      - {id: bolt_belly_sensor_side, need: "side view of Bolt with the sensor under his belly", keywords: [side_view, bolt_rig_variant]}
+
+  - topicId: arms_and_grippers
+    episode: 4
+    title: "Grab it, Bolt!"
+    concepts: [arm_parts, degrees_of_freedom, grippers, pick_and_place]
+    prerequisites: [robots_sense_think_act]
+    reuses: [servo_motor, actuator]
+    newVocabulary: [joint, gripper, degrees of freedom]
+    standards: ["NGSS K-2-ETS1-2", "NGSS 3-5-ETS1-1"]
+    status: backlog
+    expectedVisuals:
+      - {id: arm_parts, need: "arm parts: base, joints, links, gripper", keywords: [parts, callouts, arm_body]}
+      - {id: pick_place_sequence, need: "pick-and-place sequence", keywords: [sequence, numbered_steps]}
+      - {id: joint_angle, need: "joint angle for each joint", keywords: [gauge, angle]}
+      - {id: gripper_types, need: "gripper types (claw, suction, soft) compared", keywords: [compare, gripper_silhouettes]}
+      - {id: grip_strength, need: "grip strength: too soft drops, too hard squishes", keywords: [bar, threshold, squish_animation]}
+      - {id: dof_joints, need: "degrees of freedom: each joint moves separately", keywords: [articulated_arm]}
+      - {id: gripper_open_close, need: "gripper opening/closing on an object", keywords: [articulated_gripper]}
+      - {id: noodle_arms_gag, need: "Bolt tries to grab with noodle arms (gag)", keywords: [bolt_arm_action]}
+
+  # ---- backlog after ep-004 (reorderable by the owner; prerequisites in brackets in §2.2)
+  - topicId: wheels_and_motors
+    title: "Wheels and motors: how robots turn"
+    concepts: [motors, differential_drive]
+    prerequisites: [robots_sense_think_act, line_following]
+    status: backlog
+    expectedVisuals:
+      - {id: diff_drive_top, need: "two wheels at different speeds turn the robot (top-down)", keywords: [top_down, path_turn]}
+      - {id: wheel_speeds, need: "left/right wheel speed bars", keywords: [bar, value_change]}
+  - topicId: power_and_batteries
+    title: "Power and batteries: why robots get sleepy"
+    concepts: [battery, charging]
+    prerequisites: [robots_sense_think_act]
+    status: backlog
+    expectedVisuals:
+      - {id: battery_level, need: "battery level falling and charging", keywords: [bar, value_change]}
+      - {id: power_flow, need: "battery -> controller -> motors power flow", keywords: [flow_chain]}
+  - topicId: programs_are_recipes
+    title: "Programs are recipes: steps, loops and if-then"
+    concepts: [steps, loops, if_then]
+    prerequisites: [robots_sense_think_act, line_following]
+    status: backlog
+    expectedVisuals:
+      - {id: recipe_steps, need: "numbered program steps lighting up", keywords: [sequence, numbered_steps]}
+      - {id: loop_flow, need: "a loop going round", keywords: [loop]}
+  - topicId: cameras_and_colours
+    title: "Cameras and colours"
+    concepts: [camera, colour]
+    prerequisites: [distance_with_light]
+    status: backlog
+    expectedVisuals:
+      - {id: camera_pixels, need: "camera image made of coloured pixels", keywords: [pixel_grid]}
+  - topicId: check_and_correct
+    title: "Check and correct: feedback"
+    concepts: [feedback]
+    prerequisites: [line_following]
+    status: backlog
+    expectedVisuals:
+      - {id: feedback_loop, need: "measure -> compare -> correct loop", keywords: [loop]}
+      - {id: error_graph, need: "error shrinking over time", keywords: [graph, value_change]}
+  - topicId: maps_and_finding_the_way
+    title: "Maps and finding the way"
+    concepts: [maps, path_planning]
+    prerequisites: [distance_with_light, check_and_correct]
+    status: backlog
+    expectedVisuals:
+      - {id: room_map, need: "top-down room map with a path", keywords: [top_down, room_map]}
+  - topicId: robot_safety_and_helpers
+    title: "Robot safety and helpers"
+    concepts: [safety, cobots]
+    prerequisites: [arms_and_grippers]
+    status: backlog
+    expectedVisuals:
+      - {id: safety_zone, need: "a safety zone around a working arm", keywords: [top_down, zone]}
+  - topicId: balance_and_walking
+    title: "Balance and walking robots"
+    concepts: [balance, walking]
+    prerequisites: [arms_and_grippers, check_and_correct]
+    status: backlog
+    expectedVisuals:
+      - {id: walking_legs, need: "legged robot stepping", keywords: [legged_rig]}

@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/sources.schema.json",
+  "title": "Retrieved sources (§1.2 sources.json, §3.2)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "sources"
+  ],
+  "properties": {
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceId",
+          "url",
+          "title",
+          "publisher",
+          "publisherGroup",
+          "tier",
+          "contentSha256"
+        ],
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "pattern": "^s-[0-9]{2,3}$"
+          },
+          "url": {
+            "type": "string",
+            "pattern": "^https://"
+          },
+          "title": {
+            "type": "string"
+          },
+          "publisher": {
+            "type": "string"
+          },
+          "publisherGroup": {
+            "type": "string"
+          },
+          "tier": {
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D"
+            ]
+          },
+          "retrievedAt": {
+            "type": "string"
+          },
+          "contentSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "textFile": {
+            "type": "string"
+          },
+          "outboundLinks": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

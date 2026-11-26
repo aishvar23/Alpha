@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/review_approval.schema.json",
+  "title": "Owner approval of a review packet (§7)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "point",
+    "approvedSha256",
+    "reviewer",
+    "decision",
+    "timestamp"
+  ],
+  "properties": {
+    "point": {
+      "enum": [
+        "R1",
+        "R2"
+      ]
+    },
+    "approvedSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "decision": {
+      "enum": [
+        "approved",
+        "changes_requested",
+        "rejected"
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "minLength": 1
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

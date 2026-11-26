@@ -626,6 +626,9 @@ def build_parser() -> argparse.ArgumentParser:
     mx.add_argument("--out", type=Path, required=True)
     mx.add_argument("--episode", type=Path, default=None, help="episode spec (adds the M03.2 transition swishes)")
     mx.set_defaults(func=_cmd_mix)
+
+    from robotics101.authoring.cli import add_parser as _add_authoring
+    _add_authoring(sub)                                  # A1-A7 authoring tools (offline)
     return parser
 
 

@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/sequence.schema.json",
+  "title": "Curriculum sequence (curriculum/sequence.yaml, §2)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "topics"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "topics": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "topicId",
+          "title",
+          "concepts",
+          "prerequisites",
+          "expectedVisuals",
+          "status"
+        ],
+        "properties": {
+          "topicId": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,47}$"
+          },
+          "episode": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "concepts": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "prerequisites": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{1,47}$"
+            }
+          },
+          "reuses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "newVocabulary": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "standards": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "expectedVisuals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "need"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9_]{1,47}$"
+                },
+                "need": {
+                  "type": "string"
+                },
+                "keywords": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "coveredBy": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "status": {
+            "enum": [
+              "backlog",
+              "authoring",
+              "published"
+            ]
+          }
+        }
+      }
+    },
+    "provisional": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

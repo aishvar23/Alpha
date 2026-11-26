@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/facts.schema.json",
+  "title": "Fact sheet (§1.2 facts.json, §3.3-3.4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "claims"
+  ],
+  "properties": {
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "claimId",
+          "text",
+          "kidText",
+          "kind",
+          "concept",
+          "support",
+          "status"
+        ],
+        "properties": {
+          "claimId": {
+            "type": "string",
+            "pattern": "^c-[0-9]{2,3}$"
+          },
+          "text": {
+            "type": "string"
+          },
+          "kidText": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "definition",
+              "mechanism",
+              "number",
+              "example",
+              "history"
+            ]
+          },
+          "concept": {
+            "type": "string"
+          },
+          "numbers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "unit"
+              ],
+              "properties": {
+                "value": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "support": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sourceId",
+                "excerpt"
+              ],
+              "properties": {
+                "sourceId": {
+                  "type": "string"
+                },
+                "excerpt": {
+                  "type": "string",
+                  "minLength": 8
+                }
+              }
+            }
+          },
+          "status": {
+            "enum": [
+              "verified",
+              "single_source",
+              "unverified",
+              "contradicted"
+            ]
+          },
+          "independence": {
+            "type": "object"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

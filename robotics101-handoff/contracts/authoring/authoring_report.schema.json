@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/authoring_report.schema.json",
+  "title": "Gate results (§6)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "status",
+    "gates"
+  ],
+  "properties": {
+    "status": {
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
+    "runId": {
+      "type": "string"
+    },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "blocking",
+          "ok",
+          "message"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "blocking": {
+            "type": "boolean"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "value": {}
+        }
+      }
+    },
+    "thresholds": {
+      "type": "object"
+    },
+    "provisional": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

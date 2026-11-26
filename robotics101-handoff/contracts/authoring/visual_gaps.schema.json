@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/visual_gaps.schema.json",
+  "title": "Visual gaps (§1.2, §5.6 step 4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "gaps"
+  ],
+  "properties": {
+    "gaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "gapId",
+          "sceneId",
+          "beats",
+          "whatMustBeShown",
+          "suggestedKind",
+          "severity"
+        ],
+        "properties": {
+          "gapId": {
+            "type": "string",
+            "pattern": "^gap-[0-9]{2,3}$"
+          },
+          "sceneId": {
+            "type": "string"
+          },
+          "beats": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "concept": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "claimIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^c-[0-9]{2,3}$"
+            }
+          },
+          "whatMustBeShown": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "suggestedKind": {
+            "enum": [
+              "kit_param",
+              "kit_primitive",
+              "body",
+              "template",
+              "icon",
+              "vignette"
+            ]
+          },
+          "closestExisting": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "severity": {
+            "enum": [
+              "blocker",
+              "cosmetic"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/trace.schema.json",
+  "title": "One trace.jsonl record per model/tool call (§1.2, §8.4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "seq",
+    "stage",
+    "provider",
+    "model",
+    "promptId",
+    "promptVersion",
+    "inputTokens",
+    "outputTokens",
+    "usd",
+    "cacheHit"
+  ],
+  "properties": {
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "stage": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "promptId": {
+      "type": "string"
+    },
+    "promptVersion": {
+      "type": "string"
+    },
+    "fixtureKey": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "inputTokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "outputTokens": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "searches": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "usd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "latencyMs": {
+      "type": "number",
+      "minimum": 0
+    },
+    "cacheHit": {
+      "type": "boolean"
+    }
+  }
+}

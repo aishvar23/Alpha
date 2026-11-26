@@ -13,6 +13,8 @@ dependencies = [
     # M04.1: official ElevenLabs SDK (production character voices) + .env loading for ELEVENLABS_API_KEY
     "elevenlabs>=2.79",
     "python-dotenv>=1.0",
+    # A1: authoring data files (curriculum/sequence.yaml, authoring/*.yaml)
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/canon.schema.json",
+  "title": "Canon: facts already taught on screen (§2)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "episodes",
+    "quantities",
+    "vocabulary"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer"
+    },
+    "episodes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "quantities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "subject",
+          "value",
+          "unit",
+          "episode",
+          "keywords"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,47}$"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "episode": {
+            "type": "string"
+          },
+          "keywords": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "vocabulary": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

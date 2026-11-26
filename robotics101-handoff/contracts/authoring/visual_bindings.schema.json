@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/visual_bindings.schema.json",
+  "title": "Visual bindings per explain beat (§1.2, §5.6)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "bindings"
+  ],
+  "properties": {
+    "bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sceneId",
+          "fromBeat",
+          "toBeat",
+          "kind"
+        ],
+        "properties": {
+          "sceneId": {
+            "type": "string"
+          },
+          "fromBeat": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "toBeat": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "concept": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "template",
+              "visual",
+              "kit",
+              "gap"
+            ]
+          },
+          "template": {
+            "type": "string"
+          },
+          "visual": {
+            "type": "string"
+          },
+          "kit": {
+            "type": "object"
+          },
+          "gapId": {
+            "type": "string"
+          },
+          "justification": {
+            "type": "string"
+          },
+          "gags": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    }
+  }
+}

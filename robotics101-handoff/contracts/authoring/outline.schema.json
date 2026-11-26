@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/outline.schema.json",
+  "title": "Beat outline (§1.2 outline.json, §4.1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "hook",
+    "scenes"
+  ],
+  "properties": {
+    "hook": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "problem"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{1,47}$"
+        },
+        "problem": {
+          "type": "string"
+        },
+        "prop": {
+          "type": "string"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scenes": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sceneId",
+          "role",
+          "beats"
+        ],
+        "properties": {
+          "sceneId": {
+            "type": "string",
+            "pattern": "^scene-[0-9]{3}$"
+          },
+          "role": {
+            "enum": [
+              "hook",
+              "concept",
+              "practice",
+              "recap"
+            ]
+          },
+          "template": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "concept": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetSeconds": {
+            "type": "number"
+          },
+          "beats": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "purpose"
+              ],
+              "properties": {
+                "purpose": {
+                  "type": "string"
+                },
+                "concept": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "claimIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^c-[0-9]{2,3}$"
+                  }
+                },
+                "gag": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "additionalProperties": false,
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "sight",
+                        "line",
+                        "sfx",
+                        "reaction"
+                      ]
+                    },
+                    "note": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "visualIntent": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "targetSeconds": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "gags": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sceneId",
+          "beat",
+          "kind"
+        ],
+        "properties": {
+          "sceneId": {
+            "type": "string"
+          },
+          "beat": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "kind": {
+            "enum": [
+              "sight",
+              "line",
+              "sfx",
+              "reaction"
+            ]
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

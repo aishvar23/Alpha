@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://robotics101.local/contracts/authoring/review_packet.schema.json",
+  "title": "Review packet R1/R2 (§7 hash binding)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "point",
+    "artifacts"
+  ],
+  "properties": {
+    "point": {
+      "enum": [
+        "R1",
+        "R2"
+      ]
+    },
+    "runId": {
+      "type": "string"
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      }
+    },
+    "previous": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "point",
+        "packetSha256"
+      ],
+      "properties": {
+        "point": {
+          "enum": [
+            "R1"
+          ]
+        },
+        "packetSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}
